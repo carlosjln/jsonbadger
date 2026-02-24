@@ -2,7 +2,7 @@
 
 This page is an example-first cheat sheet for users and AI agents. It shows copy-pasteable jsonbadger usage in increasing complexity and covers the currently implemented query and update operator surface.
 
-Use this page for syntax and working shapes. Use `docs/api.md` for API reference details and `docs/query-translation.md` for PostgreSQL operator/function semantics.
+Use this page for syntax and working shapes. Use [`docs/api.md`](api.md) for API reference details and [`docs/query-translation.md`](query-translation.md) for PostgreSQL operator/function semantics.
 
 ## How to Read This Page
 
@@ -554,10 +554,7 @@ This page includes examples for:
 
 ## Related Docs
 
-- `README.md` (quick start + selected examples)
-- `docs/api.md` (API surface and behavior notes)
-- `docs/query-translation.md` (PostgreSQL operator/function mapping)
-- `docs/local-integration-testing.md` (local integration test setup)
-
-
-
+- [`README.md`](../README.md) (quick start + selected examples)
+- [`docs/api.md`](api.md) (API surface and behavior notes)
+- [`docs/query-translation.md`](query-translation.md) (PostgreSQL operator/function mapping)
+- [`docs/local-integration-testing.md`](local-integration-testing.md) (local integration test setup)

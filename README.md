@@ -82,7 +82,7 @@ When using `IdStrategies.uuidv7`, jsonbadger checks PostgreSQL native `uuidv7()`
 
 ## Examples Cheat Sheet
 
-For a complete copy-paste operator and runtime cheat sheet (queries, updates, and document methods), see `docs/examples.md`.
+For a complete copy-paste operator and runtime cheat sheet (queries, updates, and document methods), see [`docs/examples.md`](docs/examples.md).
 
 ## Core Features
 
@@ -99,11 +99,11 @@ For a complete copy-paste operator and runtime cheat sheet (queries, updates, an
 
 ## Documentation
 
-* `docs/api.md`
-* `docs/examples.md` (complete example cheat sheet for queries, updates, and runtime document methods)
-* `docs/query-translation.md` (includes PostgreSQL capability map for query/update operators and indexability expectations)
-* `docs/local-integration-testing.md`
-* `CHANGELOG.md` for release notes and version history
+* [`docs/api.md`](docs/api.md)
+* [`docs/examples.md`](docs/examples.md) (complete example cheat sheet for queries, updates, and runtime document methods)
+* [`docs/query-translation.md`](docs/query-translation.md) (includes PostgreSQL capability map for query/update operators and indexability expectations)
+* [`docs/local-integration-testing.md`](docs/local-integration-testing.md)
+* [`CHANGELOG.md`](CHANGELOG.md) for release notes and version history
 
 ## Author
 
