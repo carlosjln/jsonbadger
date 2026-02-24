@@ -1,0 +1,58 @@
+{
+	"name": "jsonbadger",
+	"version": "0.5.0",
+	"description": "JSONB query/model library for PostgreSQL",
+	"main": "index.js",
+	"type": "module",
+	"exports": {
+		".": "./index.js"
+	},
+	"imports": {
+		"#src/*": "./src/*",
+		"#test/*": "./test/*"
+	},
+	"files": [
+		"index.js",
+		"src",
+		"docs",
+		"README.md",
+		"LICENSE"
+	],
+	"engines": {
+		"node": ">=20"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/carlosjln/jsonbadger.git"
+	},
+	"license": "MIT",
+	"author": "Carlos López",
+	"keywords": [
+		"postgres",
+		"postgresql",
+		"jsonb",
+		"query-builder",
+		"schema-validation"
+	],
+	"publishConfig": {
+		"access": "public",
+		"tag": "next"
+	},
+	"dependencies": {
+		"pg": "^8.18.0"
+	},
+	"devDependencies": {
+		"joi": "^18.0.2",
+		"dotenv": "^17.3.1",
+		"jest": "^30.2.0"
+	},
+	"scripts": {
+		"jest-cli": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.mjs",
+		"test": "npm run test-unit",
+		"test-unit": "npm run jest-cli -- --runInBand test/unit",
+		"test-integration": "npm run jest-cli -- --runInBand test/integration/postgres",
+		"test-all": "npm run test-unit && npm run test-integration",
+		"test-output": "npm run jest-cli -- --runInBand test/unit --json --outputFile=test/test-output.json",
+		"test-coverage": "npm run jest-cli -- --runInBand test/unit --coverage"
+	}
+}

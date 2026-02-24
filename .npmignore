@@ -1,0 +1,38 @@
+# Defense-in-depth for npm publishes.
+# Note: package.json `files` is the primary publish allowlist.
+
+# VCS / local tooling
+.git/
+.gitignore
+.codex/
+.agents/
+.ai/
+.npm-cache/
+.npm-cache-*/
+
+# Local environment / secrets
+.env
+.env.*
+!.env.example
+
+# Tests and coverage artifacts
+test/
+coverage/
+test/coverage/
+jest-output.json
+*.lcov
+
+# Local build/package artifacts
+dist/
+releases/
+*.tgz
+*.zip
+
+# Internal planning/spec/decision docs (.agents is not published by package.json files allowlist)
+.agents/plans/
+.agents/specs/
+
+# Editor/OS noise
+*.log
+.DS_Store
+Thumbs.db
