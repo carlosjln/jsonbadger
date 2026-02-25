@@ -11,6 +11,28 @@ Use this page for syntax and working shapes. Use [`docs/api.md`](api.md) for API
 - Query operators use the current `$` + `snake_case` naming (for example `$elem_match`, `$has_key`, `$json_path_exists`).
 - This page only includes currently implemented behavior.
 - `Assumes:` notes tell you what earlier setup/data a snippet depends on.
+- Important mechanics: queries run when you call `.exec()` (for example `await User.find({}).exec()`), and direct in-place mutations on nested `doc.data` values may require `doc.mark_modified('path')` after mutating.
+
+Quick jump:
+- [How to Read This Page](#how-to-read-this-page)
+- [Shared Fixture and Assumptions](#shared-fixture-and-assumptions)
+- [Setup and Connect](#setup-and-connect)
+- [ID Strategy Examples](#id-strategy-examples)
+- [Schema and Model Definition](#schema-and-model-definition)
+- [Built-in FieldType Examples](#built-in-fieldtype-examples)
+- [Create and Save Documents](#create-and-save-documents)
+- [Query Basics (find, find_one, count)](#query-basics-find-find_one-count)
+- [Direct Equality and Scalar Comparisons](#direct-equality-and-scalar-comparisons)
+- [Regex Operators](#regex-operators)
+- [Array and JSON Query Operators](#array-and-json-query-operators)
+- [JSONB Key Existence Operators](#jsonb-key-existence-operators)
+- [JSONPath Operators](#jsonpath-operators)
+- [Update Operators (`update_one`)](#update-operators-update_one)
+- [Delete Operations](#delete-operations)
+- [Runtime Document Methods (get/set, dirty tracking, serialization)](#runtime-document-methods-getset-dirty-tracking-serialization)
+- [Optional Alias Path Example](#optional-alias-path-example)
+- [Complete Operator Checklist (Query and Update)](#complete-operator-checklist-query-and-update)
+- [Related Docs](#related-docs)
 
 ## Shared Fixture and Assumptions
 
@@ -91,10 +113,7 @@ const user_schema = new jsonbadger.Schema({
 		country: String
 	},
 	orders: [{sku: String, qty: Number, price: Number}],
-	payload: {},
-	owner_id: {type: 'UUIDv7'},
-	created_at: Date,
-	updated_at: Date
+	payload: {}
 });
 
 // Schema-level indexes (single path and compound)
@@ -174,21 +193,44 @@ const user_doc = new User({
 
 await user_doc.validate();
 const saved_user = await user_doc.save();
+// returns: saved data object (plain object); `user_doc.data` is updated to the saved payload
+```
+
+Validation failure pattern (`validation_error`):
+
+```js
+try {
+	const invalid_user = new User({
+		user_name: 'bad_input',
+		age: -1 // violates `min: 0` from the schema example
+	});
+
+	await invalid_user.save();
+} catch(error) {
+	if(error.name === 'validation_error') {
+		const error_payload = error.to_json();
+		// shape: { success: false, error: { type: 'validation_error', message: '...', details: ... } }
+		// `error.details` is the same validation detail payload included in `error_payload.error.details`
+	}
+}
 ```
 
 ## Query Basics (find, find_one, count)
 
 Assumes (for the query sections below):
-- `User` is defined and at least one document was saved (see `## create and save documents`).
+- `User` is defined and at least one document was saved (see `## Create and Save Documents`).
 - Examples that filter by `user_name: 'john'`, `tags`, `orders`, or `payload` assume those fields/values exist in seeded data.
 
 
 ```js
 const all_users = await User.find({}).exec();
+// returns: [{ user_name: 'john', ... }, ...] (array of plain data objects)
 
-const found_user = await User.find_one({user_name: 'john'}).exec(); // document or null
+const found_user = await User.find_one({user_name: 'john'}).exec();
+// returns: { user_name: 'john', ... } or null (plain data object)
 
-const adult_count = await User.count_documents({age: {$gte: 18}}).exec(); // integer count
+const adult_count = await User.count_documents({age: {$gte: 18}}).exec();
+// returns: number
 ```
 
 Query builder chaining:
@@ -327,8 +369,10 @@ await User.find({payload: {$has_key: 'profile.city'}}).exec();
 `$json_path_exists` (`@?`) and `$json_path_match` (`@@`):
 
 Assumes:
-- Your seeded `payload` includes shapes like `items[*].qty` and `score` (as shown in `## create and save documents`).
+- Your seeded `payload` includes shapes like `items[*].qty` and `score` (as shown in `## Create and Save Documents`).
 
+Target shape reminder:
+- `payload` is a JSON object with keys like `score` and `items`, where `items` is an array of objects (for example `{qty: 2}`).
 
 ```js
 await User.find({
@@ -352,6 +396,8 @@ Assumes (for update and delete sections below):
 - A matching row exists (examples use `user_name: 'john'` and `user_name: 'missing'`).
 - The seeded row includes `tags` and `payload` fields from the create/save example.
 
+Target shape reminder:
+- `tags` is an array, `profile` is an object, and `payload.profile` / `payload.score` are nested JSON values in the seeded row.
 
 Basic `$set` (maps to `jsonb_set(...)`):
 
@@ -366,6 +412,7 @@ const updated_user = await User.update_one(
 		}
 	}
 );
+// returns: updated data object (plain object) or null
 ```
 
 `$insert` (maps to `jsonb_insert(...)`) with numeric array index paths:
@@ -388,6 +435,9 @@ await User.update_one({user_name: 'john'}, {
 ```
 
 `$set_lax` (maps to `jsonb_set_lax(...)`) object form:
+
+Target shape reminder for `$set_lax`:
+- `payload` is a JSON object; these examples update or delete nested keys inside `payload`.
 
 ```js
 await User.update_one({user_name: 'john'}, {
@@ -453,12 +503,14 @@ await User.update_one({user_name: 'john'}, {
 
 ```js
 const deleted_user = await User.delete_one({user_name: 'john'});
+// returns: deleted data object (plain object) or null
 ```
 
 No match (or missing table) returns `null`:
 
 ```js
 const maybe_deleted = await User.delete_one({user_name: 'missing'});
+// returns: null when no row matches (or when the table does not exist yet)
 if(maybe_deleted === null) {
 	// no matching row, or table does not exist yet
 }
