@@ -18,6 +18,7 @@ data
 
 .ai
 .agents
+.archive
 .example
 .codex
 .npm-cache/

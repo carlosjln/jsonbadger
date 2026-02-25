@@ -1,7 +1,6 @@
 # JsonBadger
 
-JsonBadger is a Node.js library that brings document-style querying to PostgreSQL JSONB.
-It includes schema validation, model APIs, query compilation, and migration helpers.
+JsonBadger is a Node.js library that simplifies working with complex JSON data in PostgreSQL. Instead of writing raw, complex SQL to query nested `jsonb` columns, JsonBadger lets you define schemas and interact with your data using a clean, object-based API and simple query operators.
 
 ## Why did I create this utility?
 
