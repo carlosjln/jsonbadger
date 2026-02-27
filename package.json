@@ -53,6 +53,12 @@
 		"test-integration": "npm run jest-cli -- --runInBand test/integration/postgres",
 		"test-all": "npm run test-unit && npm run test-integration",
 		"test-output": "npm run jest-cli -- --runInBand test/unit --json --outputFile=test/test-output.json",
-		"test-coverage": "npm run jest-cli -- --runInBand test/unit --coverage"
+		"test-coverage": "npm run jest-cli -- --runInBand test/unit --coverage",
+		"bump-major": "npm version major",
+		"bump-minor": "npm version minor",
+		"bump-patch": "npm version patch",
+		"bump-major-local": "npm version major --no-git-tag-version",
+		"bump-minor-local": "npm version minor --no-git-tag-version",
+		"bump-patch-local": "npm version patch --no-git-tag-version"
 	}
 }
