@@ -51,21 +51,27 @@ When a snippet uses a different value (for example `user_name: 'jane'`), either 
 ```js
 import jsonbadger from 'jsonbadger';
 
-await jsonbadger.connect(process.env.APP_POSTGRES_URI, {
+const db_uri = 'postgresql://user:pass@localhost:5432/dbname';
+const db_connection_options = {
 	debug: false,
 	max: 10,
 	ssl: false,
 	auto_index: true,
 	id_strategy: jsonbadger.IdStrategies.bigserial
-});
+};
+
+await jsonbadger.connect(db_uri, db_connection_options);
 ```
 
 UUIDv7 server default (PostgreSQL 18+ native `uuidv7()` required):
 
 ```js
-await jsonbadger.connect(process.env.APP_POSTGRES_URI, {
+const db_uri = 'postgresql://user:pass@localhost:5432/dbname';
+const db_connection_options = {
 	id_strategy: jsonbadger.IdStrategies.uuidv7
-});
+};
+
+await jsonbadger.connect(db_uri, db_connection_options);
 ```
 
 Notes:
@@ -77,9 +83,12 @@ Notes:
 Server-wide default (`connect`) plus model override (`model(...)`):
 
 ```js
-await jsonbadger.connect(process.env.APP_POSTGRES_URI, {
+const db_uri = 'postgresql://user:pass@localhost:5432/dbname';
+const db_connection_options = {
 	id_strategy: jsonbadger.IdStrategies.uuidv7 // PostgreSQL 18+ native uuidv7() required
-});
+};
+
+await jsonbadger.connect(db_uri, db_connection_options);
 
 const AuditLog = jsonbadger.model(new jsonbadger.Schema({
 	event_name: String

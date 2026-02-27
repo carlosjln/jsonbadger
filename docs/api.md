@@ -116,10 +116,6 @@ Runtime behavior notes:
 - `immutable: true` fields are writable before first persist and become protected after a successful `save()`.
 - `to_object(...)` / `to_json(...)` apply getters by default; pass `{ getters: false }` to bypass getter transforms during serialization.
 
-For built-in FieldType declaration examples and edge-case notes, see [`docs/examples.md`](examples.md).
-
-For copy-paste usage examples (including all current query/update operators), see [`docs/examples.md`](examples.md). For PostgreSQL translation semantics, see [`docs/query-translation.md`](query-translation.md).
-
 ## query filters
 
 Supported filter/operator families (current implemented set):

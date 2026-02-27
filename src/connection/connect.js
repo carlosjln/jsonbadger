@@ -2,6 +2,7 @@ import {Pool} from 'pg';
 
 import defaults from '#src/constants/defaults.js';
 import debug_logger from '#src/debug/debug-logger.js';
+
 import {assert_condition} from '#src/utils/assert.js';
 import {assert_valid_id_strategy} from '#src/constants/id-strategies.js';
 import {scan_server_capabilities, assert_id_strategy_capability} from '#src/connection/server-capabilities.js';

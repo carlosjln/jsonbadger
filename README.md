@@ -32,13 +32,16 @@ npm install jsonbadger
 import jsonbadger from 'jsonbadger';
 
 // 1. Connect to database
-await jsonbadger.connect('postgresql://user:pass@localhost:5432/dbname', {
+const db_uri = 'postgresql://user:pass@localhost:5432/dbname';
+const db_connection_options = {
 	debug: false,
 	max: 10,
 	ssl: false,
 	auto_index: true,
 	id_strategy: jsonbadger.IdStrategies.bigserial // server default: bigserial | uuidv7 (native PostgreSQL uuidv7() required)
-});
+};
+
+await jsonbadger.connect(db_uri, db_connection_options);
 
 // 2. Define schema (FieldType format)
 const user_schema = new jsonbadger.Schema({
@@ -99,6 +102,7 @@ For a complete copy-paste operator and runtime cheat sheet (queries, updates, an
 ## Documentation
 
 * [`docs/api.md`](docs/api.md)
+* [`docs/conecction.md`](docs/conecction.md) (connection lifecycle and shared-connection examples)
 * [`docs/examples.md`](docs/examples.md) (complete example cheat sheet for queries, updates, and runtime document methods)
 * [`docs/query-translation.md`](docs/query-translation.md) (includes PostgreSQL capability map for query/update operators and indexability expectations)
 * [`docs/local-integration-testing.md`](docs/local-integration-testing.md)
