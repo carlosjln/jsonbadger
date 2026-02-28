@@ -169,26 +169,28 @@ describe('Document runtime behaviors (phase 3 foundation)', function () {
 			profile: {
 				city: String
 			},
-			updated_at: {
+			runtime_date: {
 				type: Date,
-				alias: 'updatedAt'
+				alias: 'runtimeDate'
 			}
 		});
+
 		const User = model(schema_instance, {
 			table_name: 'users'
 		});
+
 		const user_document = new User({});
 
 		expect(user_document.is_modified()).toBe(false);
 
 		user_document.set('profile.city', 'Miami');
-		user_document.mark_modified('updatedAt');
+		user_document.mark_modified('runtimeDate');
 
 		expect(user_document.is_modified()).toBe(true);
 		expect(user_document.is_modified('profile.city')).toBe(true);
 		expect(user_document.is_modified('profile')).toBe(true);
-		expect(user_document.is_modified('updated_at')).toBe(true);
-		expect(user_document.is_modified('updatedAt')).toBe(true);
+		expect(user_document.is_modified('runtime_date')).toBe(true);
+		expect(user_document.is_modified('runtimeDate')).toBe(true);
 
 		const cleared_result = user_document.clear_modified();
 
@@ -203,9 +205,11 @@ describe('Document runtime behaviors (phase 3 foundation)', function () {
 				immutable: true
 			}
 		});
+
 		const Product = model(schema_instance, {
 			table_name: 'products'
 		});
+
 		const product_document = new Product({});
 
 		product_document.set('sku', 'ABC-1');

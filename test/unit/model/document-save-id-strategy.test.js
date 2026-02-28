@@ -55,7 +55,12 @@ describe('Document save id strategy', function () {
 		server_capabilities_state.supports_uuidv7 = true;
 
 		sql_runner_mock.mockResolvedValue({
-			rows: [{data: {name: 'Saved'}}]
+			rows: [{
+				id: '9',
+				data: {name: 'Saved'},
+				created_at: new Date('2026-02-27T10:00:00.000Z'),
+				updated_at: new Date('2026-02-27T11:00:00.000Z')
+			}]
 		});
 	});
 
@@ -67,12 +72,18 @@ describe('Document save id strategy', function () {
 		const event_document = new event_model({name: 'Saved'});
 		pool_state.connected = true;
 
-		await event_document.save();
+		const saved_value = await event_document.save();
 
 		expect(ensure_table_mock).toHaveBeenCalledWith('events', 'data', 'uuidv7');
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('INSERT INTO "events" ("data") VALUES ($1::jsonb)');
 		expect(sql_runner_mock.mock.calls[0][1]).toEqual(['{"name":"Saved"}']);
+		expect(saved_value).toEqual({
+			name: 'Saved',
+			id: '9',
+			created_at: '2026-02-27T10:00:00.000Z',
+			updated_at: '2026-02-27T11:00:00.000Z'
+		});
 	});
 
 	test('throws before save when uuidv7 is unsupported on connected server', async function () {
@@ -104,11 +115,12 @@ describe('Document save id strategy', function () {
 		});
 		const counter_document = new counter_model({});
 
-		await counter_document.save();
+		const saved_value = await counter_document.save();
 
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('INSERT INTO "counters" ("data") VALUES ($1::jsonb)');
 		expect(sql_runner_mock.mock.calls[0][1]).toEqual(['{"count64":"9007199254740993"}']);
+		expect(saved_value.id).toBe('9');
 	});
 
 	test('uses bigserial insert shape when strategy resolves to bigserial', async function () {
@@ -120,12 +132,27 @@ describe('Document save id strategy', function () {
 			name: 'Saved'
 		});
 
-		await user_document.save();
+		const saved_value = await user_document.save();
 
 		expect(ensure_table_mock).toHaveBeenCalledWith('users', 'data', 'bigserial');
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('INSERT INTO "users" ("data") VALUES ($1::jsonb)');
 		expect(sql_runner_mock.mock.calls[0][1]).toEqual(['{"name":"Saved"}']);
+		expect(saved_value.created_at).toBe('2026-02-27T10:00:00.000Z');
+	});
+
+	test('rejects payload writes to reserved metadata fields during save', async function () {
+		const schema_instance = build_schema_instance();
+		const user_model = model(schema_instance, {
+			table_name: 'users'
+		});
+		const user_document = new user_model({
+			name: 'Saved',
+			id: 'manual-id'
+		});
+
+		await expect(user_document.save()).rejects.toThrow('Reserved metadata fields are read-only');
+		expect(sql_runner_mock).not.toHaveBeenCalled();
 	});
 });
 

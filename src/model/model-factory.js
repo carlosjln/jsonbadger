@@ -17,19 +17,29 @@ import {bind_parameter, create_parameter_state} from '#src/sql/parameter-binder.
 import sql_runner from '#src/sql/sql-runner.js';
 
 import {assert_condition, assert_identifier, quote_identifier} from '#src/utils/assert.js';
+import {is_array, is_not_array} from '#src/utils/array.js';
 import {has_own} from '#src/utils/object.js';
 import {build_path_literal} from '#src/utils/object-path.js';
 import {jsonb_stringify} from '#src/utils/json.js';
-import {is_not_object} from '#src/utils/value.js';
+import {is_not_object, is_object} from '#src/utils/value.js';
 
 const update_path_root_segment_pattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const update_path_nested_segment_pattern = /^(?:[a-zA-Z_][a-zA-Z0-9_]*|[0-9]+)$/;
+const reserved_metadata_fields = new Set(['id', 'created_at', 'updated_at']);
+const unsafe_hydrate_keys = new Set(['__proto__', 'constructor', 'prototype']);
 
 export default function model(schema_instance, model_configuration) {
 	assert_condition(schema_instance && typeof schema_instance.validate === 'function', 'schema_instance is required');
 	assert_condition(is_not_object(model_configuration) === false, 'model options are required');
+	assert_schema_has_no_reserved_metadata_paths(schema_instance);
+	assert_condition(
+		has_own(model_configuration, 'data_column') === false,
+		'model options.data_column is reserved for internal use and cannot be configured'
+	);
 
 	const model_options = Object.assign({}, defaults.model_options, model_configuration);
+	model_options.data_column = defaults.model_options.data_column;
+	
 	assert_identifier(model_options.table_name, 'table_name');
 	assert_identifier(model_options.data_column, 'data_column');
 
@@ -42,6 +52,7 @@ export default function model(schema_instance, model_configuration) {
 	Model.model_name = model_options.table_name;
 	Model.schema_instance = schema_instance;
 	Model.model_options = model_options;
+	
 	Model.resolve_id_strategy = function () {
 		const connection_options = get_connection_options();
 		const model_id_strategy = model_options.id_strategy;
@@ -114,6 +125,26 @@ export default function model(schema_instance, model_configuration) {
 		return new QueryBuilder(Model, 'count_documents', query_filter || {}, null);
 	};
 
+	Model.hydrate = function (target_value, source_value) {
+		if(is_not_object(target_value) || is_not_object(source_value)) {
+			return target_value;
+		}
+
+		const hydrate_allowed_keys = resolve_hydrate_allowed_keys(schema_instance);
+
+		for(const key of hydrate_allowed_keys) {
+			if(unsafe_hydrate_keys.has(key)) {
+				continue;
+			}
+
+			if(has_own(target_value, key) && has_own(source_value, key)) {
+				target_value[key] = source_value[key];
+			}
+		}
+
+		return target_value;
+	};
+
 	Model.update_one = async function (query_filter, update_definition) {
 		const update_object = update_definition || {};
 		const set_definition = update_object.$set;
@@ -128,8 +159,10 @@ export default function model(schema_instance, model_configuration) {
 		const data_identifier = quote_identifier(model_options.data_column);
 		const where_result = where_compiler(query_filter || {}, {
 			data_column: model_options.data_column,
-			schema: schema_instance
+			schema: schema_instance,
+			id_strategy: Model.resolve_id_strategy()
 		});
+		
 		const parameter_state = create_parameter_state(where_result.next_index);
 		let data_expression = data_identifier;
 
@@ -143,7 +176,11 @@ export default function model(schema_instance, model_configuration) {
 			'SET ' + data_identifier + ' = ' + data_expression + ', updated_at = NOW() ' +
 			'FROM target_row ' +
 			'WHERE target_table.id = target_row.id ' +
-			'RETURNING target_table.' + data_identifier + ' AS data';
+			'RETURNING target_table.id::text AS id, ' +
+			'target_table.' + data_identifier + ' AS data, ' +
+			'target_table.created_at AS created_at, ' +
+			'target_table.updated_at AS updated_at';
+			
 		const sql_params = where_result.params.concat(parameter_state.params);
 		const query_result = await sql_runner(sql_text, sql_params);
 
@@ -151,7 +188,7 @@ export default function model(schema_instance, model_configuration) {
 			return null;
 		}
 
-		return query_result.rows[0].data;
+		return shape_row_output(query_result.rows[0]);
 	};
 
 	Model.delete_one = async function (query_filter) {
@@ -159,7 +196,8 @@ export default function model(schema_instance, model_configuration) {
 		const data_identifier = quote_identifier(model_options.data_column);
 		const where_result = where_compiler(query_filter || {}, {
 			data_column: model_options.data_column,
-			schema: schema_instance
+			schema: schema_instance,
+			id_strategy: Model.resolve_id_strategy()
 		});
 
 		const sql_text =
@@ -167,7 +205,11 @@ export default function model(schema_instance, model_configuration) {
 			'DELETE FROM ' + table_identifier + ' AS target_table ' +
 			'USING target_row ' +
 			'WHERE target_table.id = target_row.id ' +
-			'RETURNING target_table.' + data_identifier + ' AS data';
+			'RETURNING target_table.id::text AS id, ' +
+			'target_table.' + data_identifier + ' AS data, ' +
+			'target_table.created_at AS created_at, ' +
+			'target_table.updated_at AS updated_at';
+			
 		let query_result;
 
 		try {
@@ -176,7 +218,6 @@ export default function model(schema_instance, model_configuration) {
 			if(is_missing_relation_query_error(error)) {
 				return null;
 			}
-
 			throw error;
 		}
 
@@ -184,7 +225,7 @@ export default function model(schema_instance, model_configuration) {
 			return null;
 		}
 
-		return query_result.rows[0].data;
+		return shape_row_output(query_result.rows[0]);
 	};
 
 	function cast_update_value(path_value, next_value) {
@@ -207,7 +248,6 @@ export default function model(schema_instance, model_configuration) {
 		if(!schema_instance || typeof schema_instance.path !== 'function') {
 			return null;
 		}
-
 		return schema_instance.path(path_value);
 	}
 
@@ -215,29 +255,24 @@ export default function model(schema_instance, model_configuration) {
 		const has_set_updates = set_definition !== undefined;
 		const has_insert_updates = insert_definition !== undefined;
 		const has_set_lax_updates = set_lax_definition !== undefined;
+		const allowed_operators = ['$set', '$insert', '$set_lax'];
 
 		if(!has_set_updates && !has_insert_updates && !has_set_lax_updates) {
 			throw new QueryError('update_one requires at least one supported update operator', {
-				allowed: ['$set', '$insert', '$set_lax']
+				allowed: allowed_operators
 			});
 		}
 
 		if(has_set_updates && is_not_object(set_definition)) {
-			throw new QueryError('update_definition.$set must be an object', {
-				allowed: ['$set', '$insert', '$set_lax']
-			});
+			throw new QueryError('update_definition.$set must be an object', { allowed: allowed_operators });
 		}
 
 		if(has_insert_updates && is_not_object(insert_definition)) {
-			throw new QueryError('update_definition.$insert must be an object', {
-				allowed: ['$set', '$insert', '$set_lax']
-			});
+			throw new QueryError('update_definition.$insert must be an object', { allowed: allowed_operators });
 		}
 
 		if(has_set_lax_updates && is_not_object(set_lax_definition)) {
-			throw new QueryError('update_definition.$set_lax must be an object', {
-				allowed: ['$set', '$insert', '$set_lax']
-			});
+			throw new QueryError('update_definition.$set_lax must be an object', { allowed: allowed_operators });
 		}
 
 		const update_path_entries = collect_update_path_entries([
@@ -254,20 +289,14 @@ export default function model(schema_instance, model_configuration) {
 			return data_expression;
 		}
 
-		const set_entries = Object.entries(set_definition);
-		let set_index = 0;
 		let next_expression = data_expression;
 
-		while(set_index < set_entries.length) {
-			const set_entry = set_entries[set_index];
-			const path_value = set_entry[0];
-			const next_value = set_entry[1];
-			const casted_value = cast_update_value(path_value, next_value);
-			const path_literal = build_update_path_literal(path_value);
+		for(const [path, value] of Object.entries(set_definition)) {
+			const casted_value = cast_update_value(path, value);
+			const path_literal = build_update_path_literal(path);
 			const placeholder = bind_parameter(parameter_state, jsonb_stringify(casted_value));
 
 			next_expression = 'jsonb_set(' + next_expression + ", '" + path_literal + "', " + placeholder + '::jsonb, true)';
-			set_index += 1;
 		}
 
 		return next_expression;
@@ -278,22 +307,17 @@ export default function model(schema_instance, model_configuration) {
 			return data_expression;
 		}
 
-		const insert_entries = Object.entries(insert_definition);
-		let insert_index = 0;
 		let next_expression = data_expression;
 
-		while(insert_index < insert_entries.length) {
-			const insert_entry = insert_entries[insert_index];
-			const path_value = insert_entry[0];
-			const insert_config = normalize_insert_update(path_value, insert_entry[1]);
-			const casted_value = cast_update_value(path_value, insert_config.value);
-			const path_literal = build_update_path_literal(path_value);
+		for(const [path, definition_value] of Object.entries(insert_definition)) {
+			const insert_config = normalize_insert_update(path, definition_value);
+			const casted_value = cast_update_value(path, insert_config.value);
+			const path_literal = build_update_path_literal(path);
 			const value_placeholder = bind_parameter(parameter_state, jsonb_stringify(casted_value));
 			const insert_after_sql = insert_config.insert_after ? 'true' : 'false';
 
 			next_expression =
 				'jsonb_insert(' + next_expression + ", '" + path_literal + "', " + value_placeholder + '::jsonb, ' + insert_after_sql + ')';
-			insert_index += 1;
 		}
 
 		return next_expression;
@@ -304,23 +328,18 @@ export default function model(schema_instance, model_configuration) {
 			return data_expression;
 		}
 
-		const set_lax_entries = Object.entries(set_lax_definition);
-		let set_lax_index = 0;
 		let next_expression = data_expression;
 
-		while(set_lax_index < set_lax_entries.length) {
-			const set_lax_entry = set_lax_entries[set_lax_index];
-			const path_value = set_lax_entry[0];
-			const set_lax_config = normalize_set_lax_update(path_value, set_lax_entry[1]);
-			const casted_value = cast_update_value(path_value, set_lax_config.value);
-			const path_literal = build_update_path_literal(path_value);
+		for(const [path, definition_value] of Object.entries(set_lax_definition)) {
+			const set_lax_config = normalize_set_lax_update(path, definition_value);
+			const casted_value = cast_update_value(path, set_lax_config.value);
+			const path_literal = build_update_path_literal(path);
 			const value_placeholder = bind_parameter(parameter_state, cast_update_parameter_value(casted_value));
 			const create_if_missing_sql = set_lax_config.create_if_missing ? 'true' : 'false';
 
 			next_expression =
 				'jsonb_set_lax(' + next_expression + ", '" + path_literal + "', " + value_placeholder + '::jsonb, ' +
 				create_if_missing_sql + ", '" + set_lax_config.null_value_treatment + "')";
-			set_lax_index += 1;
 		}
 
 		return next_expression;
@@ -332,46 +351,27 @@ export default function model(schema_instance, model_configuration) {
 
 	function collect_update_path_entries(update_operator_entries) {
 		const update_path_entries = [];
-		let operator_index = 0;
 
-		while(operator_index < update_operator_entries.length) {
-			const operator_entry = update_operator_entries[operator_index];
+		for(const operator_entry of update_operator_entries) {
 			const definition = operator_entry.definition;
 
-			if(definition === undefined) {
-				operator_index += 1;
-				continue;
-			}
+			if(definition === undefined) continue;
 
-			const path_entries = Object.entries(definition);
-			let path_index = 0;
-
-			while(path_index < path_entries.length) {
-				const path_entry = path_entries[path_index];
-				const path_value = path_entry[0];
-
-				split_update_path(path_value, operator_entry.operator_name);
+			for(const path of Object.keys(definition)) {
+				split_update_path(path, operator_entry.operator_name);
 				update_path_entries.push({
 					operator_name: operator_entry.operator_name,
-					path: path_value
+					path: path
 				});
-
-				path_index += 1;
 			}
-
-			operator_index += 1;
 		}
 
 		return update_path_entries;
 	}
 
 	function assert_no_conflicting_update_paths(update_path_entries) {
-		let left_index = 0;
-
-		while(left_index < update_path_entries.length) {
-			let right_index = left_index + 1;
-
-			while(right_index < update_path_entries.length) {
+		for(let left_index = 0; left_index < update_path_entries.length; left_index++) {
+			for(let right_index = left_index + 1; right_index < update_path_entries.length; right_index++) {
 				const left_entry = update_path_entries[left_index];
 				const right_entry = update_path_entries[right_index];
 
@@ -381,11 +381,7 @@ export default function model(schema_instance, model_configuration) {
 						right: right_entry
 					});
 				}
-
-				right_index += 1;
 			}
-
-			left_index += 1;
 		}
 	}
 
@@ -393,15 +389,13 @@ export default function model(schema_instance, model_configuration) {
 		if(left_path === right_path) {
 			return true;
 		}
-
 		return left_path.indexOf(right_path + '.') === 0 || right_path.indexOf(left_path + '.') === 0;
 	}
 
 	function split_update_path(path_value, operator_name) {
 		const path_segments = path_value.split('.');
-		let segment_index = 0;
 
-		while(segment_index < path_segments.length) {
+		for(let segment_index = 0; segment_index < path_segments.length; segment_index++) {
 			const segment_value = path_segments[segment_index];
 			const is_root = segment_index === 0;
 
@@ -419,14 +413,20 @@ export default function model(schema_instance, model_configuration) {
 				});
 			}
 
+			if(is_root && reserved_metadata_fields.has(segment_value)) {
+				throw new QueryError('Update path targets a reserved metadata field', {
+					operator: operator_name,
+					path: path_value,
+					field: segment_value
+				});
+			}
+
 			if(!is_root && !update_path_nested_segment_pattern.test(segment_value)) {
 				throw new QueryError('Update path contains an invalid nested segment', {
 					operator: operator_name,
 					path: path_value
 				});
 			}
-
-			segment_index += 1;
 		}
 
 		return path_segments;
@@ -436,7 +436,6 @@ export default function model(schema_instance, model_configuration) {
 		if(casted_value === null) {
 			return null;
 		}
-
 		return jsonb_stringify(casted_value);
 	}
 
@@ -508,33 +507,23 @@ export default function model(schema_instance, model_configuration) {
 	}
 
 	function assert_model_id_strategy_supported(final_id_strategy) {
-		if(final_id_strategy !== IdStrategies.uuidv7) {
+		if(final_id_strategy !== IdStrategies.uuidv7 || !has_pool()) {
 			return;
 		}
-
-		if(!has_pool()) {
-			return;
-		}
-
 		const server_capabilities = get_server_capabilities();
 		assert_id_strategy_capability(final_id_strategy, server_capabilities);
 	}
 
 	async function ensure_schema_indexes(final_table_name) {
 		const schema_indexes = resolve_schema_indexes(schema_instance);
-		let index_position = 0;
 
-		while(index_position < schema_indexes.length) {
-			const index_definition = schema_indexes[index_position];
-
+		for(const index_definition of schema_indexes) {
 			await ensure_index(
 				final_table_name,
 				index_definition.index_spec,
 				model_options.data_column,
 				index_definition.index_options
 			);
-
-			index_position += 1;
 		}
 	}
 
@@ -550,6 +539,83 @@ export default function model(schema_instance, model_configuration) {
 	return Model;
 }
 
+function assert_schema_has_no_reserved_metadata_paths(schema_instance) {
+	const schema_paths = schema_instance?.schema_description?.paths;
 
+	if(is_not_array(schema_paths)) {
+		return;
+	}
 
+	for(const path of schema_paths) {
+		const root_path = typeof path === 'string' ? path.split('.')[0] : null;
 
+		if(root_path && reserved_metadata_fields.has(root_path)) {
+			throw new Error('Schema path "' + root_path + '" is reserved and cannot be declared');
+		}
+	}
+}
+
+function resolve_hydrate_allowed_keys(schema_instance) {
+	const schema_paths = schema_instance?.schema_description?.paths;
+	const allowed_keys = [];
+	const seen_keys = new Set();
+
+	if(is_array(schema_paths)) {
+		for(const path of schema_paths) {
+			if(typeof path !== 'string' || path.length === 0) continue;
+
+			const root_path = path.split('.')[0];
+
+			if(!seen_keys.has(root_path)) {
+				seen_keys.add(root_path);
+				allowed_keys.push(root_path);
+			}
+		}
+	}
+
+	const reserved_keys = ['id', 'created_at', 'updated_at'];
+	
+	for(const reserved_key of reserved_keys) {
+		if(!seen_keys.has(reserved_key)) {
+			seen_keys.add(reserved_key);
+			allowed_keys.push(reserved_key);
+		}
+	}
+
+	return allowed_keys;
+}
+
+function shape_row_output(row_value) {
+	const payload_value = is_object(row_value?.data) ? row_value.data : {};
+	const output_value = {};
+
+	for(const [key, next_value] of Object.entries(payload_value)) {
+		if(!reserved_metadata_fields.has(key)) {
+			output_value[key] = next_value;
+		}
+	}
+
+	output_value.id = row_value?.id == null ? row_value?.id : String(row_value.id);
+	output_value.created_at = normalize_timestamp_value(row_value?.created_at);
+	output_value.updated_at = normalize_timestamp_value(row_value?.updated_at);
+
+	return output_value;
+}
+
+function normalize_timestamp_value(timestamp_value) {
+	if(timestamp_value == null) {
+		return timestamp_value;
+	}
+
+	if(timestamp_value instanceof Date) {
+		return timestamp_value.toISOString();
+	}
+
+	const parsed_timestamp = new Date(timestamp_value);
+
+	if(Number.isNaN(parsed_timestamp.getTime())) {
+		return String(timestamp_value);
+	}
+
+	return parsed_timestamp.toISOString();
+}

@@ -43,8 +43,7 @@ describe('PostgreSQL JSON capability alignment', function () {
 			});
 
 			capability_model = jsonbadger.model(capability_schema, {
-				table_name: test_table_name,
-				data_column: 'data'
+				table_name: test_table_name
 			});
 
 			await capability_model.ensure_table();

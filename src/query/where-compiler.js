@@ -21,13 +21,19 @@
 
 import {build_elem_text_expression, build_json_expression, build_text_expression, parse_path} from '#src/query/path-parser.js';
 
-import {create_parameter_state} from '#src/sql/parameter-binder.js';
+import QueryError from '#src/errors/query-error.js';
+import {bind_parameter, create_parameter_state} from '#src/sql/parameter-binder.js';
+import IdStrategies from '#src/constants/id-strategies.js';
 
 import {quote_identifier} from '#src/utils/assert.js';
 import {build_nested_object, split_dot_path} from '#src/utils/object-path.js';
 import {is_object} from '#src/utils/value.js';
 
 // TODO: might as well split into multiple files within the same directory
+
+const reserved_metadata_fields = new Set(['id', 'created_at', 'updated_at']);
+const id_operator_allowlist = new Set(['$eq', '$ne', '$in', '$nin']);
+const timestamp_operator_allowlist = new Set(['$eq', '$ne', '$gt', '$gte', '$lt', '$lte', '$in', '$nin']);
 
 function where_compiler(query_filter, compile_options, start_index) {
 	const filter_object = query_filter ?? {};
@@ -62,6 +68,11 @@ function compile_field_clause(path_value, comparison_value, compile_options, par
 	const data_column_reference = quote_identifier(data_column_name);
 	const schema_instance = compile_options?.schema ?? null;
 	const is_array_path = should_use_array_contains(path_value, comparison_value, schema_instance);
+	const reserved_metadata_field = resolve_reserved_metadata_field(path_value);
+
+	if(reserved_metadata_field) {
+		return compile_reserved_metadata_clause(reserved_metadata_field, comparison_value, compile_options, parameter_state);
+	}
 
 	if(comparison_value instanceof RegExp) {
 		const text_expression = build_text_expression(data_column_reference, path_value);
@@ -90,6 +101,292 @@ function compile_field_clause(path_value, comparison_value, compile_options, par
 	const text_expression = build_text_expression(data_column_reference, path_value);
 	const casted_comparison_value = cast_query_value(path_value, comparison_value, schema_instance);
 	return eq_operator(text_expression, casted_comparison_value, parameter_state);
+}
+
+function compile_reserved_metadata_clause(field_name, comparison_value, compile_options, parameter_state) {
+	if(comparison_value instanceof RegExp) {
+		throw new QueryError('Reserved metadata field does not support regular expression matching', {
+			field: field_name
+		});
+	}
+
+	if(is_plain_object(comparison_value)) {
+		if(comparison_value.$elem_match !== undefined) {
+			throw new QueryError('Reserved metadata field does not support $elem_match', {
+				field: field_name
+			});
+		}
+
+		if(!has_operator_entries(comparison_value)) {
+			throw new QueryError('Reserved metadata field only supports scalar values or operator objects', {
+				field: field_name
+			});
+		}
+
+		const operator_entries = Object.entries(comparison_value);
+		const clause_list = [];
+		let operator_index = 0;
+
+		while(operator_index < operator_entries.length) {
+			const operator_entry = operator_entries[operator_index];
+			const operator_name = operator_entry[0];
+			const operator_value = operator_entry[1];
+
+			if(operator_name === '$options') {
+				throw new QueryError('Reserved metadata field does not support $options', {
+					field: field_name
+				});
+			}
+
+			assert_reserved_metadata_operator_supported(field_name, operator_name);
+			clause_list.push(
+				compile_reserved_metadata_operator(field_name, operator_name, operator_value, compile_options, parameter_state)
+			);
+			operator_index += 1;
+		}
+
+		return clause_list.join(' AND ');
+	}
+
+	const normalized_value = normalize_reserved_metadata_scalar(field_name, comparison_value, '$eq', compile_options);
+	return build_reserved_metadata_comparison(field_name, '$eq', normalized_value, compile_options, parameter_state);
+}
+
+function compile_reserved_metadata_operator(field_name, operator_name, operator_value, compile_options, parameter_state) {
+	if(operator_name === '$in' || operator_name === '$nin') {
+		const normalized_values = normalize_reserved_metadata_list(field_name, operator_value, operator_name, compile_options);
+		return build_reserved_metadata_comparison(field_name, operator_name, normalized_values, compile_options, parameter_state);
+	}
+
+	const normalized_value = normalize_reserved_metadata_scalar(field_name, operator_value, operator_name, compile_options);
+	return build_reserved_metadata_comparison(field_name, operator_name, normalized_value, compile_options, parameter_state);
+}
+
+function build_reserved_metadata_comparison(field_name, operator_name, normalized_value, compile_options, parameter_state) {
+	const is_timestamp_field = field_name === 'created_at' || field_name === 'updated_at';
+	const field_expression = resolve_reserved_metadata_expression(field_name);
+	const id_parameter_cast = resolve_id_parameter_cast(compile_options);
+	const placeholder = bind_parameter(parameter_state, normalized_value);
+
+	if(operator_name === '$eq') {
+		if(field_name === 'id') {
+			return field_expression + ' = ' + placeholder + id_parameter_cast;
+		}
+
+		return field_expression + ' = ' + placeholder + (is_timestamp_field ? '::timestamptz' : '');
+	}
+
+	if(operator_name === '$ne') {
+		if(field_name === 'id') {
+			return field_expression + ' != ' + placeholder + id_parameter_cast;
+		}
+
+		return field_expression + ' != ' + placeholder + (is_timestamp_field ? '::timestamptz' : '');
+	}
+
+	if(operator_name === '$gt') {
+		return field_expression + ' > ' + placeholder + '::timestamptz';
+	}
+
+	if(operator_name === '$gte') {
+		return field_expression + ' >= ' + placeholder + '::timestamptz';
+	}
+
+	if(operator_name === '$lt') {
+		return field_expression + ' < ' + placeholder + '::timestamptz';
+	}
+
+	if(operator_name === '$lte') {
+		return field_expression + ' <= ' + placeholder + '::timestamptz';
+	}
+
+	if(operator_name === '$in') {
+		if(field_name === 'id') {
+			const id_array_cast = id_parameter_cast === '::uuid' ? '::uuid[]' : '::bigint[]';
+			return field_expression + ' = ANY(' + placeholder + id_array_cast + ')';
+		}
+
+		if(is_timestamp_field) {
+			return field_expression + ' = ANY(' + placeholder + '::timestamptz[])';
+		}
+
+		return field_expression + ' = ANY(' + placeholder + '::text[])';
+	}
+
+	if(operator_name === '$nin') {
+		if(field_name === 'id') {
+			const id_array_cast = id_parameter_cast === '::uuid' ? '::uuid[]' : '::bigint[]';
+			return 'NOT (' + field_expression + ' = ANY(' + placeholder + id_array_cast + '))';
+		}
+
+		if(is_timestamp_field) {
+			return 'NOT (' + field_expression + ' = ANY(' + placeholder + '::timestamptz[]))';
+		}
+
+		return 'NOT (' + field_expression + ' = ANY(' + placeholder + '::text[]))';
+	}
+
+	throw new QueryError('Unsupported operator for reserved metadata field', {
+		field: field_name,
+		operator: operator_name
+	});
+}
+
+function resolve_reserved_metadata_expression(field_name) {
+	if(field_name === 'id') {
+		return '"id"';
+	}
+
+	if(field_name === 'created_at') {
+		return '"created_at"';
+	}
+
+	return '"updated_at"';
+}
+
+function normalize_reserved_metadata_list(field_name, operator_value, operator_name, compile_options) {
+	const input_values = Array.isArray(operator_value) ? operator_value : [operator_value];
+	const normalized_values = [];
+	let value_index = 0;
+
+	while(value_index < input_values.length) {
+		const next_value = normalize_reserved_metadata_scalar(field_name, input_values[value_index], operator_name, compile_options);
+		normalized_values.push(next_value);
+		value_index += 1;
+	}
+
+	return normalized_values;
+}
+
+function normalize_reserved_metadata_scalar(field_name, operator_value, operator_name, compile_options) {
+	if(operator_value === undefined || operator_value === null || Array.isArray(operator_value) || is_plain_object(operator_value)) {
+		throw new QueryError('Invalid value for reserved metadata field', {
+			field: field_name,
+			operator: operator_name,
+			value: operator_value
+		});
+	}
+
+	if(field_name === 'id') {
+		return normalize_id_value(operator_value, operator_name, compile_options);
+	}
+
+	return normalize_timestamp_value(field_name, operator_name, operator_value);
+}
+
+function normalize_timestamp_value(field_name, operator_name, operator_value) {
+	const parsed_timestamp = operator_value instanceof Date ? operator_value : new Date(operator_value);
+
+	if(Number.isNaN(parsed_timestamp.getTime())) {
+		throw new QueryError('Invalid timestamp value for reserved metadata field', {
+			field: field_name,
+			operator: operator_name,
+			value: operator_value
+		});
+	}
+
+	return parsed_timestamp.toISOString();
+}
+
+function normalize_id_value(operator_value, operator_name, compile_options) {
+	const resolved_id_strategy = resolve_compile_id_strategy(compile_options);
+
+	if(resolved_id_strategy === IdStrategies.uuidv7) {
+		const uuid_value = String(operator_value);
+
+		if(!is_uuid_like(uuid_value)) {
+			throw new QueryError('Invalid id value for uuid id_strategy', {
+				field: 'id',
+				operator: operator_name,
+				value: operator_value
+			});
+		}
+
+		return uuid_value;
+	}
+
+	if(typeof operator_value === 'bigint') {
+		return operator_value.toString();
+	}
+
+	if(typeof operator_value === 'number') {
+		if(Number.isInteger(operator_value) === false) {
+			throw new QueryError('Invalid id value for bigserial id_strategy', {
+				field: 'id',
+				operator: operator_name,
+				value: operator_value
+			});
+		}
+
+		return String(operator_value);
+	}
+
+	const numeric_value = String(operator_value);
+
+	if(/^[0-9]+$/.test(numeric_value) === false) {
+		throw new QueryError('Invalid id value for bigserial id_strategy', {
+			field: 'id',
+			operator: operator_name,
+			value: operator_value
+		});
+	}
+
+	return numeric_value;
+}
+
+function resolve_id_parameter_cast(compile_options) {
+	const resolved_id_strategy = resolve_compile_id_strategy(compile_options);
+
+	if(resolved_id_strategy === IdStrategies.uuidv7) {
+		return '::uuid';
+	}
+
+	return '::bigint';
+}
+
+function resolve_compile_id_strategy(compile_options) {
+	const id_strategy = compile_options?.id_strategy;
+
+	if(id_strategy === IdStrategies.uuidv7) {
+		return IdStrategies.uuidv7;
+	}
+
+	return IdStrategies.bigserial;
+}
+
+function is_uuid_like(value) {
+	return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function assert_reserved_metadata_operator_supported(field_name, operator_name) {
+	const allowed_operator_set = field_name === 'id' ? id_operator_allowlist : timestamp_operator_allowlist;
+
+	if(allowed_operator_set.has(operator_name)) {
+		return;
+	}
+
+	throw new QueryError('Operator is not supported for reserved metadata field', {
+		field: field_name,
+		operator: operator_name
+	});
+}
+
+function resolve_reserved_metadata_field(path_value) {
+	const path_info = parse_path(path_value);
+	const root_path = path_info.root_path;
+
+	if(!reserved_metadata_fields.has(root_path)) {
+		return null;
+	}
+
+	if(path_info.is_nested) {
+		throw new QueryError('Reserved metadata fields only support top-level paths', {
+			path: path_value,
+			field: root_path
+		});
+	}
+
+	return root_path;
 }
 
 function compile_operator_object(path_value, operator_definition, data_column_reference, schema_instance, parameter_state) {
@@ -471,6 +768,10 @@ function has_operator_entries(object_value) {
 	}
 
 	return false;
+}
+
+function is_plain_object(value) {
+	return is_object(value) && Array.isArray(value) === false && value instanceof Date === false;
 }
 
 export default where_compiler;

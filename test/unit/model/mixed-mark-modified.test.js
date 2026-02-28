@@ -36,26 +36,29 @@ describe('mark_modified mutable edge cases', function () {
 
 	test('in-place Date mutations require explicit mark_modified', function () {
 		const schema_instance = new Schema({
-			updated_at: Date
+			runtime_date: Date
 		});
+
 		const User = model(schema_instance, {
 			table_name: 'users'
 		});
+
 		const initial_date = new Date('2026-01-15T12:00:00.000Z');
+
 		const user_document = new User({
-			updated_at: initial_date
+			runtime_date: initial_date
 		});
 
 		expect(user_document.is_modified()).toBe(false);
 
-		user_document.data.updated_at.setUTCMonth(2);
+		user_document.data.runtime_date.setUTCMonth(2);
 
 		expect(user_document.is_modified()).toBe(false);
-		expect(user_document.is_modified('updated_at')).toBe(false);
+		expect(user_document.is_modified('runtime_date')).toBe(false);
 
-		user_document.mark_modified('updated_at');
+		user_document.mark_modified('runtime_date');
 
 		expect(user_document.is_modified()).toBe(true);
-		expect(user_document.is_modified('updated_at')).toBe(true);
+		expect(user_document.is_modified('runtime_date')).toBe(true);
 	});
 });

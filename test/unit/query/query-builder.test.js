@@ -17,7 +17,14 @@ describe('QueryBuilder.exec read behavior', function () {
 
 	test('find_one does not auto-create tables via ensure_table', async function () {
 		const ensure_table_spy = jest.fn();
-		sql_runner_mock.mockResolvedValueOnce({rows: [{data: {user_name: 'john'}}]});
+		sql_runner_mock.mockResolvedValueOnce({
+			rows: [{
+				id: '7',
+				data: {user_name: 'john'},
+				created_at: new Date('2026-02-27T10:00:00.000Z'),
+				updated_at: new Date('2026-02-27T11:00:00.000Z')
+			}]
+		});
 
 		const query_builder = new QueryBuilder({
 			schema_instance: null,
@@ -27,7 +34,12 @@ describe('QueryBuilder.exec read behavior', function () {
 
 		const result = await query_builder.exec();
 
-		expect(result).toEqual({user_name: 'john'});
+		expect(result).toEqual({
+			user_name: 'john',
+			id: '7',
+			created_at: '2026-02-27T10:00:00.000Z',
+			updated_at: '2026-02-27T11:00:00.000Z'
+		});
 		expect(ensure_table_spy).not.toHaveBeenCalled();
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
 	});
@@ -66,8 +78,18 @@ describe('QueryBuilder.exec read behavior', function () {
 	test('query builder chain methods configure find SQL and map rows', async function () {
 		sql_runner_mock.mockResolvedValueOnce({
 			rows: [
-				{data: {user_name: 'amy'}},
-				{data: {user_name: 'bob'}}
+				{
+					id: '1',
+					data: {user_name: 'amy'},
+					created_at: new Date('2026-02-27T10:00:00.000Z'),
+					updated_at: new Date('2026-02-27T10:30:00.000Z')
+				},
+				{
+					id: '2',
+					data: {user_name: 'bob'},
+					created_at: new Date('2026-02-27T11:00:00.000Z'),
+					updated_at: new Date('2026-02-27T11:30:00.000Z')
+				}
 			]
 		});
 
@@ -85,8 +107,21 @@ describe('QueryBuilder.exec read behavior', function () {
 		const result = await query_builder.exec();
 		const sql_text = sql_runner_mock.mock.calls[0][0];
 
-		expect(result).toEqual([{user_name: 'amy'}, {user_name: 'bob'}]);
-		expect(sql_text).toContain('SELECT "data" AS data FROM "users" WHERE');
+		expect(result).toEqual([
+			{
+				user_name: 'amy',
+				id: '1',
+				created_at: '2026-02-27T10:00:00.000Z',
+				updated_at: '2026-02-27T10:30:00.000Z'
+			},
+			{
+				user_name: 'bob',
+				id: '2',
+				created_at: '2026-02-27T11:00:00.000Z',
+				updated_at: '2026-02-27T11:30:00.000Z'
+			}
+		]);
+		expect(sql_text).toContain('SELECT id::text AS id, "data" AS data, created_at AS created_at, updated_at AS updated_at FROM "users" WHERE');
 		expect(sql_text).toContain(' ORDER BY "data" ->> \'user_name\' DESC');
 		expect(sql_text).toContain(' LIMIT 2');
 		expect(sql_text).toContain(' OFFSET 1');
@@ -107,7 +142,14 @@ describe('QueryBuilder.exec read behavior', function () {
 	});
 
 	test('find_one respects an explicit limit and does not overwrite it with 1', async function () {
-		sql_runner_mock.mockResolvedValueOnce({rows: [{data: {user_name: 'john'}}]});
+		sql_runner_mock.mockResolvedValueOnce({
+			rows: [{
+				id: '7',
+				data: {user_name: 'john'},
+				created_at: new Date('2026-02-27T10:00:00.000Z'),
+				updated_at: new Date('2026-02-27T11:00:00.000Z')
+			}]
+		});
 
 		const query_builder = new QueryBuilder({
 			schema_instance: null,

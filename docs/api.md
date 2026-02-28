@@ -66,12 +66,13 @@ Path-level sugar in schema definitions is also supported:
 
 ## model
 
-`const User = model(user_schema, { table_name, data_column?, id_strategy?, auto_index? })`
+`const User = model(user_schema, { table_name, id_strategy?, auto_index? })`
 
 - `table_name` is required.
-- `data_column` defaults to `data`.
 - `id_strategy` defaults to connection-level `id_strategy`, then library default `IdStrategies.bigserial`.
 - `auto_index` defaults to model option if set, otherwise connection-level `auto_index`.
+- Reserved computed metadata fields are `id`, `created_at`, and `updated_at`.
+- Reserved metadata fields cannot be declared in schema definitions and are read-only on write paths.
 
 UUIDv7 notes:
 - `IdStrategies.uuidv7` uses database-generated row IDs via table DDL (`id UUID PRIMARY KEY DEFAULT uuidv7()`).
@@ -84,6 +85,12 @@ static methods:
 - `find(query_filter, projection_value?)`
 - `find_one(query_filter)`
 - `count_documents(query_filter)`
+- `hydrate(target, source)`:
+  - copies only allowed root keys (schema roots + reserved metadata keys) from `source` to `target`
+  - copies only keys that exist as own properties on both `target` and `source`
+  - silently returns `target` unchanged when inputs are not objects
+  - silently ignores unsafe keys (`__proto__`, `constructor`, `prototype`)
+  - copies `undefined` when the key exists on `source`
 - `update_one(query_filter, update_definition)`
   - supported operators: `$set`, `$insert`, `$set_lax`
   - operator application order is deterministic and nested: `$set` -> `$insert` -> `$set_lax`
@@ -92,7 +99,7 @@ static methods:
   - update paths allow numeric nested segments for JSON array indexes (for example, `tags.0`)
   - conflicting update paths (same path or parent/child overlap across operators) are rejected before SQL execution
 - `delete_one(query_filter)`
-  - deletes one matching row and returns the deleted document data
+  - deletes one matching row and returns `{ id, ...payload_fields, created_at, updated_at }`
   - returns `null` when no row matches
   - does not implicitly call `ensure_table()`; if the table does not exist yet, returns `null`
 
@@ -115,6 +122,12 @@ Runtime behavior notes:
 - `is_modified(path_name?)` and `clear_modified()` are available runtime helpers for dirty-path inspection/reset.
 - `immutable: true` fields are writable before first persist and become protected after a successful `save()`.
 - `to_object(...)` / `to_json(...)` apply getters by default; pass `{ getters: false }` to bypass getter transforms during serialization.
+- Data-returning methods return flat metadata + payload objects:
+  - `save()` returns `{ id, ...payload_fields, created_at, updated_at }`
+  - `find(...).exec()` returns an array of `{ id, ...payload_fields, created_at, updated_at }`
+  - `find_one(...).exec()` returns `{ id, ...payload_fields, created_at, updated_at }` or `null`
+  - `update_one(...)` returns `{ id, ...payload_fields, created_at, updated_at }` or `null`
+  - `delete_one(...)` returns `{ id, ...payload_fields, created_at, updated_at }` or `null`
 
 ## query filters
 
@@ -124,6 +137,14 @@ Supported filter/operator families (current implemented set):
 - regex: `$regex` (+ `$options`)
 - JSONB key existence: `$has_key`, `$has_any_keys`, `$has_all_keys`
 - JSONPath: `$json_path_exists`, `$json_path_match`
+
+Reserved metadata query/sort semantics:
+- top-level `id`, `created_at`, and `updated_at` map to table columns.
+- dotted reserved paths (for example `created_at.value`) are rejected with `query_error`.
+- metadata operator matrix:
+  - `id`: direct equality, `$eq`, `$ne`, `$in`, `$nin`
+  - `created_at` / `updated_at`: direct equality, `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`
+  - unsupported on metadata keys: `$regex`, `$contains`, `$all`, `$size`, `$has_key`, `$has_any_keys`, `$has_all_keys`, `$json_path_exists`, `$json_path_match`, `$elem_match`
 
 Existence semantics:
 - `$has_key` / `$has_any_keys` / `$has_all_keys` map directly to PostgreSQL `?`, `?|`, and `?&`.

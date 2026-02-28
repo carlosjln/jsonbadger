@@ -1,3 +1,4 @@
+import QueryError from '#src/errors/query-error.js';
 import sql_runner from '#src/sql/sql-runner.js';
 import {jsonb_stringify} from '#src/utils/json.js';
 import {quote_identifier} from '#src/utils/assert.js';
@@ -7,6 +8,7 @@ import {is_array} from '#src/utils/array.js';
 import {is_not_object, is_object, is_string} from '#src/utils/value.js';
 
 const runtime_state_symbol = Symbol('document_runtime_state');
+const reserved_metadata_keys = new Set(['id', 'created_at', 'updated_at']);
 
 export default function document_instance(model_constructor) {
 	const schema_instance = model_constructor.schema_instance;
@@ -131,20 +133,21 @@ export default function document_instance(model_constructor) {
 	model_constructor.prototype.save = async function () {
 		ensure_runtime_state(this);
 
-		const model_options = model_constructor.model_options;
-		const table_name = model_options.table_name;
-		const data_column = model_options.data_column;
+		const {table_name, data_column} = model_constructor.model_options;
 		const table_identifier = quote_identifier(table_name);
 		const data_identifier = quote_identifier(data_column);
 		const validated_payload = this.validate();
+
+		assert_payload_has_no_reserved_metadata_writes(validated_payload, 'save');
 
 		await model_constructor.ensure_table();
 
 		const insert_statement = build_insert_statement(table_identifier, data_identifier, validated_payload);
 		const query_result = await sql_runner(insert_statement.sql_text, insert_statement.sql_params);
-		const saved_data = query_result.rows[0].data;
+		const saved_row = query_result.rows[0];
+		const saved_data = shape_row_output(saved_row);
 
-		this.data = saved_data;
+		this.data = sanitize_payload_data(saved_row.data);
 		this.is_new = false;
 		clear_document_modified_paths(this);
 		return saved_data;
@@ -153,13 +156,76 @@ export default function document_instance(model_constructor) {
 
 function build_insert_statement(table_identifier, data_identifier, validated_payload) {
 	const serialized_payload = jsonb_stringify(validated_payload);
-	const sql_text = 'INSERT INTO ' + table_identifier + ' (' + data_identifier + ') VALUES ($1::jsonb) RETURNING ' + data_identifier + ' AS data';
+	const sql_text =
+		'INSERT INTO ' + table_identifier + ' (' + data_identifier + ') VALUES ($1::jsonb) ' +
+		'RETURNING id::text AS id, ' + data_identifier + ' AS data, created_at AS created_at, updated_at AS updated_at';
 	const sql_params = [serialized_payload];
 
 	return {
 		sql_text: sql_text,
 		sql_params: sql_params
 	};
+}
+
+function sanitize_payload_data(payload_value) {
+	if(!is_object(payload_value)) {
+		return {};
+	}
+
+	const sanitized_payload = {};
+
+	for(const [key, next_value] of Object.entries(payload_value)) {
+		if(!reserved_metadata_keys.has(key)) {
+			sanitized_payload[key] = next_value;
+		}
+	}
+
+	return sanitized_payload;
+}
+
+function shape_row_output(row_value) {
+	const output_value = sanitize_payload_data(row_value?.data);
+
+	output_value.id = row_value?.id == null ? row_value?.id : String(row_value.id);
+	output_value.created_at = normalize_timestamp_value(row_value?.created_at);
+	output_value.updated_at = normalize_timestamp_value(row_value?.updated_at);
+
+	return output_value;
+}
+
+function normalize_timestamp_value(timestamp_value) {
+	if(timestamp_value == null) {
+		return timestamp_value;
+	}
+
+	if(timestamp_value instanceof Date) {
+		return timestamp_value.toISOString();
+	}
+
+	const parsed_timestamp = new Date(timestamp_value);
+
+	if(Number.isNaN(parsed_timestamp.getTime())) {
+		return String(timestamp_value);
+	}
+
+	return parsed_timestamp.toISOString();
+}
+
+function assert_payload_has_no_reserved_metadata_writes(payload_value, operation_name) {
+	if(!is_object(payload_value)) {
+		return;
+	}
+
+	const reserved_keys = ['id', 'created_at', 'updated_at'];
+
+	for(const key of reserved_keys) {
+		if(has_own(payload_value, key)) {
+			throw new QueryError('Reserved metadata fields are read-only', {
+				operation: operation_name,
+				field: key
+			});
+		}
+	}
 }
 
 function serialize_document(document_instance, model_constructor, mode_value, serialization_options) {
@@ -243,14 +309,11 @@ function apply_schema_getters(serialized_value, schema_instance, mode_value) {
 	}
 
 	const path_names = resolve_schema_paths(schema_instance);
-	let path_index = 0;
 
-	while(path_index < path_names.length) {
-		const path_name = path_names[path_index];
+	for(const path_name of path_names) {
 		const field_type = schema_instance.path(path_name);
 
 		if(!field_type || !field_type.options || typeof field_type.options.get !== 'function') {
-			path_index += 1;
 			continue;
 		}
 
@@ -261,14 +324,8 @@ function apply_schema_getters(serialized_value, schema_instance, mode_value) {
 				mode: mode_value
 			});
 		};
-		const update_result = update_existing_path(serialized_value, path_segments, apply_getter);
 
-		if(!update_result.exists) {
-			path_index += 1;
-			continue;
-		}
-
-		path_index += 1;
+		update_existing_path(serialized_value, path_segments, apply_getter);
 	}
 
 	return serialized_value;
@@ -281,30 +338,13 @@ function resolve_schema_paths(schema_instance) {
 		return [];
 	}
 
-	const path_entries = [];
-	let path_index = 0;
-
-	while(path_index < schema_description.paths.length) {
-		const path_name = schema_description.paths[path_index];
-
-		path_entries.push({
+	return schema_description.paths
+		.map(path_name => ({
 			path_name: path_name,
 			depth: path_name.split('.').length
-		});
-		path_index += 1;
-	}
-
-	path_entries.sort(sort_paths_by_getter_order);
-
-	const sorted_paths = [];
-	path_index = 0;
-
-	while(path_index < path_entries.length) {
-		sorted_paths.push(path_entries[path_index].path_name);
-		path_index += 1;
-	}
-
-	return sorted_paths;
+		}))
+		.sort(sort_paths_by_getter_order)
+		.map(entry => entry.path_name);
 }
 
 function sort_paths_by_getter_order(left_path_entry, right_path_entry) {
@@ -326,15 +366,11 @@ function build_alias_path_map(schema_instance) {
 		return alias_path_map;
 	}
 
-	let path_index = 0;
-
-	while(path_index < schema_description.paths.length) {
-		const path_name = schema_description.paths[path_index];
+	for(const path_name of schema_description.paths) {
 		const field_type = schema_instance.path(path_name);
 		const alias_value = field_type && field_type.options ? field_type.options.alias : undefined;
 
 		if(!is_string(alias_value) || alias_value.length === 0) {
-			path_index += 1;
 			continue;
 		}
 
@@ -343,21 +379,14 @@ function build_alias_path_map(schema_instance) {
 		}
 
 		alias_path_map[alias_value] = path_name;
-		path_index += 1;
 	}
 
 	return alias_path_map;
 }
 
 function define_alias_properties(model_constructor, alias_path_map) {
-	const alias_names = Object.keys(alias_path_map);
-	let alias_index = 0;
-
-	while(alias_index < alias_names.length) {
-		const alias_name = alias_names[alias_index];
-
+	for(const alias_name of Object.keys(alias_path_map)) {
 		if(alias_name.indexOf('.') !== -1) {
-			alias_index += 1;
 			continue;
 		}
 
@@ -375,7 +404,6 @@ function define_alias_properties(model_constructor, alias_path_map) {
 				this.set(alias_name, next_value);
 			}
 		});
-		alias_index += 1;
 	}
 }
 
@@ -442,17 +470,10 @@ function is_path_marked_modified(modified_paths, path_name) {
 		return true;
 	}
 
-	const modified_path_values = Array.from(modified_paths);
-	let path_index = 0;
-
-	while(path_index < modified_path_values.length) {
-		const modified_path = modified_path_values[path_index];
-
+	for(const modified_path of modified_paths) {
 		if(is_parent_or_child_path(modified_path, path_name)) {
 			return true;
 		}
-
-		path_index += 1;
 	}
 
 	return false;
@@ -464,11 +485,8 @@ function is_parent_or_child_path(left_path, right_path) {
 
 function read_existing_path(root_object, path_segments) {
 	let current_value = root_object;
-	let segment_index = 0;
 
-	while(segment_index < path_segments.length) {
-		const segment_value = path_segments[segment_index];
-
+	for(const segment_value of path_segments) {
 		if(is_not_object(current_value) || !has_own(current_value, segment_value)) {
 			return {
 				exists: false,
@@ -477,7 +495,6 @@ function read_existing_path(root_object, path_segments) {
 		}
 
 		current_value = current_value[segment_value];
-		segment_index += 1;
 	}
 
 	return {
@@ -488,9 +505,8 @@ function read_existing_path(root_object, path_segments) {
 
 function write_path(root_object, path_segments, next_value) {
 	let current_value = root_object;
-	let segment_index = 0;
 
-	while(segment_index < path_segments.length) {
+	for(let segment_index = 0; segment_index < path_segments.length; segment_index++) {
 		const segment_value = path_segments[segment_index];
 		const is_leaf = segment_index === path_segments.length - 1;
 
@@ -508,15 +524,13 @@ function write_path(root_object, path_segments, next_value) {
 		}
 
 		current_value = current_value[segment_value];
-		segment_index += 1;
 	}
 }
 
 function update_existing_path(root_object, path_segments, update_value) {
 	let current_value = root_object;
-	let segment_index = 0;
 
-	while(segment_index < path_segments.length) {
+	for(let segment_index = 0; segment_index < path_segments.length; segment_index++) {
 		const segment_value = path_segments[segment_index];
 		const is_leaf = segment_index === path_segments.length - 1;
 
@@ -534,7 +548,5 @@ function update_existing_path(root_object, path_segments, update_value) {
 		}
 
 		current_value = current_value[segment_value];
-		segment_index += 1;
 	}
-
 }

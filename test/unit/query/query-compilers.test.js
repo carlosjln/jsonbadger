@@ -58,4 +58,14 @@ describe('query compilers', function () {
 			" ORDER BY \"payload_json\" ->> 'city' ASC"
 		);
 	});
+
+	test('sort_compiler maps reserved metadata fields to table columns and rejects dotted reserved paths', function () {
+		expect(sort_compiler({id: 1, created_at: -1, updated_at: 1})).toBe(
+			' ORDER BY "id" ASC, "created_at" DESC, "updated_at" ASC'
+		);
+
+		expect(function compile_invalid_reserved_sort_path() {
+			sort_compiler({'created_at.value': 1});
+		}).toThrow('Reserved metadata fields only support top-level sort paths');
+	});
 });

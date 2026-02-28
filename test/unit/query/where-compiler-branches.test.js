@@ -207,4 +207,56 @@ describe('where_compiler branch coverage', function () {
 			where_compiler({tags: {$elem_match: {$unknown: 1}}});
 		}).toThrow('Unsupported operator inside $elem_match: $unknown');
 	});
+
+	test('routes reserved metadata fields to table columns and validates allowed operators', function () {
+		const metadata_result = where_compiler({
+			id: {$in: ['1', '2']},
+			created_at: {$gte: '2026-02-27T00:00:00.000Z'},
+			updated_at: {$lt: new Date('2026-02-28T00:00:00.000Z')}
+		});
+
+		expect(metadata_result.sql).toContain('"id" = ANY($1::bigint[])');
+		expect(metadata_result.sql).toContain('"created_at" >= $2::timestamptz');
+		expect(metadata_result.sql).toContain('"updated_at" < $3::timestamptz');
+		expect(metadata_result.params).toEqual([
+			['1', '2'],
+			'2026-02-27T00:00:00.000Z',
+			'2026-02-28T00:00:00.000Z'
+		]);
+	});
+
+	test('rejects dotted reserved paths and unsupported reserved-field operators', function () {
+		expect(function compile_dotted_reserved_path() {
+			where_compiler({'created_at.value': {$eq: '2026-02-27T00:00:00.000Z'}});
+		}).toThrow('Reserved metadata fields only support top-level paths');
+
+		expect(function compile_reserved_regex_operator() {
+			where_compiler({id: {$regex: '^1'}});
+		}).toThrow('Operator is not supported for reserved metadata field');
+
+		expect(function compile_reserved_json_operator() {
+			where_compiler({created_at: {$json_path_exists: '$.x'}});
+		}).toThrow('Operator is not supported for reserved metadata field');
+	});
+
+	test('uses uuid parameter casts for id filters when id_strategy is uuidv7', function () {
+		const metadata_result = where_compiler({
+			id: {$eq: '0194f028-579a-7b5b-8107-b9ad31395f43'}
+		}, {
+			id_strategy: 'uuidv7'
+		});
+
+		expect(metadata_result.sql).toContain('"id" = $1::uuid');
+		expect(metadata_result.params).toEqual(['0194f028-579a-7b5b-8107-b9ad31395f43']);
+	});
+
+	test('rejects invalid id values for selected id_strategy', function () {
+		expect(function compile_invalid_bigserial_id() {
+			where_compiler({id: {$eq: 'abc'}});
+		}).toThrow('Invalid id value for bigserial id_strategy');
+
+		expect(function compile_invalid_uuid_id() {
+			where_compiler({id: {$eq: 'abc'}}, {id_strategy: 'uuidv7'});
+		}).toThrow('Invalid id value for uuid id_strategy');
+	});
 });

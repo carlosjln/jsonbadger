@@ -16,12 +16,13 @@ Use this page for syntax and working shapes. Use [`docs/api.md`](api.md) for API
 Quick jump:
 - [How to Read This Page](#how-to-read-this-page)
 - [Shared Fixture and Assumptions](#shared-fixture-and-assumptions)
+- [Reserved Metadata Fields](#reserved-metadata-fields)
 - [Setup and Connect](#setup-and-connect)
 - [ID Strategy Examples](#id-strategy-examples)
 - [Schema and Model Definition](#schema-and-model-definition)
 - [Built-in FieldType Examples](#built-in-fieldtype-examples)
 - [Create and Save Documents](#create-and-save-documents)
-- [Query Basics (find, find_one, count)](#query-basics-find-find_one-count)
+- [Query Basics (find, find_one, count_documents)](#query-basics-find-find_one-count_documents)
 - [Direct Equality and Scalar Comparisons](#direct-equality-and-scalar-comparisons)
 - [Regex Operators](#regex-operators)
 - [Array and JSON Query Operators](#array-and-json-query-operators)
@@ -38,6 +39,7 @@ Quick jump:
 
 Most snippets below are intentionally short and not fully standalone. Unless a section says otherwise, examples assume:
 
+- You are running ESM (`import ...`) with top-level `await` enabled.
 - You already connected with `jsonbadger.connect(...)`.
 - You defined the `User` model from `Schema and Model Definition`.
 - You either ran manual migrations (`ensure_table()` / `ensure_schema()`) or allowed a first write to create the table.
@@ -45,6 +47,13 @@ Most snippets below are intentionally short and not fully standalone. Unless a s
 
 When a snippet uses a different value (for example `user_name: 'jane'`), either seed a matching row first or replace the filter value with one that exists in your local data.
 
+
+## Reserved Metadata Fields
+
+- `id`, `created_at`, and `updated_at` are reserved computed fields.
+- They are read-only and returned at the top level in data-returning operations.
+- You cannot declare them in schema definitions or target them in write/update payload paths.
+- Query/sort support for these fields is top-level only (no dotted reserved paths).
 
 ## Setup and Connect
 
@@ -131,7 +140,6 @@ user_schema.create_index({user_name: 1, age: -1});
 
 const User = jsonbadger.model(user_schema, {
 	table_name: 'users',
-	data_column: 'data',
 	auto_index: true,
 	id_strategy: jsonbadger.IdStrategies.bigserial
 });
@@ -140,9 +148,11 @@ const User = jsonbadger.model(user_schema, {
 Migration helpers (manual/explicit path):
 
 ```js
+// Option A: run table and indexes explicitly
 await User.ensure_table();
 await User.ensure_index();
-// or: ensure_schema() does both (table + declared schema indexes)
+
+// Option B: run both in one call
 await User.ensure_schema();
 ```
 
@@ -202,7 +212,8 @@ const user_doc = new User({
 
 await user_doc.validate();
 const saved_user = await user_doc.save();
-// returns: saved data object (plain object); `user_doc.data` is updated to the saved payload
+// returns: { id, user_name, age, status, tags, profile, orders, payload, created_at, updated_at }
+// `user_doc.data` remains payload-only data
 ```
 
 Validation failure pattern (`validation_error`):
@@ -224,7 +235,7 @@ try {
 }
 ```
 
-## Query Basics (find, find_one, count)
+## Query Basics (find, find_one, count_documents)
 
 Assumes (for the query sections below):
 - `User` is defined and at least one document was saved (see `## Create and Save Documents`).
@@ -233,10 +244,10 @@ Assumes (for the query sections below):
 
 ```js
 const all_users = await User.find({}).exec();
-// returns: [{ user_name: 'john', ... }, ...] (array of plain data objects)
+// returns: [{ id, user_name: 'john', ..., created_at, updated_at }, ...]
 
 const found_user = await User.find_one({user_name: 'john'}).exec();
-// returns: { user_name: 'john', ... } or null (plain data object)
+// returns: { id, user_name: 'john', ..., created_at, updated_at } or null
 
 const adult_count = await User.count_documents({age: {$gte: 18}}).exec();
 // returns: number
@@ -280,6 +291,14 @@ Set membership operators:
 ```js
 await User.find({status: {$in: ['active', 'pending']}}).exec();
 await User.find({status: {$nin: ['disabled', 'banned']}}).exec();
+```
+
+Reserved metadata filters (top-level only):
+
+```js
+await User.find({id: {$in: [1, 2, 3]}}).exec(); // bigserial default
+await User.find({created_at: {$gte: '2026-01-01T00:00:00.000Z'}}).exec();
+await User.find({updated_at: {$lt: '2026-12-31T23:59:59.999Z'}}).sort({updated_at: -1}).exec();
 ```
 
 ## Regex Operators
@@ -421,7 +440,7 @@ const updated_user = await User.update_one(
 		}
 	}
 );
-// returns: updated data object (plain object) or null
+// returns: { id, ..., created_at, updated_at } or null
 ```
 
 `$insert` (maps to `jsonb_insert(...)`) with numeric array index paths:
@@ -512,7 +531,7 @@ await User.update_one({user_name: 'john'}, {
 
 ```js
 const deleted_user = await User.delete_one({user_name: 'john'});
-// returns: deleted data object (plain object) or null
+// returns: { id, ..., created_at, updated_at } or null
 ```
 
 No match (or missing table) returns `null`:
@@ -572,7 +591,9 @@ const alias_schema = new jsonbadger.Schema({
 	}
 });
 
-const AliasUser = jsonbadger.model('alias_users', alias_schema);
+const AliasUser = jsonbadger.model(alias_schema, {
+	table_name: 'alias_users'
+});
 const alias_doc = new AliasUser({profile: {city: 'Miami'}});
 
 // alias path -> underlying path
@@ -581,7 +602,7 @@ alias_doc.set('city', 'Orlando');
 alias_doc.get('profile.city'); // 'Orlando'
 ```
 
-Aliases are path aliases for `doc.get(...)`, `doc.set(...)`, and `doc.mark_modified(...)`. They do not create direct properties (for example, `alias_doc.city`).
+Aliases are path aliases for `doc.get(...)`, `doc.set(...)`, and `doc.mark_modified(...)`. Non-dotted alias names also get runtime property proxies (for example, `alias_doc.city`).
 
 Serialization helpers (`to_object`, `to_json`) apply getters by default:
 

@@ -44,8 +44,7 @@ const user_schema = new jsonbadger.Schema({
 });
 
 export const UserModel = jsonbadger.model(user_schema, {
-	table_name: 'users',
-	data_column: 'data'
+	table_name: 'users'
 });
 ```
 
@@ -64,14 +63,14 @@ export class User {
 
 	static async get_all() {
 		const docs = await UserModel.find({}).exec();
-		// returns: [{ username: 'john', email: 'john@example.com', ... }, ...]
+		// returns: [{ id, username: 'john', email: 'john@example.com', ..., created_at, updated_at }, ...]
 		return docs;
 	}
 
 	async save() {
 		const user_doc = new UserModel(this);
 		const saved_doc = await user_doc.save();
-		// returns: { username: 'john', email: 'john@example.com', ... }
+		// returns: { id, username: 'john', email: 'john@example.com', ..., created_at, updated_at }
 
 		return saved_doc;
 	}
@@ -161,7 +160,7 @@ const is_same_pool = pool_a === pool_b;
 ## What to expect
 
 - Connection bootstrap can be called from many files, but all calls reuse the same shared pool in one runtime.
-- `find(...).exec()` returns arrays of plain data objects.
-- `find_one(...).exec()` returns one plain data object or `null`.
+- `find(...).exec()` returns arrays of flat objects with metadata (`id`, `created_at`, `updated_at`) plus payload fields.
+- `find_one(...).exec()` returns one flat object with metadata plus payload fields, or `null`.
 - `count_documents(...).exec()` returns a number.
 - Entity-level rules stay out of controllers and model declarations.

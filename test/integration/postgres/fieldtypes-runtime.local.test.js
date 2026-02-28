@@ -48,7 +48,7 @@ describe('FieldTypes runtime PostgreSQL integration', function () {
 				},
 				tags: [String],
 				payload: {},
-				updated_at: Date
+				runtime_date: Date
 			}, {
 				to_json: {
 					transform: function (doc, ret) {
@@ -59,8 +59,7 @@ describe('FieldTypes runtime PostgreSQL integration', function () {
 			});
 
 			const Account = jsonbadger.model(account_schema, {
-				table_name: test_table_name,
-				data_column: 'data'
+				table_name: test_table_name
 			});
 
 			const account_document = new Account({
@@ -70,7 +69,7 @@ describe('FieldTypes runtime PostgreSQL integration', function () {
 					legacy: true,
 					prefs: {theme: 'light'}
 				},
-				updated_at: created_at
+				runtime_date: created_at
 			});
 
 			account_document.set('userName', '  john  ');
@@ -84,21 +83,21 @@ describe('FieldTypes runtime PostgreSQL integration', function () {
 			});
 
 			account_document.data.payload.prefs.theme = 'dark';
-			account_document.data.updated_at.setUTCDate(24);
+			account_document.data.runtime_date.setUTCDate(24);
 
 			expect(account_document.is_modified()).toBe(true); // user_name set(...) already marked dirty
 			account_document.clear_modified();
 			expect(account_document.is_modified()).toBe(false);
 
 			expect(account_document.is_modified('payload')).toBe(false);
-			expect(account_document.is_modified('updated_at')).toBe(false);
+			expect(account_document.is_modified('runtime_date')).toBe(false);
 
 			account_document.mark_modified('payload');
-			account_document.mark_modified('updated_at');
+			account_document.mark_modified('runtime_date');
 
 			expect(account_document.is_modified('payload')).toBe(true);
 			expect(account_document.is_modified('payload.prefs')).toBe(true);
-			expect(account_document.is_modified('updated_at')).toBe(true);
+			expect(account_document.is_modified('runtime_date')).toBe(true);
 
 			const saved_data = await account_document.save();
 

@@ -43,7 +43,14 @@ describe('Model.delete_one', function () {
 	beforeEach(function () {
 		ensure_table_mock.mockReset();
 		sql_runner_mock.mockReset();
-		sql_runner_mock.mockResolvedValue({rows: [{data: {user_name: 'john'}}]});
+		sql_runner_mock.mockResolvedValue({
+			rows: [{
+				id: '12',
+				data: {user_name: 'john'},
+				created_at: new Date('2026-02-27T10:00:00.000Z'),
+				updated_at: new Date('2026-02-27T11:00:00.000Z')
+			}]
+		});
 		connection_options_state.id_strategy = 'bigserial';
 		connection_options_state.auto_index = false;
 	});
@@ -59,7 +66,12 @@ describe('Model.delete_one', function () {
 
 		const deleted_data = await user_model.delete_one({active: 'yes'});
 
-		expect(deleted_data).toEqual({user_name: 'john'});
+		expect(deleted_data).toEqual({
+			user_name: 'john',
+			id: '12',
+			created_at: '2026-02-27T10:00:00.000Z',
+			updated_at: '2026-02-27T11:00:00.000Z'
+		});
 		expect(ensure_table_mock).not.toHaveBeenCalled();
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
 
@@ -69,7 +81,7 @@ describe('Model.delete_one', function () {
 		expect(sql_text).toContain('WITH target_row AS (SELECT id FROM "users" WHERE');
 		expect(sql_text).toContain('DELETE FROM "users" AS target_table');
 		expect(sql_text).toContain('USING target_row');
-		expect(sql_text).toContain('RETURNING target_table."data" AS data');
+		expect(sql_text).toContain('RETURNING target_table.id::text AS id, target_table."data" AS data, target_table.created_at AS created_at, target_table.updated_at AS updated_at');
 		expect(sql_params).toEqual(['true']);
 	});
 

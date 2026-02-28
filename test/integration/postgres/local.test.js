@@ -61,8 +61,7 @@ describe('Local PostgreSQL integration', function () {
 			user_schema.create_index({'address.city': 1, age: -1});
 
 			const user_model = jsonbadger.model(user_schema, {
-				table_name: test_table_name,
-				data_column: 'data'
+				table_name: test_table_name
 			});
 
 			// 2. Ensure Database Objects

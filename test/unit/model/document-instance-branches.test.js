@@ -194,7 +194,7 @@ describe('document-instance branch behavior', function () {
 	test('is_modified returns false for unrelated paths', function () {
 		const schema_instance = new Schema({
 			profile: {city: String},
-			updated_at: Date
+			runtime_date: Date
 		});
 
 		const User = model(schema_instance, {table_name: 'users'});
@@ -202,7 +202,7 @@ describe('document-instance branch behavior', function () {
 
 		doc.mark_modified('profile.city');
 
-		expect(doc.is_modified('updated_at')).toBe(false);
+		expect(doc.is_modified('runtime_date')).toBe(false);
 	});
 });
 

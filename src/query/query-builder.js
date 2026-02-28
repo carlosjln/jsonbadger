@@ -5,6 +5,9 @@ import where_compiler from '#src/query/where-compiler.js';
 import sql_runner from '#src/sql/sql-runner.js';
 
 import {quote_identifier} from '#src/utils/assert.js';
+import {is_object} from '#src/utils/value.js';
+
+const reserved_metadata_keys = new Set(['id', 'created_at', 'updated_at']);
 
 export default function QueryBuilder(model_constructor, operation_name, query_filter, projection_value) {
 	this.model_constructor = model_constructor;
@@ -47,7 +50,8 @@ QueryBuilder.prototype.exec = async function () {
 	const merged_filter = Object.assign({}, this.base_filter, this.where_filter);
 	const where_result = where_compiler(merged_filter, {
 		data_column: data_column,
-		schema: schema_instance
+		schema: schema_instance,
+		id_strategy: resolve_model_id_strategy(this.model_constructor)
 	});
 
 
@@ -62,7 +66,12 @@ QueryBuilder.prototype.exec = async function () {
 		return Number(count_result.rows[0].total_count);
 	}
 
-	let sql_text = 'SELECT ' + data_identifier + ' AS data FROM ' + table_identifier + ' WHERE ' + where_result.sql;
+	let sql_text =
+		'SELECT id::text AS id, ' +
+		data_identifier + ' AS data, ' +
+		'created_at AS created_at, ' +
+		'updated_at AS updated_at ' +
+		'FROM ' + table_identifier + ' WHERE ' + where_result.sql;
 	const sort_sql = sort_compiler(this.sort_definition, {
 		data_column: data_column
 	});
@@ -84,10 +93,61 @@ QueryBuilder.prototype.exec = async function () {
 			return null;
 		}
 
-		return query_result.rows[0].data;
+		return shape_query_row(query_result.rows[0]);
 	}
 
 	return query_result.rows.map(function map_row(row_value) {
-		return row_value.data;
+		return shape_query_row(row_value);
 	});
 };
+
+function resolve_model_id_strategy(model_constructor) {
+	if(typeof model_constructor?.resolve_id_strategy === 'function') {
+		return model_constructor.resolve_id_strategy();
+	}
+
+	return model_constructor?.model_options?.id_strategy ?? 'bigserial';
+}
+
+function shape_query_row(row_value) {
+	const payload_value = is_object(row_value?.data) ? row_value.data : {};
+	const output_value = {};
+	const payload_entries = Object.entries(payload_value);
+	let payload_index = 0;
+
+	while(payload_index < payload_entries.length) {
+		const payload_entry = payload_entries[payload_index];
+		const key_value = payload_entry[0];
+		const next_value = payload_entry[1];
+
+		if(!reserved_metadata_keys.has(key_value)) {
+			output_value[key_value] = next_value;
+		}
+
+		payload_index += 1;
+	}
+
+	output_value.id = row_value?.id === undefined || row_value?.id === null ? row_value?.id : String(row_value.id);
+	output_value.created_at = normalize_timestamp_value(row_value?.created_at);
+	output_value.updated_at = normalize_timestamp_value(row_value?.updated_at);
+
+	return output_value;
+}
+
+function normalize_timestamp_value(timestamp_value) {
+	if(timestamp_value === undefined || timestamp_value === null) {
+		return timestamp_value;
+	}
+
+	if(timestamp_value instanceof Date) {
+		return timestamp_value.toISOString();
+	}
+
+	const parsed_timestamp = new Date(timestamp_value);
+
+	if(Number.isNaN(parsed_timestamp.getTime())) {
+		return String(timestamp_value);
+	}
+
+	return parsed_timestamp.toISOString();
+}

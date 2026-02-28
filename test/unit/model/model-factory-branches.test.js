@@ -65,7 +65,14 @@ describe('model-factory branch behavior', function () {
 		ensure_table_mock.mockResolvedValue(undefined);
 		ensure_index_mock.mockResolvedValue(undefined);
 		ensure_schema_mock.mockResolvedValue(undefined);
-		sql_runner_mock.mockResolvedValue({rows: [{data: {ok: true}}]});
+		sql_runner_mock.mockResolvedValue({
+			rows: [{
+				id: '5',
+				data: {ok: true},
+				created_at: new Date('2026-02-27T10:00:00.000Z'),
+				updated_at: new Date('2026-02-27T11:00:00.000Z')
+			}]
+		});
 
 		connection_options_state.id_strategy = 'bigserial';
 		connection_options_state.auto_index = false;
@@ -103,6 +110,23 @@ describe('model-factory branch behavior', function () {
 
 		expect(override_model.resolve_id_strategy()).toBe('bigserial');
 		expect(fallback_model.resolve_id_strategy()).toBe('uuidv7');
+	});
+
+	test('rejects reserved schema root fields and public data_column override', function () {
+		expect(function create_reserved_id_model() {
+			model(new Schema({id: String}), {table_name: 'users'});
+		}).toThrow('reserved');
+
+		expect(function create_reserved_created_at_model() {
+			model(new Schema({created_at: Date}), {table_name: 'users'});
+		}).toThrow('reserved');
+
+		expect(function create_public_data_column_model() {
+			model(new Schema({name: String}), {
+				table_name: 'users',
+				data_column: 'payload'
+			});
+		}).toThrow('data_column');
 	});
 
 	test('ensure_index creates table and applies schema indexes even when uuidv7 is selected without a pool', async function () {
@@ -214,6 +238,48 @@ describe('model-factory branch behavior', function () {
 
 		await expect(user_model.delete_one({name: 'a'})).rejects.toThrow('SQL execution failed');
 	});
+
+	test('Model.hydrate copies own schema/metadata keys and silently ignores invalid or unsafe keys', function () {
+		const user_model = model(new Schema({
+			name: String,
+			profile: {
+				city: String
+			}
+		}), {table_name: 'users'});
+
+		const target = {
+			name: 'before',
+			profile: {city: 'old'},
+			id: '1',
+			created_at: 'old-created',
+			updated_at: 'old-updated',
+			extra: 'keep'
+		};
+
+		const source = {
+			name: 'after',
+			profile: {city: 'new'},
+			id: '2',
+			created_at: '2026-02-27T10:00:00.000Z',
+			updated_at: undefined,
+			__proto__: {polluted: true},
+			extra: 'ignore'
+		};
+
+		const hydrated = user_model.hydrate(target, source);
+
+		expect(hydrated).toBe(target);
+		expect(target).toEqual({
+			name: 'after',
+			profile: {city: 'new'},
+			id: '2',
+			created_at: '2026-02-27T10:00:00.000Z',
+			updated_at: undefined,
+			extra: 'keep'
+		});
+		expect(user_model.hydrate(target, null)).toBe(target);
+		expect(user_model.hydrate(null, source)).toBeNull();
+	});
 });
 
 function build_schema_stub(indexes) {
@@ -226,4 +292,3 @@ function build_schema_stub(indexes) {
 		}
 	};
 }
-
