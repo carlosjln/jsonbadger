@@ -1,6 +1,8 @@
-# jsonbadger examples cheat sheet
+# JsonBadger examples cheat sheet
 
-This page is an example-first cheat sheet for users and AI agents. It shows copy-pasteable jsonbadger usage in increasing complexity and covers the currently implemented query and update operator surface.
+JsonBadger is a PostgreSQL-backed document mapper for working with JSONB data through a model/document API.
+
+This page is an example-first cheat sheet for users and AI agents. It shows copy-pasteable JsonBadger usage in increasing complexity and covers the currently implemented query and update operator surface.
 
 Use this page for syntax and working shapes. Use [`docs/api.md`](api.md) for API reference details and [`docs/query-translation.md`](query-translation.md) for PostgreSQL operator/function semantics.
 
@@ -12,8 +14,11 @@ Use this page for syntax and working shapes. Use [`docs/api.md`](api.md) for API
 - This page only includes currently implemented behavior.
 - `Assumes:` notes tell you what earlier setup/data a snippet depends on.
 - Important mechanics: queries run when you call `.exec()` (for example `await User.find({}).exec()`), and direct in-place mutations on nested `doc.data` values may require `doc.mark_modified('path')` after mutating.
+- Operation scope: this page covers `save`, `find`, `find_one`, `count_documents`, `update_one`, and `delete_one`. Bulk helpers (`insert_many`, `update_many`, `delete_many`) are not part of the current API surface.
 
 Quick jump:
+
+Setup
 - [How to Read This Page](#how-to-read-this-page)
 - [Shared Fixture and Assumptions](#shared-fixture-and-assumptions)
 - [Reserved Metadata Fields](#reserved-metadata-fields)
@@ -22,14 +27,20 @@ Quick jump:
 - [Schema and Model Definition](#schema-and-model-definition)
 - [Built-in FieldType Examples](#built-in-fieldtype-examples)
 - [Create and Save Documents](#create-and-save-documents)
+
+Queries
 - [Query Basics (find, find_one, count_documents)](#query-basics-find-find_one-count_documents)
 - [Direct Equality and Scalar Comparisons](#direct-equality-and-scalar-comparisons)
 - [Regex Operators](#regex-operators)
 - [Array and JSON Query Operators](#array-and-json-query-operators)
 - [JSONB Key Existence Operators](#jsonb-key-existence-operators)
 - [JSONPath Operators](#jsonpath-operators)
+
+Mutations
 - [Update Operators (`update_one`)](#update-operators-update_one)
 - [Delete Operations](#delete-operations)
+
+Advanced
 - [Runtime Document Methods (get/set, dirty tracking, serialization)](#runtime-document-methods-getset-dirty-tracking-serialization)
 - [Optional Alias Path Example](#optional-alias-path-example)
 - [Complete Operator Checklist (Query and Update)](#complete-operator-checklist-query-and-update)
@@ -40,7 +51,7 @@ Quick jump:
 Most snippets below are intentionally short and not fully standalone. Unless a section says otherwise, examples assume:
 
 - You are running ESM (`import ...`) with top-level `await` enabled.
-- You already connected with `jsonbadger.connect(...)`.
+- You already connected with `JsonBadger.connect(...)`.
 - You defined the `User` model from `Schema and Model Definition`.
 - You either ran manual migrations (`ensure_table()` / `ensure_schema()`) or allowed a first write to create the table.
 - You seeded at least one `User` document using the `Create and Save Documents` example (including `tags`, `orders`, and `payload`).
@@ -57,8 +68,10 @@ When a snippet uses a different value (for example `name: 'jane'`), either seed 
 
 ## Setup and Connect
 
+> Important: `IdStrategies.uuidv7` requires native PostgreSQL `uuidv7()` support (PostgreSQL 18+).
+
 ```js
-import jsonbadger from 'jsonbadger';
+import JsonBadger from 'jsonbadger';
 
 const db_uri = 'postgresql://user:pass@localhost:5432/dbname';
 const db_connection_options = {
@@ -66,10 +79,10 @@ const db_connection_options = {
 	max: 10,
 	ssl: false,
 	auto_index: true,
-	id_strategy: jsonbadger.IdStrategies.bigserial
+	id_strategy: JsonBadger.IdStrategies.bigserial
 };
 
-await jsonbadger.connect(db_uri, db_connection_options);
+await JsonBadger.connect(db_uri, db_connection_options);
 ```
 
 UUIDv7 server default (PostgreSQL 18+ native `uuidv7()` required):
@@ -77,15 +90,32 @@ UUIDv7 server default (PostgreSQL 18+ native `uuidv7()` required):
 ```js
 const db_uri = 'postgresql://user:pass@localhost:5432/dbname';
 const db_connection_options = {
-	id_strategy: jsonbadger.IdStrategies.uuidv7
+	id_strategy: JsonBadger.IdStrategies.uuidv7
 };
 
-await jsonbadger.connect(db_uri, db_connection_options);
+await JsonBadger.connect(db_uri, db_connection_options);
 ```
 
 Notes:
-- jsonbadger checks native `uuidv7()` support automatically during `connect(...)` and caches the capability result.
+- JsonBadger checks native `uuidv7()` support automatically during `connect(...)` and caches the capability result.
 - Reads do not auto-create tables. A first write (`save()` / `update_one(...)`) can create the table, or you can call `ensure_table()` / `ensure_schema()` explicitly.
+
+Teardown example:
+
+```js
+await JsonBadger.disconnect();
+```
+
+Connection failure pattern (before a pool is established in the process):
+
+```js
+try {
+	await JsonBadger.connect('postgresql://wrong_user:wrong_pass@localhost:5432/dbname');
+} catch(error) {
+	// connection/auth/network failures bubble directly from `pg`
+	console.error(error.message);
+}
+```
 
 ## ID Strategy Examples
 
@@ -94,34 +124,34 @@ Server-wide default (`connect`) plus model override (`model(...)`):
 ```js
 const db_uri = 'postgresql://user:pass@localhost:5432/dbname';
 const db_connection_options = {
-	id_strategy: jsonbadger.IdStrategies.uuidv7 // PostgreSQL 18+ native uuidv7() required
+	id_strategy: JsonBadger.IdStrategies.uuidv7 // PostgreSQL 18+ native uuidv7() required
 };
 
-await jsonbadger.connect(db_uri, db_connection_options);
+await JsonBadger.connect(db_uri, db_connection_options);
 
-const AuditLog = jsonbadger.model(new jsonbadger.Schema({
+const AuditLog = JsonBadger.model(new JsonBadger.Schema({
 	event_name: String
 }), {
 	table_name: 'audit_logs',
 	// inherits server id_strategy: uuidv7
 });
 
-const Counter = jsonbadger.model(new jsonbadger.Schema({
+const Counter = JsonBadger.model(new JsonBadger.Schema({
 	label: String
 }), {
 	table_name: 'counters',
-	id_strategy: jsonbadger.IdStrategies.bigserial // model override
+	id_strategy: JsonBadger.IdStrategies.bigserial // model override
 });
 ```
 
 Notes:
 - `id_strategy` precedence is: model option -> connection option -> library default (`bigserial`).
-- `IdStrategies.uuidv7` uses database-generated IDs (`DEFAULT uuidv7()`) and jsonbadger validates support internally.
+- `IdStrategies.uuidv7` uses database-generated IDs (`DEFAULT uuidv7()`) and JsonBadger validates support internally.
 
 ## Schema and Model Definition
 
 ```js
-const user_schema = new jsonbadger.Schema({
+const user_schema = new JsonBadger.Schema({
 	name: {type: String, required: true, trim: true, index: true, get: (value) => value && value.toUpperCase()},
 	age: {type: Number, min: 0, index: -1},
 	status: {type: String, immutable: true},
@@ -138,10 +168,10 @@ const user_schema = new jsonbadger.Schema({
 user_schema.create_index('profile.city');
 user_schema.create_index({name: 1, age: -1});
 
-const User = jsonbadger.model(user_schema, {
+const User = JsonBadger.model(user_schema, {
 	table_name: 'users',
 	auto_index: true,
-	id_strategy: jsonbadger.IdStrategies.bigserial
+	id_strategy: JsonBadger.IdStrategies.bigserial
 });
 ```
 
@@ -159,7 +189,7 @@ await User.ensure_schema();
 ## Built-in FieldType Examples
 
 ```js
-const account_schema = new jsonbadger.Schema({
+const account_schema = new JsonBadger.Schema({
 	name: { type: String, trim: true, required: true },
 	age: { type: Number, min: 0 },
 	is_active: Boolean,
@@ -176,6 +206,25 @@ const account_schema = new jsonbadger.Schema({
 	code_or_label: { type: 'Union', of: [String, Number] }
 });
 ```
+
+Quick FieldType reference:
+
+| Field | FieldType | Example |
+| --- | --- | --- |
+| `name` | `String` | `{ type: String, trim: true, required: true }` |
+| `age` | `Number` | `{ type: Number, min: 0 }` |
+| `is_active` | `Boolean` | `is_active: Boolean` |
+| `joined_at` | `Date` | `joined_at: Date` |
+| `owner_id` | `UUIDv7` | `{ type: 'UUIDv7' }` |
+| `avatar` | `Buffer` | `avatar: Buffer` |
+| `payload` | `Mixed` | `payload: {}` |
+| `tags` | `Array<String>` | `tags: [String]` |
+| `handles` | `Map<String>` | `{ type: Map, of: String }` |
+| `amount` | `Decimal128` | `{ type: 'Decimal128' }` |
+| `visits_64` | `BigInt` | `{ type: 'BigInt' }` |
+| `ratio` | `Double` | `{ type: 'Double' }` |
+| `score_32` | `Int32` | `{ type: 'Int32' }` |
+| `code_or_label` | `Union<String, Number>` | `{ type: 'Union', of: [String, Number] }` |
 
 Edge cases and practical notes:
 - In-place changes to `Mixed` (`{}`) values and `Date` objects do not mark the path dirty automatically; call `doc.mark_modified('path')` after mutating them.
@@ -212,10 +261,11 @@ const user_doc = new User({
 
 await user_doc.validate();
 const saved_user = await user_doc.save();
-// returns: User document instance
-// saved_user.to_json() -> { id, name, age, status, tags, profile, orders, payload, created_at, updated_at }
-// `user_doc.data` remains payload-only data
 ```
+
+Returns: `saved_user` is a `User` document instance.  
+Snapshot shape: `saved_user.to_json()` -> `{ id, name, age, status, tags, profile, orders, payload, created_at, updated_at }`.  
+Runtime note: `user_doc.data` remains payload-only data.
 
 Validation failure pattern (`validation_error`):
 
@@ -236,6 +286,38 @@ try {
 }
 ```
 
+Constraint/query failure pattern (`query_error`):
+
+Assumes:
+- You created a unique index and applied it (for example via `ensure_schema()`).
+
+```js
+const unique_user_schema = new JsonBadger.Schema({
+	email: {type: String, required: true}
+});
+unique_user_schema.create_index({email: 1}, {
+	unique: true,
+	name: 'idx_unique_users_email'
+});
+
+const UniqueUser = JsonBadger.model(unique_user_schema, {
+	table_name: 'unique_users'
+});
+await UniqueUser.ensure_schema();
+
+await new UniqueUser({email: 'john@example.com'}).save();
+
+try {
+	await new UniqueUser({email: 'john@example.com'}).save();
+} catch(error) {
+	if(error.name === 'query_error') {
+		const error_payload = error.to_json();
+		const cause_message = error_payload.error.details?.cause;
+		// usually includes: duplicate key value violates unique constraint
+	}
+}
+```
+
 ## Query Basics (find, find_one, count_documents)
 
 Assumes (for the query sections below):
@@ -245,16 +327,17 @@ Assumes (for the query sections below):
 
 ```js
 const all_users = await User.find({}).exec();
-// returns: [User document instance, ...]
-// all_users[0].to_json() -> { id, name: 'john', ..., created_at, updated_at }
 
 const found_user = await User.find_one({name: 'john'}).exec();
-// returns: User document instance or null
-// found_user?.to_json() -> { id, name: 'john', ..., created_at, updated_at }
 
 const adult_count = await User.count_documents({age: {$gte: 18}}).exec();
-// returns: number
 ```
+
+Returns:
+- `all_users`: `User[]` (document instances)
+- `found_user`: `User | null`
+- `adult_count`: `number`
+- Snapshot example: `all_users[0]?.to_json()` -> `{ id, name: 'john', ..., created_at, updated_at }`
 
 Query builder chaining:
 
@@ -386,7 +469,7 @@ await User.find({payload: {$has_any_keys: ['profile', 'flags']}}).exec();
 await User.find({payload: {$has_all_keys: ['profile', 'score']}}).exec();
 ```
 
-Nested-scope existence (jsonbadger extracts the nested JSONB value first, then applies top-level existence there):
+Nested-scope existence (JsonBadger extracts the nested JSONB value first, then applies top-level existence there):
 
 ```js
 await User.find({'payload.profile': {$has_key: 'city'}}).exec();
@@ -443,9 +526,10 @@ const updated_user = await User.update_one(
 		}
 	}
 );
-// returns: User document instance or null
-// updated_user?.to_json() -> { id, ..., created_at, updated_at }
 ```
+
+Returns: `updated_user` is `User | null`.  
+Snapshot shape: `updated_user?.to_json()` -> `{ id, ..., created_at, updated_at }`.
 
 `$insert` (maps to `jsonb_insert(...)`) with numeric array index paths:
 
@@ -535,19 +619,21 @@ await User.update_one({name: 'john'}, {
 
 ```js
 const deleted_user = await User.delete_one({name: 'john'});
-// returns: User document instance or null
-// deleted_user?.to_json() -> { id, ..., created_at, updated_at }
 ```
+
+Returns: `deleted_user` is `User | null`.  
+Snapshot shape: `deleted_user?.to_json()` -> `{ id, ..., created_at, updated_at }`.
 
 No match (or missing table) returns `null`:
 
 ```js
 const maybe_deleted = await User.delete_one({name: 'missing'});
-// returns: null when no row matches (or when the table does not exist yet)
 if(maybe_deleted === null) {
 	// no matching row, or table does not exist yet
 }
 ```
+
+Returns: `null` when no row matches (or when the table does not exist yet).
 
 ## Runtime Document Methods (get/set, dirty tracking, serialization)
 
@@ -590,13 +676,13 @@ doc.clear_modified();
 Use aliases only when you need an alternate path name (for example, a short path shortcut for a nested field).
 
 ```js
-const alias_schema = new jsonbadger.Schema({
+const alias_schema = new JsonBadger.Schema({
 	profile: {
 		city: {type: String, alias: 'city'}
 	}
 });
 
-const AliasUser = jsonbadger.model(alias_schema, {
+const AliasUser = JsonBadger.model(alias_schema, {
 	table_name: 'alias_users'
 });
 const alias_doc = new AliasUser({profile: {city: 'Miami'}});
@@ -628,16 +714,16 @@ await doc.save();
 
 ## Complete Operator Checklist (Query and Update)
 
-This page includes examples for:
-- direct equality and `$eq`
-- `$ne`, `$gt`, `$gte`, `$lt`, `$lte`
-- `$in`, `$nin`
-- `$regex` + `$options` (and RegExp literal shorthand)
-- `$all`, `$size`, `$elem_match`
-- `$contains`
-- `$has_key`, `$has_any_keys`, `$has_all_keys`
-- `$json_path_exists`, `$json_path_match`
-- `update_one.$set`, `update_one.$insert`, `update_one.$set_lax`
+| Family | Supported operators/methods |
+| --- | --- |
+| Scalar equality/comparison | direct equality, `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte` |
+| Set membership | `$in`, `$nin` |
+| Regex | RegExp literal shorthand, `$regex`, `$options` |
+| Array operators | `$all`, `$size`, `$elem_match` |
+| JSON containment | `$contains` |
+| JSONB key existence | `$has_key`, `$has_any_keys`, `$has_all_keys` |
+| JSONPath | `$json_path_exists`, `$json_path_match` |
+| Updates (`update_one`) | `$set`, `$insert`, `$set_lax` |
 
 ## Related Docs
 

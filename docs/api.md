@@ -1,4 +1,4 @@
-# jsonbadger API
+# JsonBadger API
 
 ## Top-level exports
 
@@ -12,7 +12,7 @@ Named exports:
 - `register_field_type(type_name, type_constructor, references?)`
 - `resolve_field_type(type_reference)`
 
-Default export (`jsonbadger`) includes the same plus:
+Default export (`JsonBadger`) includes the same plus:
 - `field_types.UUIDv7`
 - `field_types.boolean_convert_to_true`
 - `field_types.boolean_convert_to_false`
@@ -76,7 +76,7 @@ Path-level sugar in schema definitions is also supported:
 
 UUIDv7 notes:
 - `IdStrategies.uuidv7` uses database-generated row IDs via table DDL (`id UUID PRIMARY KEY DEFAULT uuidv7()`).
-- jsonbadger validates `uuidv7` support before uuidv7-backed table/schema/write paths using cached server capability metadata.
+- JsonBadger validates `uuidv7` support before uuidv7-backed table/schema/write paths using cached server capability metadata.
 
 static methods:
 - `ensure_table()`: manual migration call that ensures the table exists (for `IdStrategies.uuidv7`, table DDL uses `DEFAULT uuidv7()`); when `auto_index` is enabled, applies declared schema indexes once per model instance. First-write methods (`save()`, `update_one(...)`) can also create the table automatically.
@@ -151,7 +151,7 @@ Reserved metadata query/sort semantics:
 Existence semantics:
 - `$has_key` / `$has_any_keys` / `$has_all_keys` map directly to PostgreSQL `?`, `?|`, and `?&`.
 - These operators are top-level for the JSONB value on the left side of the operator.
-- When used with a nested field path, jsonbadger extracts that nested JSONB value first, then applies the existence operator to that extracted value.
+- When used with a nested field path, JsonBadger extracts that nested JSONB value first, then applies the existence operator to that extracted value.
 
 JSONPath notes:
 - `$json_path_exists` maps to `@?` and binds the JSONPath string as a `::jsonpath` parameter.

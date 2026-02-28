@@ -1,4 +1,4 @@
-﻿# query translation
+# query translation
 
 This project compiles Mongo-like filters into PostgreSQL SQL over JSONB data.
 
@@ -35,9 +35,9 @@ This project compiles Mongo-like filters into PostgreSQL SQL over JSONB data.
 
 Top-level semantics note:
 - PostgreSQL key-existence operators only check keys at the top level of the left-hand JSONB value.
-- jsonbadger preserves that behavior exactly.
-- If the filter path is nested (for example `profile.city`), jsonbadger first extracts that nested JSONB value (`#>`), then applies the existence operator to the extracted value's top level.
-- jsonbadger does not emulate recursive/deep key search for these operators.
+- JsonBadger preserves that behavior exactly.
+- If the filter path is nested (for example `profile.city`), JsonBadger first extracts that nested JSONB value (`#>`), then applies the existence operator to the extracted value's top level.
+- JsonBadger does not emulate recursive/deep key search for these operators.
 
 ## JSONPath operators
 
@@ -72,7 +72,7 @@ Update path behavior:
 
 This table is the implementation-facing capability map for currently supported query/update operators over JSONB.
 
-| jsonbadger feature | PostgreSQL operator/function | Notes | Indexability expectation |
+| JsonBadger feature | PostgreSQL operator/function | Notes | Indexability expectation |
 | --- | --- | --- | --- |
 | scalar equality (`{ path: value }`, `$ne`) | JSON extraction (`->>`, `#>>`) + `=` / `!=` | Compares extracted text/scalar representation | Manual expression indexes required for fast path filtering/sorting; current schema index helpers do not auto-create these expression indexes |
 | numeric comparisons (`$gt`, `$gte`, `$lt`, `$lte`) | JSON extraction + `::numeric` + comparison | Invalid numeric inputs fail before SQL execution | Manual expression indexes may be used; no automatic expression-index creation |
@@ -81,7 +81,7 @@ This table is the implementation-facing capability map for currently supported q
 | `$all` | `@>` (JSON array containment) | Encodes requested list as JSON array | GIN on JSONB value is typically the relevant index strategy |
 | `$size` | `jsonb_array_length(...)` | Array length equality | Usually expression-based optimization if needed; no auto-created support |
 | `$elem_match` | `jsonb_array_elements(...)` + nested predicates | Uses set-returning expansion | Often less index-friendly than direct containment; depends on query shape |
-| `$regex` | `~` / `~*` on extracted text | PostgreSQL regex semantics | Manual text/expression indexing strategy required; jsonbadger does not auto-create regex-specific indexes |
+| `$regex` | `~` / `~*` on extracted text | PostgreSQL regex semantics | Manual text/expression indexing strategy required; JsonBadger does not auto-create regex-specific indexes |
 | `$has_key` | `?` | Top-level key existence on the left JSONB value | GIN on JSONB value is the expected index family |
 | `$has_any_keys` | `?|` | Any-key existence | GIN on JSONB value is the expected index family |
 | `$has_all_keys` | `?&` | All-keys existence | GIN on JSONB value is the expected index family |
@@ -94,5 +94,5 @@ This table is the implementation-facing capability map for currently supported q
 Index helper behavior (current implementation):
 - `schema.create_index('path')` creates a GIN index on the extracted JSONB path expression.
 - `schema.create_index({ path: 1 })` (and compound object specs) create BTREE indexes on extracted text path expressions.
-- Single-path string GIN indexes do not support `unique` in jsonbadger; object specs support `unique` because they compile to BTREE indexes.
+- Single-path string GIN indexes do not support `unique` in JsonBadger; object specs support `unique` because they compile to BTREE indexes.
 

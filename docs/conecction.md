@@ -7,7 +7,7 @@ This guide shows how to cleanly connect to your database and reuse the same shar
 This file connects once at app startup. All models and controllers then use that shared connection.
 
 ```js
-import jsonbadger from 'jsonbadger';
+import JsonBadger from 'jsonbadger';
 
 let shared_pool = null;
 
@@ -20,7 +20,7 @@ export async function connect_db() {
 	const db_connection_options = {max: 10, debug: false};
 
 	try {
-		shared_pool = await jsonbadger.connect(db_uri, db_connection_options);
+		shared_pool = await JsonBadger.connect(db_uri, db_connection_options);
 
 		// returns: shared pg Pool instance
 		return shared_pool;
@@ -36,14 +36,14 @@ export async function connect_db() {
 Keep this file focused on data mapping only.
 
 ```js
-import jsonbadger from 'jsonbadger';
+import JsonBadger from 'jsonbadger';
 
-const user_schema = new jsonbadger.Schema({
+const user_schema = new JsonBadger.Schema({
 	username: {type: String, required: true, index: true},
 	email: {type: String, required: true, index: {unique: true, name: 'idx_users_email_unique'}},
 });
 
-export const UserModel = jsonbadger.model(user_schema, {
+export const UserModel = JsonBadger.model(user_schema, {
 	table_name: 'users'
 });
 ```
