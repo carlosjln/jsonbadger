@@ -78,7 +78,8 @@ describe('Document save id strategy', function () {
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('INSERT INTO "events" ("data") VALUES ($1::jsonb)');
 		expect(sql_runner_mock.mock.calls[0][1]).toEqual(['{"name":"Saved"}']);
-		expect(saved_value).toEqual({
+		expect(saved_value).toBe(event_document);
+		expect(saved_value.to_json()).toEqual({
 			name: 'Saved',
 			id: '9',
 			created_at: '2026-02-27T10:00:00.000Z',

@@ -45,7 +45,7 @@ Most snippets below are intentionally short and not fully standalone. Unless a s
 - You either ran manual migrations (`ensure_table()` / `ensure_schema()`) or allowed a first write to create the table.
 - You seeded at least one `User` document using the `Create and Save Documents` example (including `tags`, `orders`, and `payload`).
 
-When a snippet uses a different value (for example `user_name: 'jane'`), either seed a matching row first or replace the filter value with one that exists in your local data.
+When a snippet uses a different value (for example `name: 'jane'`), either seed a matching row first or replace the filter value with one that exists in your local data.
 
 
 ## Reserved Metadata Fields
@@ -122,7 +122,7 @@ Notes:
 
 ```js
 const user_schema = new jsonbadger.Schema({
-	user_name: {type: String, required: true, trim: true, index: true, get: (value) => value && value.toUpperCase()},
+	name: {type: String, required: true, trim: true, index: true, get: (value) => value && value.toUpperCase()},
 	age: {type: Number, min: 0, index: -1},
 	status: {type: String, immutable: true},
 	tags: [String],
@@ -136,7 +136,7 @@ const user_schema = new jsonbadger.Schema({
 
 // Schema-level indexes (single path and compound)
 user_schema.create_index('profile.city');
-user_schema.create_index({user_name: 1, age: -1});
+user_schema.create_index({name: 1, age: -1});
 
 const User = jsonbadger.model(user_schema, {
 	table_name: 'users',
@@ -160,7 +160,7 @@ await User.ensure_schema();
 
 ```js
 const account_schema = new jsonbadger.Schema({
-	user_name: { type: String, trim: true, required: true },
+	name: { type: String, trim: true, required: true },
 	age: { type: Number, min: 0 },
 	is_active: Boolean,
 	joined_at: Date,
@@ -192,7 +192,7 @@ Assumes:
 
 ```js
 const user_doc = new User({
-	user_name: 'john',
+	name: 'john',
 	age: 30,
 	status: 'active',
 	tags: ['vip', 'beta'],
@@ -212,7 +212,8 @@ const user_doc = new User({
 
 await user_doc.validate();
 const saved_user = await user_doc.save();
-// returns: { id, user_name, age, status, tags, profile, orders, payload, created_at, updated_at }
+// returns: User document instance
+// saved_user.to_json() -> { id, name, age, status, tags, profile, orders, payload, created_at, updated_at }
 // `user_doc.data` remains payload-only data
 ```
 
@@ -221,7 +222,7 @@ Validation failure pattern (`validation_error`):
 ```js
 try {
 	const invalid_user = new User({
-		user_name: 'bad_input',
+		name: 'bad_input',
 		age: -1 // violates `min: 0` from the schema example
 	});
 
@@ -239,15 +240,17 @@ try {
 
 Assumes (for the query sections below):
 - `User` is defined and at least one document was saved (see `## Create and Save Documents`).
-- Examples that filter by `user_name: 'john'`, `tags`, `orders`, or `payload` assume those fields/values exist in seeded data.
+- Examples that filter by `name: 'john'`, `tags`, `orders`, or `payload` assume those fields/values exist in seeded data.
 
 
 ```js
 const all_users = await User.find({}).exec();
-// returns: [{ id, user_name: 'john', ..., created_at, updated_at }, ...]
+// returns: [User document instance, ...]
+// all_users[0].to_json() -> { id, name: 'john', ..., created_at, updated_at }
 
-const found_user = await User.find_one({user_name: 'john'}).exec();
-// returns: { id, user_name: 'john', ..., created_at, updated_at } or null
+const found_user = await User.find_one({name: 'john'}).exec();
+// returns: User document instance or null
+// found_user?.to_json() -> { id, name: 'john', ..., created_at, updated_at }
 
 const adult_count = await User.count_documents({age: {$gte: 18}}).exec();
 // returns: number
@@ -272,8 +275,8 @@ Read behavior note:
 Direct equality and explicit `$eq` both work:
 
 ```js
-await User.find({user_name: 'john'}).exec();
-await User.find({user_name: {$eq: 'john'}}).exec();
+await User.find({name: 'john'}).exec();
+await User.find({name: {$eq: 'john'}}).exec();
 ```
 
 Scalar comparison operators:
@@ -306,14 +309,14 @@ await User.find({updated_at: {$lt: '2026-12-31T23:59:59.999Z'}}).sort({updated_a
 Regex literal shorthand:
 
 ```js
-await User.find({user_name: /jo/i}).exec();
+await User.find({name: /jo/i}).exec();
 ```
 
 `$regex` with `$options`:
 
 ```js
 await User.find({
-	user_name: {
+	name: {
 		$regex: '^jo',
 		$options: 'i'
 	}
@@ -421,7 +424,7 @@ Expected behavior:
 `update_one(...)` supports `$set`, `$insert`, and `$set_lax`.
 
 Assumes (for update and delete sections below):
-- A matching row exists (examples use `user_name: 'john'` and `user_name: 'missing'`).
+- A matching row exists (examples use `name: 'john'` and `name: 'missing'`).
 - The seeded row includes `tags` and `payload` fields from the create/save example.
 
 Target shape reminder:
@@ -431,7 +434,7 @@ Basic `$set` (maps to `jsonb_set(...)`):
 
 ```js
 const updated_user = await User.update_one(
-	{user_name: 'john'},
+	{name: 'john'},
 	{
 		$set: {
 			age: 31,
@@ -440,19 +443,20 @@ const updated_user = await User.update_one(
 		}
 	}
 );
-// returns: { id, ..., created_at, updated_at } or null
+// returns: User document instance or null
+// updated_user?.to_json() -> { id, ..., created_at, updated_at }
 ```
 
 `$insert` (maps to `jsonb_insert(...)`) with numeric array index paths:
 
 ```js
-await User.update_one({user_name: 'john'}, {
+await User.update_one({name: 'john'}, {
 	$insert: {
 		'tags.0': 'first_tag'
 	}
 });
 
-await User.update_one({user_name: 'john'}, {
+await User.update_one({name: 'john'}, {
 	$insert: {
 		'tags.0': {
 			value: 'after_first',
@@ -468,7 +472,7 @@ Target shape reminder for `$set_lax`:
 - `payload` is a JSON object; these examples update or delete nested keys inside `payload`.
 
 ```js
-await User.update_one({user_name: 'john'}, {
+await User.update_one({name: 'john'}, {
 	$set_lax: {
 		'payload.cleanup_flag': {
 			value: null,
@@ -481,7 +485,7 @@ await User.update_one({user_name: 'john'}, {
 `$set_lax` options example (`create_if_missing`, `null_value_treatment`):
 
 ```js
-await User.update_one({user_name: 'john'}, {
+await User.update_one({name: 'john'}, {
 	$set_lax: {
 		'payload.archived_at': {
 			value: null,
@@ -495,7 +499,7 @@ await User.update_one({user_name: 'john'}, {
 Multiple update operators in one call (application order is `$set` -> `$insert` -> `$set_lax`):
 
 ```js
-await User.update_one({user_name: 'john'}, {
+await User.update_one({name: 'john'}, {
 	$set: {
 		'payload.score': 50
 	},
@@ -514,7 +518,7 @@ await User.update_one({user_name: 'john'}, {
 Conflict rule (rejected before SQL):
 
 ```js
-await User.update_one({user_name: 'john'}, {
+await User.update_one({name: 'john'}, {
 	$set: {
 		payload: {nested: true}
 	},
@@ -527,17 +531,18 @@ await User.update_one({user_name: 'john'}, {
 
 ## Delete Operations
 
-`delete_one(...)` deletes one matching row and returns the deleted document data.
+`delete_one(...)` deletes one matching row and returns the deleted document instance.
 
 ```js
-const deleted_user = await User.delete_one({user_name: 'john'});
-// returns: { id, ..., created_at, updated_at } or null
+const deleted_user = await User.delete_one({name: 'john'});
+// returns: User document instance or null
+// deleted_user?.to_json() -> { id, ..., created_at, updated_at }
 ```
 
 No match (or missing table) returns `null`:
 
 ```js
-const maybe_deleted = await User.delete_one({user_name: 'missing'});
+const maybe_deleted = await User.delete_one({name: 'missing'});
 // returns: null when no row matches (or when the table does not exist yet)
 if(maybe_deleted === null) {
 	// no matching row, or table does not exist yet
@@ -549,13 +554,13 @@ if(maybe_deleted === null) {
 Runtime getters/setters and dirty tracking:
 
 Assumes:
-- `User` is defined from the schema/model example and includes the `user_name` getter configuration shown there.
+- `User` is defined from the schema/model example and includes the `name` getter configuration shown there.
 - This snippet demonstrates in-memory runtime behavior; no database read is required until `save()`.
 
 
 ```js
 const doc = new User({
-	user_name: 'jane',
+	name: 'jane',
 	status: 'active',
 	payload: {count: 1},
 	profile: {city: 'Miami'}
@@ -563,8 +568,8 @@ const doc = new User({
 
 // normal path set/get
 
-doc.set('user_name', '  jane_doe  ');
-const upper_name = doc.get('user_name');
+doc.set('name', '  jane_doe  ');
+const upper_name = doc.get('name');
 
 doc.set('profile.city', 'Orlando');
 const city = doc.get('profile.city');

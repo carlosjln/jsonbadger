@@ -66,7 +66,8 @@ describe('Model.delete_one', function () {
 
 		const deleted_data = await user_model.delete_one({active: 'yes'});
 
-		expect(deleted_data).toEqual({
+		expect(deleted_data).toBeInstanceOf(user_model);
+		expect(deleted_data.to_json()).toEqual({
 			user_name: 'john',
 			id: '12',
 			created_at: '2026-02-27T10:00:00.000Z',

@@ -63,14 +63,16 @@ export class User {
 
 	static async get_all() {
 		const docs = await UserModel.find({}).exec();
-		// returns: [{ id, username: 'john', email: 'john@example.com', ..., created_at, updated_at }, ...]
+		// returns: [UserModel document instance, ...]
+		// docs[0].to_json() -> { id, username: 'john', email: 'john@example.com', ..., created_at, updated_at }
 		return docs;
 	}
 
 	async save() {
 		const user_doc = new UserModel(this);
 		const saved_doc = await user_doc.save();
-		// returns: { id, username: 'john', email: 'john@example.com', ..., created_at, updated_at }
+		// returns: UserModel document instance
+		// saved_doc.to_json() -> { id, username: 'john', email: 'john@example.com', ..., created_at, updated_at }
 
 		return saved_doc;
 	}
@@ -87,7 +89,7 @@ import {User} from '../entities/user-entity.js';
 export async function get_users(req, res) {
 	try {
 		const users = await User.get_all();
-		// returns: [{ username: 'john', email: 'john@example.com', ... }, ...]
+		// users are document instances; JSON serialization uses toJSON() automatically
 
 		return res.json({
 			success: true,
@@ -104,7 +106,7 @@ export async function create_user(req, res) {
 		const {username, email} = req.body;
 		const user_entity = new User(username, email);
 		const saved_user = await user_entity.save();
-		// returns: { username: 'john', email: 'john@example.com', ... }
+		// returns: UserModel document instance
 
 		return res.status(201).json({success: true, data: saved_user});
 	} catch(error) {
@@ -160,7 +162,9 @@ const is_same_pool = pool_a === pool_b;
 ## What to expect
 
 - Connection bootstrap can be called from many files, but all calls reuse the same shared pool in one runtime.
-- `find(...).exec()` returns arrays of flat objects with metadata (`id`, `created_at`, `updated_at`) plus payload fields.
-- `find_one(...).exec()` returns one flat object with metadata plus payload fields, or `null`.
+- `find(...).exec()` returns arrays of document instances.
+- `find_one(...).exec()` returns one document instance, or `null`.
+- `save()`, `update_one(...)`, and `delete_one(...)` also return document instances.
+- Use `doc.to_json()` / `doc.to_object()` for plain-object snapshots (`{ id, ...payload_fields, created_at, updated_at }`).
 - `count_documents(...).exec()` returns a number.
 - Entity-level rules stay out of controllers and model declarations.

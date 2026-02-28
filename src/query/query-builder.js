@@ -93,20 +93,20 @@ QueryBuilder.prototype.exec = async function () {
 			return null;
 		}
 
-		return shape_query_row(query_result.rows[0]);
+		return map_query_row(this.model_constructor, query_result.rows[0]);
 	}
 
 	return query_result.rows.map(function map_row(row_value) {
-		return shape_query_row(row_value);
-	});
+		return map_query_row(this.model_constructor, row_value);
+	}.bind(this));
 };
 
-function resolve_model_id_strategy(model_constructor) {
-	if(typeof model_constructor?.resolve_id_strategy === 'function') {
-		return model_constructor.resolve_id_strategy();
+function map_query_row(model_constructor, row_value) {
+	if(model_constructor && typeof model_constructor.create_document_from_row === 'function') {
+		return model_constructor.create_document_from_row(row_value);
 	}
 
-	return model_constructor?.model_options?.id_strategy ?? 'bigserial';
+	return shape_query_row(row_value);
 }
 
 function shape_query_row(row_value) {
@@ -150,4 +150,12 @@ function normalize_timestamp_value(timestamp_value) {
 	}
 
 	return parsed_timestamp.toISOString();
+}
+
+function resolve_model_id_strategy(model_constructor) {
+	if(typeof model_constructor?.resolve_id_strategy === 'function') {
+		return model_constructor.resolve_id_strategy();
+	}
+
+	return model_constructor?.model_options?.id_strategy ?? 'bigserial';
 }

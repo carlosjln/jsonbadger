@@ -21,7 +21,7 @@ import {is_array, is_not_array} from '#src/utils/array.js';
 import {has_own} from '#src/utils/object.js';
 import {build_path_literal} from '#src/utils/object-path.js';
 import {jsonb_stringify} from '#src/utils/json.js';
-import {is_not_object, is_object} from '#src/utils/value.js';
+import {is_not_object} from '#src/utils/value.js';
 
 const update_path_root_segment_pattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const update_path_nested_segment_pattern = /^(?:[a-zA-Z_][a-zA-Z0-9_]*|[0-9]+)$/;
@@ -188,7 +188,7 @@ export default function model(schema_instance, model_configuration) {
 			return null;
 		}
 
-		return shape_row_output(query_result.rows[0]);
+		return Model.create_document_from_row(query_result.rows[0]);
 	};
 
 	Model.delete_one = async function (query_filter) {
@@ -225,7 +225,7 @@ export default function model(schema_instance, model_configuration) {
 			return null;
 		}
 
-		return shape_row_output(query_result.rows[0]);
+		return Model.create_document_from_row(query_result.rows[0]);
 	};
 
 	function cast_update_value(path_value, next_value) {
@@ -583,39 +583,4 @@ function resolve_hydrate_allowed_keys(schema_instance) {
 	}
 
 	return allowed_keys;
-}
-
-function shape_row_output(row_value) {
-	const payload_value = is_object(row_value?.data) ? row_value.data : {};
-	const output_value = {};
-
-	for(const [key, next_value] of Object.entries(payload_value)) {
-		if(!reserved_metadata_fields.has(key)) {
-			output_value[key] = next_value;
-		}
-	}
-
-	output_value.id = row_value?.id == null ? row_value?.id : String(row_value.id);
-	output_value.created_at = normalize_timestamp_value(row_value?.created_at);
-	output_value.updated_at = normalize_timestamp_value(row_value?.updated_at);
-
-	return output_value;
-}
-
-function normalize_timestamp_value(timestamp_value) {
-	if(timestamp_value == null) {
-		return timestamp_value;
-	}
-
-	if(timestamp_value instanceof Date) {
-		return timestamp_value.toISOString();
-	}
-
-	const parsed_timestamp = new Date(timestamp_value);
-
-	if(Number.isNaN(parsed_timestamp.getTime())) {
-		return String(timestamp_value);
-	}
-
-	return parsed_timestamp.toISOString();
 }

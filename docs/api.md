@@ -99,7 +99,7 @@ static methods:
   - update paths allow numeric nested segments for JSON array indexes (for example, `tags.0`)
   - conflicting update paths (same path or parent/child overlap across operators) are rejected before SQL execution
 - `delete_one(query_filter)`
-  - deletes one matching row and returns `{ id, ...payload_fields, created_at, updated_at }`
+  - deletes one matching row and returns a document instance (or `null`)
   - returns `null` when no row matches
   - does not implicitly call `ensure_table()`; if the table does not exist yet, returns `null`
 
@@ -122,12 +122,14 @@ Runtime behavior notes:
 - `is_modified(path_name?)` and `clear_modified()` are available runtime helpers for dirty-path inspection/reset.
 - `immutable: true` fields are writable before first persist and become protected after a successful `save()`.
 - `to_object(...)` / `to_json(...)` apply getters by default; pass `{ getters: false }` to bypass getter transforms during serialization.
-- Data-returning methods return flat metadata + payload objects:
-  - `save()` returns `{ id, ...payload_fields, created_at, updated_at }`
-  - `find(...).exec()` returns an array of `{ id, ...payload_fields, created_at, updated_at }`
-  - `find_one(...).exec()` returns `{ id, ...payload_fields, created_at, updated_at }` or `null`
-  - `update_one(...)` returns `{ id, ...payload_fields, created_at, updated_at }` or `null`
-  - `delete_one(...)` returns `{ id, ...payload_fields, created_at, updated_at }` or `null`
+- Data-returning methods return document instances:
+  - `save()` returns the persisted document instance
+  - `find(...).exec()` returns an array of document instances
+  - `find_one(...).exec()` returns one document instance or `null`
+  - `update_one(...)` returns one document instance or `null`
+  - `delete_one(...)` returns one document instance or `null`
+- Plain-object snapshots are explicit:
+  - `doc.to_json()` and `doc.to_object()` return `{ id, ...payload_fields, created_at, updated_at }`
 
 ## query filters
 

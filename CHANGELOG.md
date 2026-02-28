@@ -4,13 +4,13 @@
 
 ### Changed
 
-- Breaking: data-returning methods now return flat metadata + payload objects:
+- Breaking: data-returning methods now return document instances:
   - `save()`
   - `find(...).exec()`
   - `find_one(...).exec()`
   - `update_one(...)`
   - `delete_one(...)`
-  - shape: `{ id, ...payload_fields, created_at, updated_at }`
+  - plain-object snapshots are now explicit via `doc.to_json()` / `doc.to_object()` with shape `{ id, ...payload_fields, created_at, updated_at }`
 - Breaking: model schema definitions cannot declare reserved metadata fields (`id`, `created_at`, `updated_at`).
 - Breaking: reserved metadata fields are read-only and are blocked in write/update payload paths.
 - Breaking: `data_column` is now internal-only and cannot be configured through `model(...)` options.
