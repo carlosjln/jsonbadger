@@ -29,7 +29,7 @@ describe('where_compiler branch coverage', function () {
 			is_array_root: function (path_value) {
 				return path_value === 'tags';
 			},
-			path: function (path_value) {
+			get_path: function (path_value) {
 				if(path_value !== 'tags') {
 					return null;
 				}
@@ -119,7 +119,7 @@ describe('where_compiler branch coverage', function () {
 				is_array_root: function (path_value) {
 					return path_value === 'tags';
 				},
-				path: function () {
+				get_path: function () {
 					return {
 						instance: 'Array'
 					};
@@ -138,7 +138,7 @@ describe('where_compiler branch coverage', function () {
 			is_array_root: function () {
 				return false;
 			},
-			path: function (path_value) {
+			get_path: function (path_value) {
 				if(path_value === 'flags') {
 					return {
 						cast: function (value) {

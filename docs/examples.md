@@ -14,14 +14,14 @@ Use this page for syntax and working shapes. Use [`docs/api.md`](api.md) for API
 - This page only includes currently implemented behavior.
 - `Assumes:` notes tell you what earlier setup/data a snippet depends on.
 - Important mechanics: queries run when you call `.exec()` (for example `await User.find({}).exec()`), and direct in-place mutations on nested `doc.data` values may require `doc.mark_modified('path')` after mutating.
-- Operation scope: this page covers `save`, `find`, `find_one`, `count_documents`, `update_one`, and `delete_one`. Bulk helpers (`insert_many`, `update_many`, `delete_many`) are not part of the current API surface.
+- Operation scope: this page covers `create`, `save`, `find`, `find_one`, `find_by_id`, `count_documents`, `update_one`, `delete_one`, and instance `delete().exec()`. Bulk helpers (`insert_many`, `update_many`, `delete_many`) are not part of the current API surface.
 
 Quick jump:
 
 Setup
 - [How to Read This Page](#how-to-read-this-page)
 - [Shared Fixture and Assumptions](#shared-fixture-and-assumptions)
-- [Reserved Metadata Fields](#reserved-metadata-fields)
+- [Reserved Base Fields](#reserved-base-fields)
 - [Setup and Connect](#setup-and-connect)
 - [ID Strategy Examples](#id-strategy-examples)
 - [Schema and Model Definition](#schema-and-model-definition)
@@ -59,12 +59,30 @@ Most snippets below are intentionally short and not fully standalone. Unless a s
 When a snippet uses a different value (for example `name: 'jane'`), either seed a matching row first or replace the filter value with one that exists in your local data.
 
 
-## Reserved Metadata Fields
+## Reserved Base Fields
 
-- `id`, `created_at`, and `updated_at` are reserved computed fields.
-- They are read-only and returned at the top level in data-returning operations.
-- You cannot declare them in schema definitions or target them in write/update payload paths.
-- Query/sort support for these fields is top-level only (no dotted reserved paths).
+- `id`, `created_at`, and `updated_at` are top-level base fields returned in data-returning operations.
+- These base fields exist in schema/runtime introspection even when omitted from user schema input.
+- If user schema declares any of these paths, the user definition is preserved.
+- Query/sort support for base fields is top-level only (no dotted base-field paths like `created_at.value`).
+
+`id` behavior:
+- Create with `IdStrategies.uuidv7`:
+  - caller-provided `id` is used.
+  - if `id` is omitted, PostgreSQL default `uuidv7()` generates it.
+- Create with `IdStrategies.bigserial`:
+  - caller-provided `id` is ignored silently.
+  - PostgreSQL sequence generates it.
+- Update paths cannot mutate `id`.
+
+Timestamp helper behavior:
+- Create:
+  - provided `created_at` / `updated_at` values are kept.
+  - omitted values are auto-filled.
+- Update:
+  - provided `updated_at` is kept.
+  - omitted `updated_at` is auto-set.
+  - `created_at` is not auto-updated.
 
 ## Setup and Connect
 
@@ -148,6 +166,27 @@ Notes:
 - `id_strategy` precedence is: model option -> connection option -> library default (`bigserial`).
 - `IdStrategies.uuidv7` uses database-generated IDs (`DEFAULT uuidv7()`) and JsonBadger validates support internally.
 
+Create-time `id` behavior example:
+
+```js
+// uuidv7 model: pass-through when provided
+const uuid_user = await AuditLog.create({
+	id: '0194f028-579a-7b5b-8107-b9ad31395f43',
+	event_name: 'login'
+});
+
+// uuidv7 model: DB generates when omitted
+const generated_uuid_user = await AuditLog.create({
+	event_name: 'logout'
+});
+
+// bigserial model: caller id is ignored, DB generates numeric id
+const serial_counter = await Counter.create({
+	id: 999,
+	label: 'requests'
+});
+```
+
 ## Schema and Model Definition
 
 ```js
@@ -165,8 +204,8 @@ const user_schema = new JsonBadger.Schema({
 });
 
 // Schema-level indexes (single path and compound)
-user_schema.create_index('profile.city');
-user_schema.create_index({name: 1, age: -1});
+user_schema.create_index({using: 'gin', path: 'profile.city'});
+user_schema.create_index({using: 'btree', paths: {name: 1, age: -1}});
 
 const User = JsonBadger.model(user_schema, {
 	table_name: 'users',
@@ -267,6 +306,33 @@ Returns: `saved_user` is a `User` document instance.
 Snapshot shape: `saved_user.to_json()` -> `{ id, name, age, status, tags, profile, orders, payload, created_at, updated_at }`.  
 Runtime note: `user_doc.data` remains payload-only data.
 
+Static create and id lookup:
+
+```js
+const created_user = await User.create({
+	name: 'maria',
+	age: 29
+});
+
+const same_user = await User.find_by_id(created_user.id).exec();
+```
+
+Timestamp helper examples on create:
+
+```js
+// Caller-provided timestamp values are kept
+const user_with_timestamps = await User.create({
+	name: 'timed-user',
+	created_at: '2026-03-03T08:00:00.000Z',
+	updated_at: '2026-03-03T09:00:00.000Z'
+});
+
+// Omitted timestamps are auto-filled
+const user_with_auto_timestamps = await User.create({
+	name: 'auto-timestamp-user'
+});
+```
+
 Validation failure pattern (`validation_error`):
 
 ```js
@@ -295,7 +361,9 @@ Assumes:
 const unique_user_schema = new JsonBadger.Schema({
 	email: {type: String, required: true}
 });
-unique_user_schema.create_index({email: 1}, {
+unique_user_schema.create_index({
+	using: 'btree',
+	path: 'email',
 	unique: true,
 	name: 'idx_unique_users_email'
 });
@@ -330,12 +398,15 @@ const all_users = await User.find({}).exec();
 
 const found_user = await User.find_one({name: 'john'}).exec();
 
+const by_id_user = await User.find_by_id('1').exec();
+
 const adult_count = await User.count_documents({age: {$gte: 18}}).exec();
 ```
 
 Returns:
 - `all_users`: `User[]` (document instances)
 - `found_user`: `User | null`
+- `by_id_user`: `User | null`
 - `adult_count`: `number`
 - Snapshot example: `all_users[0]?.to_json()` -> `{ id, name: 'john', ..., created_at, updated_at }`
 
@@ -379,7 +450,7 @@ await User.find({status: {$in: ['active', 'pending']}}).exec();
 await User.find({status: {$nin: ['disabled', 'banned']}}).exec();
 ```
 
-Reserved metadata filters (top-level only):
+Reserved base-field filters (top-level only):
 
 ```js
 await User.find({id: {$in: [1, 2, 3]}}).exec(); // bigserial default
@@ -613,6 +684,25 @@ await User.update_one({name: 'john'}, {
 // throws: conflicting update paths (same path or parent/child overlap)
 ```
 
+Timestamp helper examples on update:
+
+```js
+// Caller-provided updated_at is kept
+await User.update_one({name: 'john'}, {
+	$set: {
+		age: 32,
+		updated_at: '2026-03-03T10:00:00.000Z'
+	}
+});
+
+// Omitted updated_at is auto-refreshed
+await User.update_one({name: 'john'}, {
+	$set: {
+		age: 33
+	}
+});
+```
+
 ## Delete Operations
 
 `delete_one(...)` deletes one matching row and returns the deleted document instance.
@@ -623,6 +713,16 @@ const deleted_user = await User.delete_one({name: 'john'});
 
 Returns: `deleted_user` is `User | null`.  
 Snapshot shape: `deleted_user?.to_json()` -> `{ id, ..., created_at, updated_at }`.
+
+Instance delete flow with `.exec()`:
+
+```js
+const doc = await User.find_one({name: 'john'}).exec();
+
+if(doc) {
+	await doc.delete().exec();
+}
+```
 
 No match (or missing table) returns `null`:
 

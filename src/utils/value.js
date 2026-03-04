@@ -2,6 +2,10 @@ const is_object = (value) => {
 	return value !== null && typeof value === 'object' && !Array.isArray(value);
 };
 
+const is_plain_object = (value) => {
+	return is_object(value) && Object.prototype.toString.call(value) === '[object Object]';
+};
+
 const is_not_object = (value) => {
 	return value === null || Array.isArray(value) || typeof value !== 'object';
 };
@@ -17,6 +21,7 @@ const is_string = (value) => {
 
 export {
 	is_object,
+	is_plain_object,
 	is_not_object,
 	is_nan,
 	is_string
@@ -24,6 +29,7 @@ export {
 
 export default {
 	is_object,
+	is_plain_object,
 	is_not_object,
 	is_nan,
 	is_string

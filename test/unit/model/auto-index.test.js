@@ -77,7 +77,7 @@ describe('Model auto index behavior', function () {
 	});
 
 	test('uses connection auto_index default when model auto_index is not set', async function () {
-		const schema_instance = build_schema_instance([{index_spec: 'name', index_options: {}}]);
+		const schema_instance = build_schema_instance([{using: 'gin', path: 'name'}]);
 		const user_model = model(schema_instance, {
 			table_name: 'users'
 		});
@@ -85,11 +85,11 @@ describe('Model auto index behavior', function () {
 		await user_model.ensure_table();
 
 		expect(ensure_table_mock).toHaveBeenCalledWith('users', 'data', 'bigserial');
-		expect(ensure_index_mock).toHaveBeenCalledWith('users', 'name', 'data', {});
+		expect(ensure_index_mock).toHaveBeenCalledWith('users', {using: 'gin', path: 'name'}, 'data');
 	});
 
 	test('model auto_index false overrides connection auto_index true', async function () {
-		const schema_instance = build_schema_instance([{index_spec: 'name', index_options: {}}]);
+		const schema_instance = build_schema_instance([{using: 'gin', path: 'name'}]);
 		const user_model = model(schema_instance, {
 			table_name: 'users',
 			auto_index: false
@@ -104,7 +104,7 @@ describe('Model auto index behavior', function () {
 	test('model auto_index true overrides connection auto_index false', async function () {
 		connection_options_state.auto_index = false;
 
-		const schema_instance = build_schema_instance([{index_spec: 'name', index_options: {}}]);
+		const schema_instance = build_schema_instance([{using: 'gin', path: 'name'}]);
 		const user_model = model(schema_instance, {
 			table_name: 'users',
 			auto_index: true
@@ -113,11 +113,11 @@ describe('Model auto index behavior', function () {
 		await user_model.ensure_table();
 
 		expect(ensure_table_mock).toHaveBeenCalledWith('users', 'data', 'bigserial');
-		expect(ensure_index_mock).toHaveBeenCalledWith('users', 'name', 'data', {});
+		expect(ensure_index_mock).toHaveBeenCalledWith('users', {using: 'gin', path: 'name'}, 'data');
 	});
 
 	test('only applies auto_index once per model instance', async function () {
-		const schema_instance = build_schema_instance([{index_spec: 'name', index_options: {}}]);
+		const schema_instance = build_schema_instance([{using: 'gin', path: 'name'}]);
 		const user_model = model(schema_instance, {
 			table_name: 'users'
 		});

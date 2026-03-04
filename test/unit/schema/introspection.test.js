@@ -17,7 +17,7 @@ describe('Schema path introspection', function () {
 			}
 		});
 
-		const name_path = schema_instance.path('name');
+		const name_path = schema_instance.get_path('name');
 
 		expect(name_path.path).toBe('name');
 		expect(name_path.instance).toBe('String');
@@ -25,8 +25,8 @@ describe('Schema path introspection', function () {
 		expect(name_path.regExp).toEqual(/^[a-z]+$/);
 		expect(name_path.enum_values).toEqual(['alice', 'bob']);
 
-		expect(schema_instance.path('profile.city').instance).toBe('String');
-		expect(schema_instance.path('unknown')).toBe(null);
+		expect(schema_instance.get_path('profile.city').instance).toBe('String');
+		expect(schema_instance.get_path('unknown')).toBe(null);
 
 		expect(schema_instance.get_path_type('name')).toBe('String');
 		expect(schema_instance.get_path_type('tags')).toBe('Array');

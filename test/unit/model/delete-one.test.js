@@ -136,4 +136,39 @@ describe('Model.delete_one', function () {
 		expect(sql_text).toContain('WHERE TRUE LIMIT 1');
 		expect(sql_params).toEqual([]);
 	});
+
+	test('document instance delete().exec() deletes by document id', async function () {
+		const schema_instance = new Schema({
+			user_name: String
+		});
+		const user_model = model(schema_instance, {
+			table_name: 'users'
+		});
+		const document_instance = new user_model({
+			id: '12',
+			user_name: 'john'
+		});
+
+		const deleted_document = await document_instance.delete().exec();
+
+		expect(deleted_document).toBeInstanceOf(user_model);
+		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
+		expect(sql_runner_mock.mock.calls[0][0]).toContain('WHERE "id" = $1::bigint');
+		expect(sql_runner_mock.mock.calls[0][1]).toEqual(['12']);
+	});
+
+	test('document instance delete().exec() rejects when id is missing', async function () {
+		const schema_instance = new Schema({
+			user_name: String
+		});
+		const user_model = model(schema_instance, {
+			table_name: 'users'
+		});
+		const document_instance = new user_model({
+			user_name: 'john'
+		});
+
+		await expect(document_instance.delete().exec()).rejects.toThrow('Document id is required for delete operations');
+		expect(sql_runner_mock).not.toHaveBeenCalled();
+	});
 });

@@ -4,7 +4,7 @@
 */
 export function create_path_introspection(parsed_schema) {
 	const parsed_value = parsed_schema ?? {};
-	const field_types = resolve_field_types_map(parsed_value);
+	const field_types = get_paths_map(parsed_value);
 	const object_paths = resolve_object_paths(parsed_value);
 
 	return {
@@ -18,7 +18,7 @@ export function get_path_field_type(path_introspection, path_name) {
 		return null;
 	}
 
-	const field_types = resolve_field_types_map(path_introspection);
+	const field_types = get_paths_map(path_introspection);
 	return field_types[path_name] ?? null;
 }
 
@@ -53,7 +53,7 @@ export function is_array_root(path_introspection, path_name) {
 	return root_field_type.instance === 'Array';
 }
 
-function resolve_field_types_map(value) {
+function get_paths_map(value) {
 	if(!value || typeof value !== 'object') {
 		return Object.create(null);
 	}

@@ -12,9 +12,9 @@ describe('Schema type-key interpretation rules', function () {
 			}
 		});
 
-		expect(schema_instance.path('name').instance).toBe('String');
-		expect(schema_instance.path('age').instance).toBe('Number');
-		expect(schema_instance.path('age').options.required).toBe(true);
+		expect(schema_instance.get_path('name').instance).toBe('String');
+		expect(schema_instance.get_path('age').instance).toBe('Number');
+		expect(schema_instance.get_path('age').options.required).toBe(true);
 	});
 
 	test('treats object with direct type key as explicit field type declaration', function () {
@@ -25,8 +25,8 @@ describe('Schema type-key interpretation rules', function () {
 			}
 		});
 
-		expect(schema_instance.path('asset').instance).toBe('String');
-		expect(schema_instance.path('asset.ticker')).toBe(null);
+		expect(schema_instance.get_path('asset').instance).toBe('String');
+		expect(schema_instance.get_path('asset.ticker')).toBe(null);
 	});
 
 	test('allows literal field named "type" when nested definition is explicit', function () {
@@ -37,8 +37,8 @@ describe('Schema type-key interpretation rules', function () {
 			}
 		});
 
-		expect(schema_instance.path('asset')).toBe(null);
-		expect(schema_instance.path('asset.type').instance).toBe('String');
-		expect(schema_instance.path('asset.ticker').instance).toBe('String');
+		expect(schema_instance.get_path('asset')).toBe(null);
+		expect(schema_instance.get_path('asset.type').instance).toBe('String');
+		expect(schema_instance.get_path('asset.ticker').instance).toBe('String');
 	});
 });

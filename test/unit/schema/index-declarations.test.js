@@ -10,17 +10,19 @@ describe('Schema index declarations', function () {
 		});
 
 		schema_instance
-			.create_index('name')
-			.create_index({name: 1, type: -1}, {unique: true, name: 'idx_name_type'});
+			.create_index({using: 'gin', path: 'name'})
+			.create_index({using: 'btree', paths: {name: 1, type: -1}, unique: true, name: 'idx_name_type'});
 
 		expect(schema_instance.get_indexes()).toEqual([
 			{
-				index_spec: 'name',
-				index_options: {}
+				using: 'gin',
+				path: 'name'
 			},
 			{
-				index_spec: {name: 1, type: -1},
-				index_options: {unique: true, name: 'idx_name_type'}
+				using: 'btree',
+				paths: {name: 1, type: -1},
+				unique: true,
+				name: 'idx_name_type'
 			}
 		]);
 	});
@@ -30,8 +32,9 @@ describe('Schema index declarations', function () {
 			name: {type: String, index: true},
 			age: {type: Number, index: 1},
 			rank: {type: Number, index: -1},
-			email: {type: String, index: {unique: true, name: 'idx_users_email_unique'}},
-			score: {type: Number, index: {order: -1}},
+			email: {type: String, index: {using: 'btree', unique: true, name: 'idx_users_email_unique'}},
+			score: {type: Number, index: {using: 'btree', order: -1}},
+			nick_name: {type: String, index: {using: 'gin', name: 'idx_users_nickname_gin'}},
 			profile: {
 				city: {type: String, index: true},
 				zip: {type: Number, index: -1}
@@ -43,32 +46,44 @@ describe('Schema index declarations', function () {
 
 		expect(schema_instance.get_indexes()).toEqual([
 			{
-				index_spec: 'name',
-				index_options: {}
+				using: 'gin',
+				path: 'name'
 			},
 			{
-				index_spec: {age: 1},
-				index_options: {}
+				using: 'btree',
+				path: 'age',
+				order: 1
 			},
 			{
-				index_spec: {rank: -1},
-				index_options: {}
+				using: 'btree',
+				path: 'rank',
+				order: -1
 			},
 			{
-				index_spec: {email: 1},
-				index_options: {unique: true, name: 'idx_users_email_unique'}
+				using: 'btree',
+				path: 'email',
+				order: 1,
+				unique: true,
+				name: 'idx_users_email_unique'
 			},
 			{
-				index_spec: {score: -1},
-				index_options: {}
+				using: 'btree',
+				path: 'score',
+				order: -1
 			},
 			{
-				index_spec: 'profile.city',
-				index_options: {}
+				using: 'gin',
+				path: 'nick_name',
+				name: 'idx_users_nickname_gin'
 			},
 			{
-				index_spec: {'profile.zip': -1},
-				index_options: {}
+				using: 'gin',
+				path: 'profile.city'
+			},
+			{
+				using: 'btree',
+				path: 'profile.zip',
+				order: -1
 			}
 		]);
 	});
@@ -83,41 +98,95 @@ describe('Schema index declarations', function () {
 
 	test('returns cloned index definitions', function () {
 		const schema_instance = new Schema({name: String, type: String});
-		schema_instance.create_index({name: 1}, {name: 'idx_name'});
+		schema_instance.create_index({
+			using: 'btree',
+			paths: {name: 1, type: -1},
+			name: 'idx_name_type'
+		});
 
 		const first_read = schema_instance.get_indexes();
-		first_read[0].index_spec.name = -1;
-		first_read[0].index_options.name = 'changed';
+		first_read[0].paths.name = -1;
+		first_read[0].name = 'changed';
 
 		expect(schema_instance.get_indexes()).toEqual([
 			{
-				index_spec: {name: 1},
-				index_options: {name: 'idx_name'}
+				using: 'btree',
+				paths: {name: 1, type: -1},
+				name: 'idx_name_type'
 			}
 		]);
 	});
 
-	test('throws for invalid compound sort direction', function () {
+	test('silently drops invalid compound index order entries', function () {
 		const schema_instance = new Schema({name: String});
 
-		expect(function create_invalid_direction_index() {
-			schema_instance.create_index({name: 0});
-		}).toThrow('index direction for path "name" must be 1 or -1');
+		schema_instance.create_index({
+			using: 'btree',
+			paths: {name: 0}
+		});
+
+		expect(schema_instance.get_indexes()).toEqual([]);
 	});
 
-	test('throws for invalid path-level index option values', function () {
-		expect(function create_invalid_path_index() {
-			return new Schema({
-				name: {type: String, index: 'asc'}
-			});
-		}).toThrow('index option at path "name" must be true, false, 1, -1, or an options object');
+	test('silently drops invalid path-level index option values', function () {
+		const schema_instance = new Schema({
+			name: {type: String, index: 'asc'}
+		});
+
+		expect(schema_instance.get_indexes()).toEqual([]);
 	});
 
-	test('throws for invalid path-level index object direction values', function () {
-		expect(function create_invalid_path_index_direction() {
-			return new Schema({
-				name: {type: String, index: {direction: 0}}
-			});
-		}).toThrow('index direction for path "name" must be 1 or -1');
+	test('silently defaults invalid path-level index order values to ascending', function () {
+		const schema_instance = new Schema({
+			name: {type: String, index: {order: 0}}
+		});
+
+		expect(schema_instance.get_indexes()).toEqual([
+			{
+				using: 'btree',
+				path: 'name',
+				order: 1
+			}
+		]);
+	});
+
+	test('silently defaults invalid path-level using values to btree', function () {
+		const schema_instance = new Schema({
+			name: {type: String, index: {using: 'hash'}}
+		});
+
+		expect(schema_instance.get_indexes()).toEqual([
+			{
+				using: 'btree',
+				path: 'name',
+				order: 1
+			}
+		]);
+	});
+
+	test('silently drops path-level order when using gin', function () {
+		const schema_instance = new Schema({
+			name: {type: String, index: {using: 'gin', order: -1}}
+		});
+
+		expect(schema_instance.get_indexes()).toEqual([
+			{
+				using: 'gin',
+				path: 'name'
+			}
+		]);
+	});
+
+	test('silently drops path-level unique when using gin', function () {
+		const schema_instance = new Schema({
+			name: {type: String, index: {using: 'gin', unique: true}}
+		});
+
+		expect(schema_instance.get_indexes()).toEqual([
+			{
+				using: 'gin',
+				path: 'name'
+			}
+		]);
 	});
 });

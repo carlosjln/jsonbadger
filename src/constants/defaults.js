@@ -9,6 +9,7 @@ const defaults = {
 	},
 
 	schema_options: {},
+
 	model_options: {
 		table_name: null,
 		data_column: 'data',

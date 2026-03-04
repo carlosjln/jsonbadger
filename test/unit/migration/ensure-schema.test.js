@@ -49,8 +49,8 @@ describe('ensure_schema', function () {
 
 	test('ensures each declared schema index in order after ensuring table', async function () {
 		const schema_indexes = [
-			{index_spec: {email: 1}, index_options: {unique: true}},
-			{index_spec: 'profile.city', index_options: {name: 'idx_users_city_gin'}}
+			{using: 'btree', path: 'email', order: 1, unique: true},
+			{using: 'gin', path: 'profile.city', name: 'idx_users_city_gin'}
 		];
 
 		resolve_schema_indexes_mock.mockReturnValue(schema_indexes);
@@ -61,8 +61,8 @@ describe('ensure_schema', function () {
 		expect(resolve_schema_indexes_mock).toHaveBeenCalledTimes(1);
 		expect(ensure_index_mock).toHaveBeenCalledTimes(2);
 		expect(ensure_index_mock.mock.calls).toEqual([
-			['users', {email: 1}, 'data', {unique: true}],
-			['users', 'profile.city', 'data', {name: 'idx_users_city_gin'}]
+			['users', {using: 'btree', path: 'email', order: 1, unique: true}, 'data'],
+			['users', {using: 'gin', path: 'profile.city', name: 'idx_users_city_gin'}, 'data']
 		]);
 		expect(ensure_table_mock.mock.invocationCallOrder[0]).toBeLessThan(ensure_index_mock.mock.invocationCallOrder[0]);
 		expect(ensure_index_mock.mock.invocationCallOrder[0]).toBeLessThan(ensure_index_mock.mock.invocationCallOrder[1]);

@@ -57,8 +57,8 @@ describe('Local PostgreSQL integration', function () {
 				orders: [Object]
 			});
 
-			user_schema.create_index('user_name');
-			user_schema.create_index({'address.city': 1, age: -1});
+			user_schema.create_index({using: 'gin', path: 'user_name'});
+			user_schema.create_index({using: 'btree', paths: {'address.city': 1, age: -1}});
 
 			const user_model = jsonbadger.model(user_schema, {
 				table_name: test_table_name

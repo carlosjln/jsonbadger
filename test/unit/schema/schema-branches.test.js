@@ -4,27 +4,38 @@ import defaults from '#src/constants/defaults.js';
 import Schema from '#src/schema/schema.js';
 
 describe('Schema guard and explicit-array index behavior', function () {
-	test('uses default schema_def and schema options when omitted', function () {
+	test('uses default schema options when omitted', function () {
 		const schema_instance = new Schema();
 
-		expect(schema_instance.schema_def).toEqual({});
 		expect(schema_instance.options).toEqual(defaults.schema_options);
 		expect(schema_instance.get_indexes()).toEqual([]);
-
-		expect(schema_instance.schema_description).toEqual({
-			paths: [],
-			objects: []
-		});
+		expect(Object.keys(schema_instance.paths)).toEqual(
+			expect.arrayContaining(['id', 'created_at', 'updated_at'])
+		);
 	});
 
-	test('returns safe defaults when compiled_schema helper methods are unavailable', function () {
+	test('returns path metadata through public runtime helpers', function () {
 		const schema_instance = new Schema({name: String});
 
-		schema_instance.compiled_schema = {};
-
-		expect(schema_instance.path('name')).toBeNull();
-		expect(schema_instance.get_path_type('name')).toBeNull();
+		expect(schema_instance.get_path('name').instance).toBe('String');
+		expect(schema_instance.get_path('id').instance).toBe('Mixed');
+		expect(schema_instance.get_path_type('name')).toBe('String');
 		expect(schema_instance.is_array_root('tags')).toBe(false);
+	});
+
+	test('preserves user-declared metadata path definitions and still exposes metadata paths', function () {
+		const schema_instance = new Schema({
+			id: Number,
+			created_at: String,
+			name: String
+		});
+
+		expect(schema_instance.get_path('id').instance).toBe('Number');
+		expect(schema_instance.get_path('created_at').instance).toBe('String');
+		expect(schema_instance.get_path('updated_at').instance).toBe('Date');
+		expect(Object.keys(schema_instance.paths)).toEqual(
+			expect.arrayContaining(['id', 'created_at', 'updated_at', 'name'])
+		);
 	});
 
 	test('auto-registers path-level index on explicit array type syntax', function () {
@@ -37,8 +48,8 @@ describe('Schema guard and explicit-array index behavior', function () {
 
 		expect(schema_instance.get_indexes()).toEqual([
 			{
-				index_spec: 'tags',
-				index_options: {}
+				using: 'gin',
+				path: 'tags'
 			}
 		]);
 	});

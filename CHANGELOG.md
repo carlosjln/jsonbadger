@@ -2,26 +2,35 @@
 
 ## Unreleased
 
+### Breaking
+
+- `Schema#path(path_name)` was renamed to `Schema#get_path(path_name)`.
+- `Schema#create_index(...)` now accepts a single descriptor object (`index_definition`); legacy `(index_spec, index_options)` usage was removed.
+- `ensure_index(...)` now accepts `(table_name, index_definition, data_column)`; legacy separate `index_spec/index_options` args were removed.
+
 ### Changed
 
-- Breaking: data-returning methods now return document instances:
-  - `save()`
-  - `find(...).exec()`
-  - `find_one(...).exec()`
-  - `update_one(...)`
-  - `delete_one(...)`
-  - plain-object snapshots are now explicit via `doc.to_json()` / `doc.to_object()` with shape `{ id, ...payload_fields, created_at, updated_at }`
-- Breaking: model schema definitions cannot declare reserved metadata fields (`id`, `created_at`, `updated_at`).
-- Breaking: reserved metadata fields are read-only and are blocked in write/update payload paths.
-- Breaking: `data_column` is now internal-only and cannot be configured through `model(...)` options.
-- Query/sort compilers now route top-level reserved metadata keys to table columns and reject dotted reserved paths.
+- Unified internal and user-facing terminology from `metadata` to `base fields` (`id`, `created_at`, `updated_at`).
+- Base fields are now injected into schema introspection by default while preserving explicit user-defined base-field paths when declared.
+- Index normalization is centralized in `Schema`; migration `ensure_index(...)` now focuses on SQL generation and SQL-safety assertions to avoid normalization drift.
+- `Model.update_one(...)` now routes top-level timestamp updates (`created_at`, `updated_at`) through row columns with strict timestamp-path constraints; `updated_at` still auto-refreshes when omitted.
+- `Document#save()` now supports update-on-existing-document flow using dirty paths and base-field assignment tracking (instead of insert-only behavior).
+- Query compilers now resolve schema field types via `schema.get_path(...)`.
+- Added shared `is_plain_object(...)` in `src/utils/value.js` and reused it in query compilation paths.
 
 ### Added
 
-- Added `Model.hydrate(target, source)` static helper:
-  - copies only schema root keys + reserved metadata keys
-  - copies only own keys present on both `target` and `source`
-  - uses silent no-op behavior for invalid inputs and unsafe keys
+- `Model.create(document_or_list)` convenience helper for single and batched create flows.
+- `Model.find_by_id(id_value)` convenience query helper.
+- Instance deletion flow: `doc.delete().exec()`.
+
+### Docs
+
+- Updated `README.md`, `docs/api.md`, `docs/examples.md`, and `docs/query-translation.md` to align with base-field terminology, index descriptor behavior, and current API/runtime semantics.
+
+### Testing
+
+- Expanded and updated migration/model/query/schema test coverage to validate the refactor (index normalization contract, timestamp/base-field routing, runtime save/delete behavior, and docs-aligned API expectations).
 
 ## 0.1.0 - 2026-02-24
 

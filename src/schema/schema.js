@@ -1,25 +1,39 @@
 import defaults from '#src/constants/defaults.js';
-
 import ValidationError from '#src/errors/validation-error.js';
-import schema_compiler from '#src/schema/schema-compiler.js';
-
+import compile_schema from '#src/schema/schema-compiler.js';
 import {default_field_type_registry} from '#src/field-types/registry.js';
-import {assert_condition, assert_identifier, assert_path} from '#src/utils/assert.js';
-import {is_object, is_string} from '#src/utils/value.js';
+import {assert_identifier, assert_path} from '#src/utils/assert.js';
 import {has_own} from '#src/utils/object.js';
+import {is_object, is_string} from '#src/utils/value.js';
 
-export default function Schema(schema_def, options) {
-	this.schema_def = schema_def || {};
-	this.options = Object.assign({}, defaults.schema_options, options || {});
-	this.compiled_schema = schema_compiler(this.schema_def);
-	this.schema_description = this.compiled_schema.describe();
+const base_fields = Object.freeze({
+	id: Object.freeze({type: 'Mixed'}),
+	created_at: Object.freeze({type: Date}),
+	updated_at: Object.freeze({type: Date})
+});
+const base_fields_keys = new Set(Object.keys(base_fields));
+
+export default function Schema(schema_definition = {}, options = {}) {
+	// 1. Prepare schema definition with missing system fields
+	inject_base_fields(schema_definition);
+
+	// 2. Compile schema
+	this.$compiled_schema = compile_schema(schema_definition);
+
+	// 3. Initialize properties
 	this.indexes = [];
+	this.options = Object.assign({}, defaults.schema_options, options);
+	this.paths = Object.assign({}, this.$compiled_schema.get_introspection().field_types);
+	this.$field_registry = default_field_type_registry;
 
-	register_path_level_indexes(this, this.schema_def, '', default_field_type_registry);
+	// 4. Extract and register indexes defined inline on fields
+	this.register_field_indexes(schema_definition);
 }
 
+// --- PUBLIC API ---
+
 Schema.prototype.validate = function (payload) {
-	const validation_result = this.compiled_schema.validate(payload);
+	const validation_result = this.$compiled_schema.validate(payload);
 
 	if(validation_result.error) {
 		throw new ValidationError('Schema validation failed', validation_result.error.details);
@@ -28,207 +42,221 @@ Schema.prototype.validate = function (payload) {
 	return validation_result.value;
 };
 
-Schema.prototype.path = function (path_name) {
-	if(!this.compiled_schema || typeof this.compiled_schema.path !== 'function') {
-		return null;
+Schema.prototype.get_path = function (path_name) {
+	if(has_own(this.paths, path_name)) {
+		return this.paths[path_name];
 	}
 
-	return this.compiled_schema.path(path_name);
+	return null;
 };
 
 Schema.prototype.get_path_type = function (path_name) {
-	if(!this.compiled_schema || typeof this.compiled_schema.get_path_type !== 'function') {
-		return null;
-	}
-
-	return this.compiled_schema.get_path_type(path_name);
+	return this.$compiled_schema.get_path_type(path_name);
 };
 
 Schema.prototype.is_array_root = function (path_name) {
-	if(!this.compiled_schema || typeof this.compiled_schema.is_array_root !== 'function') {
-		return false;
-	}
-
-	return this.compiled_schema.is_array_root(path_name);
+	return this.$compiled_schema.is_array_root(path_name);
 };
 
-Schema.prototype.create_index = function (index_spec, index_options) {
-	const normalized_index_spec = normalize_index_spec(index_spec);
-	const normalized_index_options = normalize_index_options(index_options);
+Schema.prototype.create_index = function (index_definition) {
+	const normalized_index_definition = normalize_index_definition(index_definition);
 
-	this.indexes.push({
-		index_spec: normalized_index_spec,
-		index_options: normalized_index_options
-	});
+	if(normalized_index_definition) {
+		this.indexes.push(normalized_index_definition);
+	}
+
+	return this; // Allows chaining
+};
+
+Schema.prototype.get_indexes = function () {
+	const cloned_indexes = [];
+
+	for(const index_definition of this.indexes) {
+		const cloned_definition = Object.assign({}, index_definition);
+
+		if(is_object(index_definition.paths)) {
+			cloned_definition.paths = Object.assign({}, index_definition.paths);
+		}
+
+		cloned_indexes.push(cloned_definition);
+	}
+
+	return cloned_indexes;
+};
+
+Schema.prototype.collect_field_defined_indexes = function (schema_definition) {
+	const index_definitions = [];
+	const schema_instance = this;
+
+	collect_paths(schema_definition, '');
+
+	return index_definitions;
+
+	function collect_paths(current_definition, parent_path) {
+		for(const [path_segment, field_definition] of Object.entries(current_definition)) {
+			const full_path = parent_path ? `${parent_path}.${path_segment}` : path_segment;
+
+			if(!parent_path && base_fields_keys.has(path_segment)) {
+				continue;
+			}
+
+			if(is_explicit_field(field_definition, schema_instance.$field_registry)) {
+				const inline_index_definition = normalize_index_definition(field_definition.index, full_path);
+
+				if(inline_index_definition) {
+					index_definitions.push(inline_index_definition);
+				}
+			} else if(is_object(field_definition)) {
+				collect_paths(field_definition, full_path);
+			}
+		}
+	}
+};
+
+Schema.prototype.register_field_indexes = function (schema_definition) {
+	const field_defined_indexes = this.collect_field_defined_indexes(schema_definition);
+
+	for(const index_definition of field_defined_indexes) {
+		this.create_index(index_definition);
+	}
 
 	return this;
 };
 
-Schema.prototype.get_indexes = function () {
-	const index_definitions = [];
-	let index_position = 0;
+// --- INTERNAL MODULE FUNCTIONS ---
 
-	while(index_position < this.indexes.length) {
-		const index_definition = this.indexes[index_position];
-		const index_spec = clone_index_spec(index_definition.index_spec);
-		const index_options = Object.assign({}, index_definition.index_options);
-
-		index_definitions.push({
-			index_spec: index_spec,
-			index_options: index_options
-		});
-		index_position += 1;
-	}
-
-	return index_definitions;
-};
-
-function register_path_level_indexes(schema_instance, schema_definition, parent_path, field_registry) {
-	const schema_entries = Object.entries(schema_definition);
-	let entry_position = 0;
-
-	while(entry_position < schema_entries.length) {
-		const schema_entry = schema_entries[entry_position];
-		const path_segment = schema_entry[0];
-		const field_definition = schema_entry[1];
-		const path_value = parent_path ? parent_path + '.' + path_segment : path_segment;
-
-		if(is_explicit_field_definition(field_definition, field_registry)) {
-			register_index_option(schema_instance, path_value, field_definition.index);
-			entry_position += 1;
-			continue;
+function inject_base_fields(schema_def) {
+	for(const [field_name, field_config] of Object.entries(base_fields)) {
+		if(!has_own(schema_def, field_name)) {
+			schema_def[field_name] = Object.assign({}, field_config);
 		}
-
-		if(is_plain_object(field_definition)) {
-			register_path_level_indexes(schema_instance, field_definition, path_value, field_registry);
-		}
-
-		entry_position += 1;
 	}
 }
 
-function is_explicit_field_definition(field_definition, field_registry) {
-	if(!is_plain_object(field_definition) || !has_own(field_definition, 'type')) {
+function is_explicit_field(field_definition, registry) {
+	if(!is_object(field_definition) || !has_own(field_definition, 'type')) {
 		return false;
 	}
 
 	const type_key = field_definition.type;
-
-	if(Array.isArray(type_key)) {
-		return true;
-	}
-
-	return field_registry.has_field_type(type_key);
+	return Array.isArray(type_key) || registry.has_field_type(type_key);
 }
 
-function register_index_option(schema_instance, path_value, index_option) {
-	if(index_option === undefined || index_option === false) {
-		return;
+function normalize_index_definition(index_input, path_name) {
+	if(index_input === undefined || index_input === false || index_input === null) {
+		return null;
 	}
 
-	if(index_option === true) {
-		schema_instance.create_index(path_value);
-		return;
+	// 1. Handle Shorthand Primitives (when path_name is provided)
+	if(path_name !== undefined) {
+		if(index_input === true) {
+			return {using: 'gin', path: path_name};
+		}
+
+		if(index_input === 1 || index_input === -1) {
+			return {using: 'btree', path: path_name, order: index_input};
+		}
 	}
 
-	if(index_option === 1 || index_option === -1) {
-		schema_instance.create_index({
-			[path_value]: index_option
-		});
-		return;
+	// 2. Ensure input is an object for further processing
+	if(!is_object(index_input)) {
+		return null;
 	}
 
-	if(is_plain_object(index_option)) {
-		const index_options = Object.assign({}, index_option);
-		const direction_value = resolve_path_level_index_direction(path_value, index_options);
+	const raw_definition = Object.assign({}, index_input);
 
-		schema_instance.create_index({
-			[path_value]: direction_value
-		}, index_options);
-		return;
+	// Auto-inject path_name if provided and missing
+	if(path_name !== undefined && !has_own(raw_definition, 'path')) {
+		raw_definition.path = path_name;
 	}
 
-	throw new Error('index option at path "' + path_value + '" must be true, false, 1, -1, or an options object');
+	// 3. Determine index type (using)
+	let index_type = raw_definition.using;
+
+	if(index_type !== 'gin' && index_type !== 'btree') {
+		if(raw_definition.using !== undefined) {
+			index_type = 'btree';
+		} else if(raw_definition.paths !== undefined || raw_definition.order !== undefined || raw_definition.unique !== undefined) {
+			index_type = 'btree';
+		} else if(raw_definition.path !== undefined) {
+			index_type = 'gin';
+		} else {
+			return null; // Cannot infer index type
+		}
+	}
+
+	// 4. Build normalized definition based on type
+	const normalized_definition = {using: index_type};
+
+	if(is_string(raw_definition.name)) {
+		try {
+			assert_identifier(raw_definition.name, 'index_definition.name');
+			normalized_definition.name = raw_definition.name;
+		} catch(error) {
+			// Intentionally ignore invalid names
+		}
+	}
+
+	if(index_type === 'gin') {
+		// GIN: requires a single valid path, rejects order and unique
+		if(!is_string(raw_definition.path)) {
+			return null;
+		}
+
+		try {
+			assert_path(raw_definition.path, 'index path');
+			normalized_definition.path = raw_definition.path;
+			return normalized_definition;
+		} catch(error) {
+			return null;
+		}
+	}
+
+	if(index_type === 'btree') {
+		// BTREE: allows unique, order, single path, or multiple paths
+		let has_valid_path = false;
+
+		if(is_string(raw_definition.path)) {
+			try {
+				assert_path(raw_definition.path, 'index path');
+				normalized_definition.path = raw_definition.path;
+				normalized_definition.order = (raw_definition.order === 1 || raw_definition.order === -1) ? raw_definition.order : 1;
+				has_valid_path = true;
+			} catch(error) {
+			}
+		}
+
+		if(!has_valid_path && is_object(raw_definition.paths)) {
+			const valid_paths = {};
+
+			for(const [p_value, p_order] of Object.entries(raw_definition.paths)) {
+				if(!is_string(p_value) || (p_order !== 1 && p_order !== -1)) {
+					continue;
+				}
+
+				try {
+					assert_path(p_value, 'index path');
+					valid_paths[p_value] = p_order;
+				} catch(error) {
+				}
+			}
+
+			if(Object.keys(valid_paths).length > 0) {
+				normalized_definition.paths = valid_paths;
+				has_valid_path = true;
+			}
+		}
+
+		if(!has_valid_path) {
+			return null;
+		}
+
+		if(typeof raw_definition.unique === 'boolean') {
+			normalized_definition.unique = raw_definition.unique;
+		}
+
+		return normalized_definition;
+	}
+
+	return null;
 }
-
-function resolve_path_level_index_direction(path_value, index_options) {
-	let direction_value = 1;
-
-	if(has_own(index_options, 'direction')) {
-		direction_value = index_options.direction;
-		delete index_options.direction;
-	}
-
-	if(has_own(index_options, 'order')) {
-		direction_value = index_options.order;
-		delete index_options.order;
-	}
-
-	assert_condition(direction_value === 1 || direction_value === -1, 'index direction for path "' + path_value + '" must be 1 or -1');
-
-	return direction_value;
-}
-
-function normalize_index_spec(index_spec) {
-	if(is_string(index_spec)) {
-		assert_path(index_spec, 'index path');
-		return index_spec;
-	}
-
-	assert_condition(is_object(index_spec), 'index_spec must be a path string or an object map of paths to sort directions');
-
-	const index_entries = Object.entries(index_spec);
-	assert_condition(index_entries.length > 0, 'index_spec object must define at least one indexed path');
-
-	const normalized_spec = {};
-	let entry_position = 0;
-
-	while(entry_position < index_entries.length) {
-		const index_entry = index_entries[entry_position];
-		const path_value = index_entry[0];
-		const direction_value = index_entry[1];
-
-		assert_path(path_value, 'index path');
-		assert_condition(
-			direction_value === 1 || direction_value === -1,
-			'index direction for path "' + path_value + '" must be 1 or -1'
-		);
-		normalized_spec[path_value] = direction_value;
-		entry_position += 1;
-	}
-
-	return normalized_spec;
-}
-
-function normalize_index_options(index_options) {
-	if(index_options === undefined) {
-		return {};
-	}
-
-	assert_condition(is_object(index_options), 'index_options must be an object');
-
-	const normalized_options = Object.assign({}, index_options);
-
-	if(normalized_options.unique !== undefined) {
-		assert_condition(typeof normalized_options.unique === 'boolean', 'index_options.unique must be a boolean');
-	}
-
-	if(normalized_options.name !== undefined) {
-		assert_identifier(normalized_options.name, 'index_options.name');
-	}
-
-	return normalized_options;
-}
-
-function clone_index_spec(index_spec) {
-	if(is_string(index_spec)) {
-		return index_spec;
-	}
-
-	return Object.assign({}, index_spec);
-}
-
-function is_plain_object(value) {
-	return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-

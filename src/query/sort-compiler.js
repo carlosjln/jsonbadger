@@ -15,7 +15,7 @@ const reserved_metadata_sort_columns = Object.freeze({
  *
  * Supported shape:
  * - keys: field paths (e.g. `name`, `profile.last_name`, `created_at`)
- * - values: direction hints (`-1` => DESC, any other value => ASC)
+ * - values: order hints (`-1` => DESC, any other value => ASC)
  *
  * Returns an empty string for missing/invalid sort definitions so callers can
  * safely append the result to a larger SQL fragment.
@@ -34,11 +34,11 @@ export default function sort_compiler(sort_definition, compile_options) {
 	while(entry_index < sort_entries.length) {
 		const sort_entry = sort_entries[entry_index];
 		const path_value = sort_entry[0];
-		// Keep sort direction normalization permissive: only exact -1 maps to DESC.
-		const direction_value = Number(sort_entry[1]) === -1 ? 'DESC' : 'ASC';
+		// Keep sort order normalization permissive: only exact -1 maps to DESC.
+		const order_value = Number(sort_entry[1]) === -1 ? 'DESC' : 'ASC';
 		const text_expression = resolve_sort_expression(path_value, data_column_reference);
 
-		sort_clauses.push(text_expression + ' ' + direction_value);
+		sort_clauses.push(text_expression + ' ' + order_value);
 		entry_index += 1;
 	}
 

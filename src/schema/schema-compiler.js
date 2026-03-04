@@ -4,15 +4,21 @@ Assumptions and trade-offs:
 - Error aggregation mirrors abortEarly=false behavior with deterministic per-path detail records.
 */
 import field_definition_parser from '#src/schema/field-definition-parser.js';
+
 import {
 	create_path_introspection,
 	get_path_field_type,
 	get_path_type as resolve_path_type,
 	is_array_root as resolve_is_array_root
 } from '#src/schema/path-introspection.js';
+
 import {has_own} from '#src/utils/object.js';
-export default function schema_compiler(schema_definition) {
-	const parsed_schema = field_definition_parser(schema_definition || {});
+
+const schema_validation_error_message = 'Schema validation failed';
+const schema_validation_error_code = 'validation_error';
+
+export default function compile_schema(schema_definition = {}) {
+	const parsed_schema = field_definition_parser(schema_definition);
 	const path_introspection = create_path_introspection(parsed_schema);
 	const field_types = path_introspection.field_types;
 	const sorted_paths = Object.keys(field_types).sort(sort_paths_by_depth);
@@ -21,20 +27,21 @@ export default function schema_compiler(schema_definition) {
 		validate: function (payload) {
 			return validate_payload(payload, sorted_paths, field_types);
 		},
-		path: function (path_name) {
+
+		get_path: function (path_name) {
 			return get_path_field_type(path_introspection, path_name);
 		},
+
 		get_path_type: function (path_name) {
 			return resolve_path_type(path_introspection, path_name);
 		},
+
 		is_array_root: function (path_name) {
 			return resolve_is_array_root(path_introspection, path_name);
 		},
-		describe: function () {
-			return {
-				paths: Object.keys(field_types),
-				objects: Array.from(path_introspection.object_paths)
-			};
+
+		get_introspection: function () {
+			return path_introspection;
 		}
 	};
 }
@@ -46,8 +53,8 @@ function validate_payload(payload, sorted_paths, field_types) {
 			error: {
 				details: [{
 					path: '',
-					code: 'validation_error',
-					message: 'Schema validation failed',
+					code: schema_validation_error_code,
+					message: schema_validation_error_message,
 					type: 'object'
 				}]
 			}
@@ -110,8 +117,8 @@ function sort_paths_by_depth(left_path, right_path) {
 }
 
 function format_field_error(path_name, error) {
-	const error_message = error && error.message ? error.message : 'Schema validation failed';
-	const error_code = error && error.code ? error.code : 'validation_error';
+	const error_message = error && error.message ? error.message : schema_validation_error_message;
+	const error_code = error && error.code ? error.code : schema_validation_error_code;
 
 	return {
 		path: path_name,

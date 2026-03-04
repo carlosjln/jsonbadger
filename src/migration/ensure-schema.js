@@ -10,7 +10,7 @@ export default async function ensure_schema(table_name, data_column, collection_
 
 	while(index_position < schema_indexes.length) {
 		const index_definition = schema_indexes[index_position];
-		await ensure_index(table_name, index_definition.index_spec, data_column, index_definition.index_options);
+		await ensure_index(table_name, index_definition, data_column);
 		index_position += 1;
 	}
 }

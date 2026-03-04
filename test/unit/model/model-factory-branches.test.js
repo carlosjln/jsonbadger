@@ -112,14 +112,18 @@ describe('model-factory branch behavior', function () {
 		expect(fallback_model.resolve_id_strategy()).toBe('uuidv7');
 	});
 
-	test('rejects reserved schema root fields and public data_column override', function () {
-		expect(function create_reserved_id_model() {
+	test('allows id/timestamp schema paths and rejects public data_column override', function () {
+		expect(function create_id_path_model() {
 			model(new Schema({id: String}), {table_name: 'users'});
-		}).toThrow('reserved');
+		}).not.toThrow();
 
-		expect(function create_reserved_created_at_model() {
+		expect(function create_created_at_path_model() {
 			model(new Schema({created_at: Date}), {table_name: 'users'});
-		}).toThrow('reserved');
+		}).not.toThrow();
+
+		expect(function create_updated_at_path_model() {
+			model(new Schema({updated_at: Date}), {table_name: 'users'});
+		}).not.toThrow();
 
 		expect(function create_public_data_column_model() {
 			model(new Schema({name: String}), {
@@ -129,11 +133,63 @@ describe('model-factory branch behavior', function () {
 		}).toThrow('data_column');
 	});
 
+	test('find_by_id returns a find_one QueryBuilder scoped by id', function () {
+		const user_model = model(new Schema({name: String}), {table_name: 'users'});
+		const query_builder = user_model.find_by_id('abc-123');
+
+		expect(query_builder).toBeInstanceOf(QueryBuilder);
+		expect(query_builder.operation_name).toBe('find_one');
+		expect(query_builder.base_filter).toEqual({id: 'abc-123'});
+	});
+
+	test('Model.create delegates to document save semantics for single and array inputs', async function () {
+		const user_model = model(new Schema({name: String}), {table_name: 'users'});
+
+		sql_runner_mock
+			.mockResolvedValueOnce({
+				rows: [{
+					id: '11',
+					data: {name: 'one'},
+					created_at: new Date('2026-02-27T10:00:00.000Z'),
+					updated_at: new Date('2026-02-27T11:00:00.000Z')
+				}]
+			})
+			.mockResolvedValueOnce({
+				rows: [{
+					id: '12',
+					data: {name: 'two'},
+					created_at: new Date('2026-02-27T12:00:00.000Z'),
+					updated_at: new Date('2026-02-27T13:00:00.000Z')
+				}]
+			})
+			.mockResolvedValueOnce({
+				rows: [{
+					id: '13',
+					data: {name: 'three'},
+					created_at: new Date('2026-02-27T14:00:00.000Z'),
+					updated_at: new Date('2026-02-27T15:00:00.000Z')
+				}]
+			});
+
+		const one = await user_model.create({name: 'one'});
+		const many = await user_model.create([{name: 'two'}, {name: 'three'}]);
+
+		expect(one).toBeInstanceOf(user_model);
+		expect(one.name).toBe('one');
+		expect(Array.isArray(many)).toBe(true);
+		expect(many).toHaveLength(2);
+		expect(many[0]).toBeInstanceOf(user_model);
+		expect(many[1]).toBeInstanceOf(user_model);
+		expect(many[0].name).toBe('two');
+		expect(many[1].name).toBe('three');
+		expect(sql_runner_mock).toHaveBeenCalledTimes(3);
+	});
+
 	test('ensure_index creates table and applies schema indexes even when uuidv7 is selected without a pool', async function () {
 		connection_options_state.id_strategy = 'uuidv7';
 
 		const schema_instance = build_schema_stub([
-			{index_spec: 'name', index_options: {}}
+			{using: 'gin', path: 'name'}
 		]);
 
 		const user_model = model(schema_instance, {table_name: 'users'});
@@ -141,7 +197,7 @@ describe('model-factory branch behavior', function () {
 		await user_model.ensure_index();
 
 		expect(ensure_table_mock).toHaveBeenCalledWith('users', 'data', 'uuidv7');
-		expect(ensure_index_mock).toHaveBeenCalledWith('users', 'name', 'data', {});
+		expect(ensure_index_mock).toHaveBeenCalledWith('users', {using: 'gin', path: 'name'}, 'data');
 	});
 
 	test('update_one returns null when no row matches and accepts null query_filter', async function () {
@@ -222,6 +278,45 @@ describe('model-factory branch behavior', function () {
 		})).rejects.toThrow('Update path contains an invalid nested segment');
 	});
 
+	test('update_one rejects id field mutation paths', async function () {
+		const user_model = model(new Schema({name: String}), {table_name: 'users'});
+
+		await expect(user_model.update_one({}, {
+			$set: {
+				id: 'next-id'
+			}
+		})).rejects.toThrow('Update path targets read-only id field');
+	});
+
+	test('update_one auto-updates updated_at unless caller provides it', async function () {
+		const user_model = model(new Schema({name: String}), {table_name: 'users'});
+
+		await user_model.update_one({name: 'john'}, {
+			$set: {
+				name: 'jane'
+			}
+		});
+
+		const auto_timestamp_sql = sql_runner_mock.mock.calls[0][0];
+		expect(auto_timestamp_sql).toContain('updated_at = NOW()');
+
+		sql_runner_mock.mockClear();
+
+		await user_model.update_one({name: 'john'}, {
+			$set: {
+				name: 'jane',
+				updated_at: '2026-03-03T10:00:00.000Z'
+			}
+		});
+
+		const explicit_timestamp_sql = sql_runner_mock.mock.calls[0][0];
+		expect(explicit_timestamp_sql).not.toContain('updated_at = NOW()');
+		expect(explicit_timestamp_sql).toContain('updated_at =');
+		expect(sql_runner_mock.mock.calls[0][1]).toEqual(
+			expect.arrayContaining(['2026-03-03T10:00:00.000Z'])
+		);
+	});
+
 	test('delete_one rethrows non-QueryError failures', async function () {
 		const user_model = model(new Schema({name: String}), {table_name: 'users'});
 		sql_runner_mock.mockRejectedValueOnce(new Error('db down'));
@@ -239,7 +334,7 @@ describe('model-factory branch behavior', function () {
 		await expect(user_model.delete_one({name: 'a'})).rejects.toThrow('SQL execution failed');
 	});
 
-	test('Model.hydrate copies own schema/metadata keys and silently ignores invalid or unsafe keys', function () {
+	test('Model.hydrate copies own schema/base field keys and silently ignores invalid or unsafe keys', function () {
 		const user_model = model(new Schema({
 			name: String,
 			profile: {

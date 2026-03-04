@@ -75,7 +75,7 @@ describe('document-instance branch behavior', function () {
 		expect(doc.to_object()).toEqual({name: 'john'});
 	});
 
-	test('to_object handles schema stubs without options/path and with invalid schema_description paths', function () {
+	test('to_object handles schema stubs without options/get_path and with invalid schema_description paths', function () {
 		const no_path_schema = {
 			validate: function (payload) {return payload;}
 		};
@@ -84,7 +84,7 @@ describe('document-instance branch behavior', function () {
 			validate: function (payload) {return payload;},
 			options: {},
 			schema_description: {paths: 'bad'},
-			path: function () {
+			get_path: function () {
 				return null;
 			}
 		};
@@ -163,11 +163,11 @@ describe('document-instance branch behavior', function () {
 		expect(doc.get('profile.city_alias')).toBe('Miami');
 	});
 
-	test('model creation tolerates schema.path entries without options when building alias map', function () {
+	test('model creation tolerates schema.get_path entries without options when building alias map', function () {
 		const schema_stub = {
 			validate: function (payload) {return payload;},
 			schema_description: {paths: ['name']},
-			path: function () {
+			get_path: function () {
 				return {};
 			}
 		};

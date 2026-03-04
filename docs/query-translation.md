@@ -91,8 +91,9 @@ This table is the implementation-facing capability map for currently supported q
 | `update_one.$insert` | `jsonb_insert(...)` | Supports `insert_after` and numeric array-index path segments | N/A (write-path function) |
 | `update_one.$set_lax` | `jsonb_set_lax(...)` | Supports `create_if_missing` + `null_value_treatment` | N/A (write-path function) |
 
-Index helper behavior (current implementation):
-- `schema.create_index('path')` creates a GIN index on the extracted JSONB path expression.
-- `schema.create_index({ path: 1 })` (and compound object specs) create BTREE indexes on extracted text path expressions.
-- Single-path string GIN indexes do not support `unique` in JsonBadger; object specs support `unique` because they compile to BTREE indexes.
+Index helper behavior:
+- `schema.create_index({using: 'gin', path: 'profile.city'})` creates a GIN index on the extracted JSONB path expression.
+- `schema.create_index({using: 'btree', path: 'age', order: -1})` creates a BTREE index on extracted text path expressions.
+- `schema.create_index({using: 'btree', paths: {name: 1, age: -1}})` creates compound BTREE indexes.
+- GIN descriptors reject `unique`; BTREE descriptors support `unique`.
 

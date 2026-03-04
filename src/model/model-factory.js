@@ -17,7 +17,7 @@ import {bind_parameter, create_parameter_state} from '#src/sql/parameter-binder.
 import sql_runner from '#src/sql/sql-runner.js';
 
 import {assert_condition, assert_identifier, quote_identifier} from '#src/utils/assert.js';
-import {is_array, is_not_array} from '#src/utils/array.js';
+import {is_array} from '#src/utils/array.js';
 import {has_own} from '#src/utils/object.js';
 import {build_path_literal} from '#src/utils/object-path.js';
 import {jsonb_stringify} from '#src/utils/json.js';
@@ -25,13 +25,13 @@ import {is_not_object} from '#src/utils/value.js';
 
 const update_path_root_segment_pattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const update_path_nested_segment_pattern = /^(?:[a-zA-Z_][a-zA-Z0-9_]*|[0-9]+)$/;
-const reserved_metadata_fields = new Set(['id', 'created_at', 'updated_at']);
+const row_base_fields = new Set(['id', 'created_at', 'updated_at']);
+const timestamp_fields = new Set(['created_at', 'updated_at']);
 const unsafe_hydrate_keys = new Set(['__proto__', 'constructor', 'prototype']);
 
 export default function model(schema_instance, model_configuration) {
 	assert_condition(schema_instance && typeof schema_instance.validate === 'function', 'schema_instance is required');
 	assert_condition(is_not_object(model_configuration) === false, 'model options are required');
-	assert_schema_has_no_reserved_metadata_paths(schema_instance);
 	assert_condition(
 		has_own(model_configuration, 'data_column') === false,
 		'model options.data_column is reserved for internal use and cannot be configured'
@@ -121,8 +121,28 @@ export default function model(schema_instance, model_configuration) {
 		return new QueryBuilder(Model, 'find_one', query_filter || {}, null);
 	};
 
+	Model.find_by_id = function (id_value) {
+		return new QueryBuilder(Model, 'find_one', {id: id_value}, null);
+	};
+
 	Model.count_documents = function (query_filter) {
 		return new QueryBuilder(Model, 'count_documents', query_filter || {}, null);
+	};
+
+	Model.create = async function (document_value_or_list) {
+		if(is_array(document_value_or_list)) {
+			const created_documents = [];
+
+			for(const document_value of document_value_or_list) {
+				const next_document = new Model(document_value || {});
+				created_documents.push(await next_document.save());
+			}
+
+			return created_documents;
+		}
+
+		const next_document = new Model(document_value_or_list || {});
+		return next_document.save();
 	};
 
 	Model.hydrate = function (target_value, source_value) {
@@ -152,6 +172,7 @@ export default function model(schema_instance, model_configuration) {
 		const set_lax_definition = update_object.$set_lax;
 
 		assert_supported_update_definition(set_definition, insert_definition, set_lax_definition);
+		const split_set_definition = split_set_updates(set_definition);
 
 		await Model.ensure_table();
 
@@ -166,14 +187,29 @@ export default function model(schema_instance, model_configuration) {
 		const parameter_state = create_parameter_state(where_result.next_index);
 		let data_expression = data_identifier;
 
-		data_expression = apply_set_updates(data_expression, set_definition, parameter_state);
+		data_expression = apply_set_updates(data_expression, split_set_definition.data_set, parameter_state);
 		data_expression = apply_insert_updates(data_expression, insert_definition, parameter_state);
 		data_expression = apply_set_lax_updates(data_expression, set_lax_definition, parameter_state);
+		const row_update_assignments = [
+			data_identifier + ' = ' + data_expression
+		];
+
+		if(has_own(split_set_definition.timestamp_set, 'created_at')) {
+			const created_at_placeholder = bind_parameter(parameter_state, split_set_definition.timestamp_set.created_at);
+			row_update_assignments.push('created_at = ' + created_at_placeholder + '::timestamptz');
+		}
+
+		if(has_own(split_set_definition.timestamp_set, 'updated_at')) {
+			const updated_at_placeholder = bind_parameter(parameter_state, split_set_definition.timestamp_set.updated_at);
+			row_update_assignments.push('updated_at = ' + updated_at_placeholder + '::timestamptz');
+		} else {
+			row_update_assignments.push('updated_at = NOW()');
+		}
 
 		const sql_text =
 			'WITH target_row AS (' + 'SELECT id FROM ' + table_identifier + ' WHERE ' + where_result.sql + ' LIMIT 1' + ') ' +
 			'UPDATE ' + table_identifier + ' AS target_table ' +
-			'SET ' + data_identifier + ' = ' + data_expression + ', updated_at = NOW() ' +
+			'SET ' + row_update_assignments.join(', ') + ' ' +
 			'FROM target_row ' +
 			'WHERE target_table.id = target_row.id ' +
 			'RETURNING target_table.id::text AS id, ' +
@@ -245,10 +281,10 @@ export default function model(schema_instance, model_configuration) {
 	}
 
 	function resolve_update_field_type(path_value) {
-		if(!schema_instance || typeof schema_instance.path !== 'function') {
+		if(!schema_instance || typeof schema_instance.get_path !== 'function') {
 			return null;
 		}
-		return schema_instance.path(path_value);
+		return schema_instance.get_path(path_value);
 	}
 
 	function assert_supported_update_definition(set_definition, insert_definition, set_lax_definition) {
@@ -284,6 +320,31 @@ export default function model(schema_instance, model_configuration) {
 		assert_no_conflicting_update_paths(update_path_entries);
 	}
 
+	function split_set_updates(set_definition) {
+		const split_definition = {
+			data_set: {},
+			timestamp_set: {}
+		};
+
+		if(set_definition === undefined) {
+			return split_definition;
+		}
+
+		for(const [path_value, next_value] of Object.entries(set_definition)) {
+			const root_path = path_value.split('.')[0];
+
+			if(root_path === 'created_at' || root_path === 'updated_at') {
+				assert_condition(path_value === root_path, 'Timestamp updates must use top-level paths only');
+				split_definition.timestamp_set[root_path] = normalize_row_timestamp_update(root_path, next_value);
+				continue;
+			}
+
+			split_definition.data_set[path_value] = next_value;
+		}
+
+		return split_definition;
+	}
+
 	function apply_set_updates(data_expression, set_definition, parameter_state) {
 		if(set_definition === undefined) {
 			return data_expression;
@@ -300,6 +361,19 @@ export default function model(schema_instance, model_configuration) {
 		}
 
 		return next_expression;
+	}
+
+	function normalize_row_timestamp_update(path_value, next_value) {
+		const parsed_timestamp = next_value instanceof Date ? next_value : new Date(next_value);
+
+		if(Number.isNaN(parsed_timestamp.getTime())) {
+			throw new QueryError('Invalid timestamp value for update path', {
+				path: path_value,
+				value: next_value
+			});
+		}
+
+		return parsed_timestamp.toISOString();
 	}
 
 	function apply_insert_updates(data_expression, insert_definition, parameter_state) {
@@ -413,12 +487,30 @@ export default function model(schema_instance, model_configuration) {
 				});
 			}
 
-			if(is_root && reserved_metadata_fields.has(segment_value)) {
-				throw new QueryError('Update path targets a reserved metadata field', {
+			if(is_root && segment_value === 'id') {
+				throw new QueryError('Update path targets read-only id field', {
 					operator: operator_name,
 					path: path_value,
 					field: segment_value
 				});
+			}
+
+			if(is_root && timestamp_fields.has(segment_value)) {
+				if(operator_name !== '$set') {
+					throw new QueryError('Timestamp fields only support $set updates', {
+						operator: operator_name,
+						path: path_value,
+						field: segment_value
+					});
+				}
+
+				if(path_value !== segment_value) {
+					throw new QueryError('Timestamp fields only support top-level update paths', {
+						operator: operator_name,
+						path: path_value,
+						field: segment_value
+					});
+				}
 			}
 
 			if(!is_root && !update_path_nested_segment_pattern.test(segment_value)) {
@@ -520,9 +612,8 @@ export default function model(schema_instance, model_configuration) {
 		for(const index_definition of schema_indexes) {
 			await ensure_index(
 				final_table_name,
-				index_definition.index_spec,
-				model_options.data_column,
-				index_definition.index_options
+				index_definition,
+				model_options.data_column
 			);
 		}
 	}
@@ -539,24 +630,8 @@ export default function model(schema_instance, model_configuration) {
 	return Model;
 }
 
-function assert_schema_has_no_reserved_metadata_paths(schema_instance) {
-	const schema_paths = schema_instance?.schema_description?.paths;
-
-	if(is_not_array(schema_paths)) {
-		return;
-	}
-
-	for(const path of schema_paths) {
-		const root_path = typeof path === 'string' ? path.split('.')[0] : null;
-
-		if(root_path && reserved_metadata_fields.has(root_path)) {
-			throw new Error('Schema path "' + root_path + '" is reserved and cannot be declared');
-		}
-	}
-}
-
 function resolve_hydrate_allowed_keys(schema_instance) {
-	const schema_paths = schema_instance?.schema_description?.paths;
+	const schema_paths = resolve_schema_path_names(schema_instance);
 	const allowed_keys = [];
 	const seen_keys = new Set();
 
@@ -573,14 +648,20 @@ function resolve_hydrate_allowed_keys(schema_instance) {
 		}
 	}
 
-	const reserved_keys = ['id', 'created_at', 'updated_at'];
-	
-	for(const reserved_key of reserved_keys) {
-		if(!seen_keys.has(reserved_key)) {
-			seen_keys.add(reserved_key);
-			allowed_keys.push(reserved_key);
+	for(const base_field of row_base_fields) {
+		if(!seen_keys.has(base_field)) {
+			seen_keys.add(base_field);
+			allowed_keys.push(base_field);
 		}
 	}
 
 	return allowed_keys;
+}
+
+function resolve_schema_path_names(schema_instance) {
+	if(is_not_object(schema_instance) || is_not_object(schema_instance.paths)) {
+		return [];
+	}
+
+	return Object.keys(schema_instance.paths);
 }

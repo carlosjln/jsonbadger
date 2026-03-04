@@ -27,7 +27,7 @@ import IdStrategies from '#src/constants/id-strategies.js';
 
 import {quote_identifier} from '#src/utils/assert.js';
 import {build_nested_object, split_dot_path} from '#src/utils/object-path.js';
-import {is_object} from '#src/utils/value.js';
+import {is_object, is_plain_object} from '#src/utils/value.js';
 
 // TODO: might as well split into multiple files within the same directory
 
@@ -728,11 +728,11 @@ function cast_array_contains_value(path_value, comparison_value, schema_instance
 }
 
 function resolve_query_field_type(schema_instance, path_value) {
-	if(!schema_instance || typeof schema_instance.path !== 'function') {
+	if(!schema_instance || typeof schema_instance.get_path !== 'function') {
 		return null;
 	}
 
-	return schema_instance.path(path_value);
+	return schema_instance.get_path(path_value);
 }
 
 function should_use_array_contains(path_value, comparison_value, schema_instance) {
@@ -768,10 +768,6 @@ function has_operator_entries(object_value) {
 	}
 
 	return false;
-}
-
-function is_plain_object(value) {
-	return is_object(value) && Array.isArray(value) === false && value instanceof Date === false;
 }
 
 export default where_compiler;
