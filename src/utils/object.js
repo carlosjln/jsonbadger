@@ -1,22 +1,59 @@
-import {is_object} from '#src/utils/value.js';
+import {is_object, is_plain_object} from '#src/utils/value.js';
 
 function has_own(target, key) {
 	return Object.prototype.hasOwnProperty.call(target, key);
 }
 
-// Optimized deep clone with fallback and circular reference handling
+/**
+ * Deep-clones plain data while preserving built-in value semantics.
+ *
+ * @param {*} value Source value to clone.
+ * @param {WeakMap<object, *>} cache Circular-reference cache.
+ * @returns {*}
+ */
 function deep_clone(value, cache = new WeakMap()) {
-	// Use native high-performance clone if available
-	if(typeof globalThis.structuredClone === 'function') {
-		return globalThis.structuredClone(value);
-	}
-
 	if(value === null || typeof value !== 'object') {
 		return value;
 	}
 
 	if(cache.has(value)) {
 		return cache.get(value);
+	}
+
+	if(value instanceof Date) {
+		return new Date(value.getTime());
+	}
+
+	if(value instanceof RegExp) {
+		const cloned_regexp = new RegExp(value.source, value.flags);
+		cloned_regexp.lastIndex = value.lastIndex;
+		return cloned_regexp;
+	}
+
+	if(Buffer.isBuffer(value)) {
+		return Buffer.from(value);
+	}
+
+	if(value instanceof Map) {
+		const cloned_map = new Map();
+		cache.set(value, cloned_map);
+
+		for(const [map_key, map_value] of value.entries()) {
+			cloned_map.set(deep_clone(map_key, cache), deep_clone(map_value, cache));
+		}
+
+		return cloned_map;
+	}
+
+	if(value instanceof Set) {
+		const cloned_set = new Set();
+		cache.set(value, cloned_set);
+
+		for(const set_value of value.values()) {
+			cloned_set.add(deep_clone(set_value, cache));
+		}
+
+		return cloned_set;
 	}
 
 	if(Array.isArray(value)) {
@@ -30,6 +67,14 @@ function deep_clone(value, cache = new WeakMap()) {
 		return result;
 	}
 
+	// Bugfix note:
+	// Native structuredClone flattens custom class instances into plain objects, which corrupts
+	// parser-produced FieldType instances stored inside options (`of_field_type`, union candidates).
+	// Keep non-plain objects by reference here so runtime methods stay intact.
+	if(!is_plain_object(value)) {
+		return value;
+	}
+
 	const result = {};
 	const keys = Object.keys(value);
 	cache.set(value, result);
@@ -41,7 +86,6 @@ function deep_clone(value, cache = new WeakMap()) {
 
 	return result;
 }
-
 // TODO: rename this? maybe?
 function normalize(schema, value, cache = new WeakMap()) {
 	// 1. Array Handling

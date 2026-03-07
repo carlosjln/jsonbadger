@@ -14,6 +14,10 @@ function run_without_structured_clone(callback) {
 	}
 }
 
+function CustomInstance(label) {
+	this.label = label;
+}
+
 describe('utils/object', function () {
 	test('exports expected utility functions and has_own only checks own properties', function () {
 		const base_object = {inherited_flag: true};
@@ -28,7 +32,7 @@ describe('utils/object', function () {
 		expect(has_own(child_object, 'inherited_flag')).toBe(false);
 	});
 
-	test('deep_clone clones nested structures with native structuredClone when available', function () {
+	test('deep_clone clones nested plain structures', function () {
 		const value = {
 			profile: {name: 'Alice'},
 			tags: ['a', 'b']
@@ -39,6 +43,28 @@ describe('utils/object', function () {
 		expect(cloned_value).not.toBe(value);
 		expect(cloned_value.profile).not.toBe(value.profile);
 		expect(cloned_value.tags).not.toBe(value.tags);
+	});
+
+	test('deep_clone preserves function-bearing objects without flattening nested data', function () {
+		const validate = function () {
+			return true;
+		};
+		const value = {
+			options: {
+				validate: validate,
+				nested: {
+					enabled: true
+				}
+			}
+		};
+
+		const cloned_value = deep_clone(value);
+
+		expect(cloned_value).toEqual(value);
+		expect(cloned_value).not.toBe(value);
+		expect(cloned_value.options).not.toBe(value.options);
+		expect(cloned_value.options.nested).not.toBe(value.options.nested);
+		expect(cloned_value.options.validate).toBe(validate);
 	});
 
 	test('deep_clone fallback handles primitives, arrays, objects and circular references', function () {
@@ -63,6 +89,71 @@ describe('utils/object', function () {
 			expect(cloned_value.list[0]).toBe(cloned_value.shared_a);
 			expect(cloned_value.list).not.toBe(source_value.list);
 		});
+	});
+
+	test('deep_clone fallback preserves RegExp semantics and custom instances', function () {
+		run_without_structured_clone(function () {
+			const custom_instance = new CustomInstance('child');
+			const source_value = {
+				validate: function () {
+					return true;
+				},
+				match: /^[a-z]+$/gi,
+				custom_instance: custom_instance
+			};
+
+			const cloned_value = deep_clone(source_value);
+
+			expect(cloned_value).not.toBe(source_value);
+			expect(cloned_value.match).toBeInstanceOf(RegExp);
+			expect(cloned_value.match).not.toBe(source_value.match);
+			expect(cloned_value.match.source).toBe(source_value.match.source);
+			expect(cloned_value.match.flags).toBe(source_value.match.flags);
+			expect(cloned_value.custom_instance).toBe(custom_instance);
+		});
+	});
+
+	test('deep_clone preserves Date Buffer Map and Set semantics', function () {
+		const created_at = new Date('2026-03-06T10:00:00.000Z');
+		const file_buffer = Buffer.from('jsonbadger');
+		const map_value = new Map([
+			['profile', {name: 'Alice'}]
+		]);
+		const set_value = new Set([
+			{tag: 'vip'}
+		]);
+		const source_value = {
+			created_at: created_at,
+			file_buffer: file_buffer,
+			map_value: map_value,
+			set_value: set_value
+		};
+
+		const cloned_value = deep_clone(source_value);
+		const cloned_map_entry = cloned_value.map_value.get('profile');
+		const original_map_entry = map_value.get('profile');
+		const cloned_set_entry = [...cloned_value.set_value][0];
+		const original_set_entry = [...set_value][0];
+
+		expect(cloned_value).not.toBe(source_value);
+
+		expect(cloned_value.created_at).toBeInstanceOf(Date);
+		expect(cloned_value.created_at).not.toBe(created_at);
+		expect(cloned_value.created_at.getTime()).toBe(created_at.getTime());
+
+		expect(Buffer.isBuffer(cloned_value.file_buffer)).toBe(true);
+		expect(cloned_value.file_buffer).not.toBe(file_buffer);
+		expect(cloned_value.file_buffer.equals(file_buffer)).toBe(true);
+
+		expect(cloned_value.map_value).toBeInstanceOf(Map);
+		expect(cloned_value.map_value).not.toBe(map_value);
+		expect(cloned_map_entry).toEqual(original_map_entry);
+		expect(cloned_map_entry).not.toBe(original_map_entry);
+
+		expect(cloned_value.set_value).toBeInstanceOf(Set);
+		expect(cloned_value.set_value).not.toBe(set_value);
+		expect(cloned_set_entry).toEqual(original_set_entry);
+		expect(cloned_set_entry).not.toBe(original_set_entry);
 	});
 
 	test('normalize handles array schemas including empty schema, invalid items and circular array cache reuse', function () {

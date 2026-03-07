@@ -1,23 +1,34 @@
-const is_object = (value) => {
+function is_object(value) {
 	return value !== null && typeof value === 'object' && !Array.isArray(value);
-};
+}
 
-const is_plain_object = (value) => {
-	return is_object(value) && Object.prototype.toString.call(value) === '[object Object]';
-};
+/**
+ * Checks whether a value is a plain object with a null or default object prototype.
+ *
+ * @param {*} value Value to inspect.
+ * @returns {boolean}
+ */
+function is_plain_object(value) {
+	if(!is_object(value)) {
+		return false;
+	}
 
-const is_not_object = (value) => {
+	const prototype_value = Object.getPrototypeOf(value);
+	return prototype_value === Object.prototype || prototype_value === null;
+}
+
+function is_not_object(value) {
 	return value === null || Array.isArray(value) || typeof value !== 'object';
-};
+}
 
-const is_nan = (value) => {
+function is_nan(value) {
 	const numeric_value = Number(value);
 	return Number.isNaN(numeric_value);
-};
+}
 
-const is_string = (value) => {
+function is_string(value) {
 	return typeof value === 'string';
-};
+}
 
 export {
 	is_object,
