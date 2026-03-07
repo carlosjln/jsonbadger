@@ -3,16 +3,14 @@ import disconnect from '#src/connection/disconnect.js';
 import IdStrategies from '#src/constants/id-strategies.js';
 import Schema from '#src/schema/schema.js';
 import model from '#src/model/model-factory.js';
-import {create_field_type, register_field_type, resolve_field_type} from '#src/field-types/registry.js';
+import field_type from '#src/field-types/field-type-namespace.js';
 import {boolean_convert_to_false, boolean_convert_to_true, uuidv7_type_reference} from '#src/field-types/builtins/index.js';
 
 const jsonbadger = {
 	connect,
 	disconnect,
 	model,
-	create_field_type,
-	register_field_type,
-	resolve_field_type,
+	field_type,
 	Schema,
 	IdStrategies,
 	field_types: {
@@ -26,9 +24,7 @@ export {
 	connect,
 	disconnect,
 	model,
-	create_field_type,
-	register_field_type,
-	resolve_field_type,
+	field_type,
 	Schema,
 	IdStrategies
 };

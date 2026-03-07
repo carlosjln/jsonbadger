@@ -346,7 +346,7 @@ function is_exact_union_match(candidate_field_type, value) {
 }
 
 export {
-	// Type references
+	// Type alias helpers
 	decimal128_type_reference,
 	double_type_reference,
 	int32_type_reference,

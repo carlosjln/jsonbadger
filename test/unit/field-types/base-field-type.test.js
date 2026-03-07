@@ -26,7 +26,7 @@ TestFieldType.prototype.run_type_validators = function (value, context_value) {
 };
 
 describe('BaseFieldType', function () {
-	test('registers universal validators and returns introspection metadata', function () {
+	test('registers universal validators and returns introspection details', function () {
 		const field_type = new BaseFieldType('profile.name', {
 			required: true,
 			validate: function () {

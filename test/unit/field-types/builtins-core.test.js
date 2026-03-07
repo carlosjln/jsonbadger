@@ -324,7 +324,7 @@ describe('foundational FieldType builtins (direct)', function () {
 		expect(map_no_options.cast({a: 1})).toEqual({a: 1});
 	});
 
-	test('foundational registry exports include all expected builtins and UUIDv7 reference helper', function () {
+	test('foundational registry exports include all expected builtins and UUIDv7 alias helper', function () {
 		const foundational_types = get_foundational_field_types();
 
 		expect(typeof uuidv7_type_reference).toBe('function');
@@ -345,6 +345,6 @@ describe('foundational FieldType builtins (direct)', function () {
 			'Int32',
 			'Union'
 		]));
-		expect(foundational_types.UUIDv7.references).toEqual(expect.arrayContaining(['UUIDv7']));
+		expect(foundational_types.UUIDv7.aliases).toEqual(expect.arrayContaining(['UUIDv7']));
 	});
 });
