@@ -4,7 +4,8 @@ JsonBadger is a PostgreSQL-backed document mapper for working with JSONB data th
 
 This page is an example-first cheat sheet for users and AI agents. It shows copy-pasteable JsonBadger usage in increasing complexity and covers the currently implemented query and update operator surface.
 
-Use this page for syntax and working shapes. Use [`docs/api.md`](api.md) for API reference details and [`docs/query-translation.md`](query-translation.md) for PostgreSQL operator/function semantics.
+Use this page for syntax and working shapes. Use [`docs/api/index.md`](api/index.md) for the module API map and [`docs/query-translation.md`](query-translation.md) for PostgreSQL operator/function semantics.
+Use [`docs/lifecycle.md`](lifecycle.md) when you need the document phase map instead of operator syntax.
 
 ## How to Read This Page
 
@@ -42,6 +43,7 @@ Mutations
 
 Advanced
 - [Runtime Document Methods (get/set, dirty tracking, serialization)](#runtime-document-methods-getset-dirty-tracking-serialization)
+- [Lifecycle Quick Reference](#lifecycle-quick-reference)
 - [Optional Alias Path Example](#optional-alias-path-example)
 - [Complete Operator Checklist (Query and Update)](#complete-operator-checklist-query-and-update)
 - [Related Docs](#related-docs)
@@ -92,7 +94,7 @@ Timestamp helper behavior:
 import JsonBadger from 'jsonbadger';
 
 const db_uri = 'postgresql://user:pass@localhost:5432/dbname';
-const db_connection_options = {
+const options = {
 	debug: false,
 	max: 10,
 	ssl: false,
@@ -100,18 +102,18 @@ const db_connection_options = {
 	id_strategy: JsonBadger.IdStrategies.bigserial
 };
 
-await JsonBadger.connect(db_uri, db_connection_options);
+await JsonBadger.connect(db_uri, options);
 ```
 
 UUIDv7 server default (PostgreSQL 18+ native `uuidv7()` required):
 
 ```js
 const db_uri = 'postgresql://user:pass@localhost:5432/dbname';
-const db_connection_options = {
+const options = {
 	id_strategy: JsonBadger.IdStrategies.uuidv7
 };
 
-await JsonBadger.connect(db_uri, db_connection_options);
+await JsonBadger.connect(db_uri, options);
 ```
 
 Notes:
@@ -141,11 +143,11 @@ Server-wide default (`connect`) plus model override (`model(...)`):
 
 ```js
 const db_uri = 'postgresql://user:pass@localhost:5432/dbname';
-const db_connection_options = {
+const options = {
 	id_strategy: JsonBadger.IdStrategies.uuidv7 // PostgreSQL 18+ native uuidv7() required
 };
 
-await JsonBadger.connect(db_uri, db_connection_options);
+await JsonBadger.connect(db_uri, options);
 
 const AuditLog = JsonBadger.model(new JsonBadger.Schema({
 	event_name: String
@@ -812,6 +814,26 @@ await doc.save();
 // doc.set('status', 'disabled'); // throws
 ```
 
+## Lifecycle Quick Reference
+
+```js
+const doc = new User({name: 'john'});
+doc.set('profile.city', 'Miami');
+await doc.save();
+
+const found = await User.find_by_id(doc.id).exec();
+const snapshot = found.to_json();
+```
+
+Phase summary:
+- `new User(...)` -> constructed
+- first runtime interaction (`set/get/save/delete`) -> runtime-ready
+- `save()` on new doc -> persisted
+- `find_one(...).exec()` / `find_by_id(...).exec()` -> queried/hydrated
+- `to_object()` / `to_json()` -> serialized snapshot
+
+For the full lifecycle contract, see [`docs/lifecycle.md`](lifecycle.md).
+
 ## Complete Operator Checklist (Query and Update)
 
 | Family | Supported operators/methods |
@@ -828,6 +850,10 @@ await doc.save();
 ## Related Docs
 
 - [`README.md`](../README.md) (quick start + selected examples)
-- [`docs/api.md`](api.md) (API surface and behavior notes)
+- [`docs/api/index.md`](api/index.md) (module API map)
+- [`docs/api/model.md`](api/model.md) (model API contracts and planned method notes)
+- [`docs/api/schema.md`](api/schema.md) (schema API and index declaration rules)
+- [`docs/api/query-builder.md`](api/query-builder.md) (query builder chain and filter families)
+- [`docs/lifecycle.md`](lifecycle.md) (document phases, hydration/save flow, dirty tracking, and serialization)
 - [`docs/query-translation.md`](query-translation.md) (PostgreSQL operator/function mapping)
 - [`docs/local-integration-testing.md`](local-integration-testing.md) (local integration test setup)

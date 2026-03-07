@@ -29,7 +29,7 @@ const row_base_fields = new Set(['id', 'created_at', 'updated_at']);
 const timestamp_fields = new Set(['created_at', 'updated_at']);
 const unsafe_hydrate_keys = new Set(['__proto__', 'constructor', 'prototype']);
 
-export default function model(schema_instance, model_configuration) {
+function model(schema_instance, model_configuration) {
 	assert_condition(schema_instance && typeof schema_instance.validate === 'function', 'schema_instance is required');
 	assert_condition(is_not_object(model_configuration) === false, 'model options are required');
 	assert_condition(
@@ -45,6 +45,11 @@ export default function model(schema_instance, model_configuration) {
 
 	let indexes_ensured = false;
 
+	/**
+	 * Document constructor lifecycle boundary:
+	 * - constructed: payload is assigned to `this.data`
+	 * - runtime-ready: internal document state is initialized lazily by document-instance helpers
+	 */
 	function Model(data) {
 		this.data = data || {};
 	}
@@ -420,7 +425,7 @@ export default function model(schema_instance, model_configuration) {
 	}
 
 	function build_update_path_literal(path_value) {
-		return build_path_literal(split_update_path(path_value));
+		return build_path_literal(parse_update_path(path_value));
 	}
 
 	function collect_update_path_entries(update_operator_entries) {
@@ -432,7 +437,7 @@ export default function model(schema_instance, model_configuration) {
 			if(definition === undefined) continue;
 
 			for(const path of Object.keys(definition)) {
-				split_update_path(path, operator_entry.operator_name);
+				parse_update_path(path, operator_entry.operator_name);
 				update_path_entries.push({
 					operator_name: operator_entry.operator_name,
 					path: path
@@ -466,7 +471,7 @@ export default function model(schema_instance, model_configuration) {
 		return left_path.indexOf(right_path + '.') === 0 || right_path.indexOf(left_path + '.') === 0;
 	}
 
-	function split_update_path(path_value, operator_name) {
+	function parse_update_path(path_value, operator_name) {
 		const path_segments = path_value.split('.');
 
 		for(let segment_index = 0; segment_index < path_segments.length; segment_index++) {
@@ -665,3 +670,5 @@ function resolve_schema_path_names(schema_instance) {
 
 	return Object.keys(schema_instance.paths);
 }
+
+export default model;

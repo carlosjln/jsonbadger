@@ -4,12 +4,14 @@ import where_compiler from '#src/query/where-compiler.js';
 
 import sql_runner from '#src/sql/sql-runner.js';
 
-import {quote_identifier} from '#src/utils/assert.js';
+import {assert_condition, quote_identifier} from '#src/utils/assert.js';
 import {is_object} from '#src/utils/value.js';
 
-const reserved_metadata_keys = new Set(['id', 'created_at', 'updated_at']);
+const base_field_keys = new Set(['id', 'created_at', 'updated_at']);
 
-export default function QueryBuilder(model_constructor, operation_name, query_filter, projection_value) {
+function QueryBuilder(model_constructor, operation_name, query_filter, projection_value) {
+	assert_condition(model_constructor && is_object(model_constructor.model_options), 'QueryBuilder requires model_constructor.model_options');
+
 	this.model_constructor = model_constructor;
 	this.operation_name = operation_name;
 	this.base_filter = query_filter || {};
@@ -41,6 +43,8 @@ QueryBuilder.prototype.skip = function (skip_value) {
 };
 
 QueryBuilder.prototype.exec = async function () {
+	// Query execution is the queried/hydrated lifecycle boundary for read methods:
+	// rows become document instances through `create_document_from_row(...)`.
 	const schema_instance = this.model_constructor.schema_instance;
 	const model_options = this.model_constructor.model_options;
 	const table_name = model_options.table_name;
@@ -120,7 +124,7 @@ function shape_query_row(row_value) {
 		const key_value = payload_entry[0];
 		const next_value = payload_entry[1];
 
-		if(!reserved_metadata_keys.has(key_value)) {
+		if(!base_field_keys.has(key_value)) {
 			output_value[key_value] = next_value;
 		}
 
@@ -153,9 +157,13 @@ function normalize_timestamp_value(timestamp_value) {
 }
 
 function resolve_model_id_strategy(model_constructor) {
-	if(typeof model_constructor?.resolve_id_strategy === 'function') {
-		return model_constructor.resolve_id_strategy();
+	const resolve_id_strategy = model_constructor.resolve_id_strategy;
+
+	if(typeof resolve_id_strategy === 'function') {
+		return resolve_id_strategy.call(model_constructor);
 	}
 
-	return model_constructor?.model_options?.id_strategy ?? 'bigserial';
+	return model_constructor.model_options.id_strategy ?? 'bigserial';
 }
+
+export default QueryBuilder;

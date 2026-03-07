@@ -1,4 +1,4 @@
-export default function ValidationError(message, details) {
+function ValidationError(message, details) {
 	this.name = 'validation_error';
 	this.message = message || 'Validation failed';
 	this.details = details || null;
@@ -21,3 +21,5 @@ ValidationError.prototype.to_json = function () {
 		}
 	};
 };
+
+export default ValidationError;

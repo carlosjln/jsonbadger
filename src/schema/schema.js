@@ -13,7 +13,7 @@ const base_fields = Object.freeze({
 });
 const base_fields_keys = new Set(Object.keys(base_fields));
 
-export default function Schema(schema_definition = {}, options = {}) {
+function Schema(schema_definition = {}, options = {}) {
 	// 1. Prepare schema definition with missing system fields
 	inject_base_fields(schema_definition);
 
@@ -260,3 +260,5 @@ function normalize_index_definition(index_input, path_name) {
 
 	return null;
 }
+
+export default Schema;

@@ -1,7 +1,7 @@
 import debug_logger from '#src/debug/debug-logger.js';
 import {clear_pool, get_debug_mode, get_pool, has_pool} from '#src/connection/pool-store.js';
 
-export default async function disconnect() {
+async function disconnect() {
 	if(!has_pool()) {
 		return;
 	}
@@ -14,3 +14,5 @@ export default async function disconnect() {
 
 	debug_logger(debug_mode, 'connection_closed', null);
 }
+
+export default disconnect;

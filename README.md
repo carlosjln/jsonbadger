@@ -33,7 +33,7 @@ import JsonBadger from 'jsonbadger';
 
 // 1. Connect to database
 const db_uri = 'postgresql://user:pass@localhost:5432/dbname';
-const db_connection_options = {
+const options = {
 	debug: false,
 	max: 10,
 	ssl: false,
@@ -41,7 +41,7 @@ const db_connection_options = {
 	id_strategy: JsonBadger.IdStrategies.bigserial // server default: bigserial | uuidv7 (native PostgreSQL uuidv7() required)
 };
 
-await JsonBadger.connect(db_uri, db_connection_options);
+await JsonBadger.connect(db_uri, options);
 
 // 2. Define schema (FieldType format)
 const user_schema = new JsonBadger.Schema({
@@ -89,6 +89,8 @@ When using `IdStrategies.uuidv7`, JsonBadger checks PostgreSQL native `uuidv7()`
 
 For a complete copy-paste operator and runtime cheat sheet (queries, updates, and document methods), see [`docs/examples.md`](docs/examples.md).
 
+For the document state flow from `new Model(...)` through `save()`, hydration, dirty tracking, and serialization, see [`docs/lifecycle.md`](docs/lifecycle.md).
+
 ## Core Features
 
 * **JSONB-first**: Model API designed specifically for PostgreSQL JSONB.
@@ -107,9 +109,14 @@ For a complete copy-paste operator and runtime cheat sheet (queries, updates, an
 
 ## Documentation
 
-* [`docs/api.md`](docs/api.md)
-* [`docs/conecction.md`](docs/conecction.md) (connection lifecycle and shared-connection examples)
+* [`docs/api/index.md`](docs/api/index.md)
+* [`docs/api/model.md`](docs/api/model.md) (model-specific API contracts and planned method notes)
+* [`docs/api/schema.md`](docs/api/schema.md)
+* [`docs/api/query-builder.md`](docs/api/query-builder.md)
+* [`docs/api/connection.md`](docs/api/connection.md) (connection API, lifecycle, and shared-connection examples)
+* [`docs/api/field-types.md`](docs/api/field-types.md)
 * [`docs/examples.md`](docs/examples.md) (complete example cheat sheet for queries, updates, and runtime document methods)
+* [`docs/lifecycle.md`](docs/lifecycle.md) (document phases, hydration/save flow, dirty tracking, and serialization)
 * [`docs/query-translation.md`](docs/query-translation.md) (includes PostgreSQL capability map for query/update operators and indexability expectations)
 * [`docs/local-integration-testing.md`](docs/local-integration-testing.md)
 * [`CHANGELOG.md`](CHANGELOG.md) for release notes and version history

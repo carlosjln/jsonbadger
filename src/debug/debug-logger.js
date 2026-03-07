@@ -1,6 +1,6 @@
 import safe_json_stringify from '#src/utils/json-safe.js';
 
-export default function debug_logger(debug_mode, event_name, event_data) {
+function debug_logger(debug_mode, event_name, event_data) {
 	if(!debug_mode) {
 		return;
 	}
@@ -13,3 +13,5 @@ export default function debug_logger(debug_mode, event_name, event_data) {
 
 	console.log('[jsonbadger][debug] ' + safe_json_stringify(log_entry));
 }
+
+export default debug_logger;

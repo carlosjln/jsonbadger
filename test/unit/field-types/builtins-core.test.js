@@ -10,9 +10,9 @@ import {
 	StringFieldType,
 	UUIDv7FieldType,
 	get_foundational_field_types,
-	uuidv7_pattern,
 	uuidv7_type_reference
 } from '#src/field-types/builtins/index.js';
+import {is_uuid_v7} from '#src/utils/value.js';
 
 describe('foundational FieldType builtins (direct)', function () {
 	test('StringFieldType casts and validates match/enum/length options', function () {
@@ -135,7 +135,7 @@ describe('foundational FieldType builtins (direct)', function () {
 		}).toThrow('Cast to Boolean failed');
 
 		expect(uuid_field.cast(uppercase_uuid)).toBe(uppercase_uuid.toLowerCase());
-		expect(uuidv7_pattern.test(uuid_field.cast(uppercase_uuid))).toBe(true);
+		expect(is_uuid_v7(uuid_field.cast(uppercase_uuid))).toBe(true);
 		expect(function cast_invalid_uuidv7() {
 			uuid_field.cast('not-a-uuid');
 		}).toThrow('Cast to UUIDv7 failed');

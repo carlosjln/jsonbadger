@@ -7,7 +7,7 @@ const ID_COLUMN_SQL_BY_STRATEGY = {
 	[IdStrategies.uuidv7]: 'id UUID PRIMARY KEY DEFAULT uuidv7()'
 };
 
-export default async function ensure_table(table_name, data_column, id_strategy) {
+async function ensure_table(table_name, data_column, id_strategy) {
 	assert_identifier(table_name, 'table_name');
 	assert_identifier(data_column, 'data_column');
 	assert_valid_id_strategy(id_strategy);
@@ -29,3 +29,5 @@ export default async function ensure_table(table_name, data_column, id_strategy)
 function resolve_id_column_sql(id_strategy) {
 	return ID_COLUMN_SQL_BY_STRATEGY[id_strategy];
 }
+
+export default ensure_table;

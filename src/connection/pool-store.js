@@ -1,17 +1,18 @@
 import defaults from '#src/constants/defaults.js';
+import {deep_clone} from '#src/utils/object.js';
 
 const connection_state = {
 	pool_instance: null,
 	debug_mode: defaults.connection_options.debug,
-	connection_options: Object.assign({}, defaults.connection_options),
+	connection_options: deep_clone(defaults.connection_options),
 	server_capabilities: null
 };
 
-export function has_pool() {
+function has_pool() {
 	return connection_state.pool_instance !== null;
 }
 
-export function get_pool() {
+function get_pool() {
 	if(connection_state.pool_instance) {
 		return connection_state.pool_instance;
 	}
@@ -19,28 +20,40 @@ export function get_pool() {
 	throw new Error('jsonbadger is not connected. Call connect() first.');
 }
 
-export function set_pool(pool_instance, connection_options, server_capabilities) {
+function set_pool(pool_instance, options, server_capabilities) {
+	const resolved_options = Object.assign({}, defaults.connection_options, options || {});
+
 	connection_state.pool_instance = pool_instance;
-	connection_state.connection_options = Object.assign({}, defaults.connection_options, connection_options || {});
+	connection_state.connection_options = deep_clone(resolved_options);
 	connection_state.debug_mode = connection_state.connection_options.debug;
 	connection_state.server_capabilities = server_capabilities === null ? null : Object.freeze(Object.assign({}, server_capabilities));
 }
 
-export function clear_pool() {
+function clear_pool() {
 	connection_state.pool_instance = null;
-	connection_state.connection_options = Object.assign({}, defaults.connection_options);
+	connection_state.connection_options = deep_clone(defaults.connection_options);
 	connection_state.debug_mode = defaults.connection_options.debug;
 	connection_state.server_capabilities = null;
 }
 
-export function get_debug_mode() {
+function get_debug_mode() {
 	return connection_state.debug_mode;
 }
 
-export function get_connection_options() {
-	return Object.assign({}, connection_state.connection_options);
+function get_connection_options() {
+	return deep_clone(connection_state.connection_options);
 }
 
-export function get_server_capabilities() {
+function get_server_capabilities() {
 	return connection_state.server_capabilities;
 }
+
+export {
+	has_pool,
+	get_pool,
+	set_pool,
+	clear_pool,
+	get_debug_mode,
+	get_connection_options,
+	get_server_capabilities
+};

@@ -1,12 +1,8 @@
-/*
-Assumptions and trade-offs:
-- Type-key rules are strict: explicit declarations win when `type` is a supported type reference.
-- Plain-object `of` definitions for Array/Map are normalized to Mixed in this phase.
-*/
 import {default_field_type_registry} from '#src/field-types/registry.js';
 import {is_array, is_not_array} from '#src/utils/array.js';
+import {is_plain_object} from '#src/utils/value.js';
 
-export default function field_definition_parser(schema_definition, registry_instance) {
+function field_definition_parser(schema_definition, registry_instance) {
 	const parse_state = {
 		field_types: Object.create(null),
 		object_paths: new Set()
@@ -60,7 +56,7 @@ function parse_field_definition(path_value, field_definition, field_registry) {
 	if(field_registry.has_field_type(field_definition)) {
 		return {
 			kind: 'field_type',
-			field_type: field_registry.create_field_type(path_value, field_definition, {})
+			field_type: field_registry.create(path_value, field_definition, {})
 		};
 	}
 
@@ -70,7 +66,7 @@ function parse_field_definition(path_value, field_definition, field_registry) {
 		if(definition_keys.length === 0) {
 			return {
 				kind: 'field_type',
-				field_type: field_registry.create_field_type(path_value, 'Mixed', {})
+				field_type: field_registry.create(path_value, 'Mixed', {})
 			};
 		}
 
@@ -81,6 +77,7 @@ function parse_field_definition(path_value, field_definition, field_registry) {
 			};
 		}
 
+		// Plain objects without an explicit supported `type` key become nested schema branches.
 		return {
 			kind: 'nested',
 			nested_schema: field_definition
@@ -119,7 +116,7 @@ function create_explicit_field_type(path_value, field_definition, field_registry
 		return create_array_field_type(path_value, type_key, field_options, field_registry);
 	}
 
-	const type_name = field_registry.resolve_field_type_name(type_key);
+	const type_name = field_registry.resolve(type_key);
 
 	if(!type_name) {
 		throw new Error('Unsupported field type at path "' + path_value + '"');
@@ -132,15 +129,15 @@ function create_explicit_field_type(path_value, field_definition, field_registry
 
 	if(type_name === 'Map') {
 		field_options.of_field_type = create_of_field_type(path_value, of_definition, field_registry);
-		return field_registry.create_field_type(path_value, type_name, field_options);
+		return field_registry.create(path_value, type_name, field_options);
 	}
 
 	if(type_name === 'Union') {
 		field_options.of_field_types = create_union_field_types(path_value, of_definition, field_registry);
-		return field_registry.create_field_type(path_value, type_name, field_options);
+		return field_registry.create(path_value, type_name, field_options);
 	}
 
-	return field_registry.create_field_type(path_value, type_name, field_options);
+	return field_registry.create(path_value, type_name, field_options);
 }
 
 function create_array_field_type(path_value, array_definition, field_options, field_registry) {
@@ -152,7 +149,7 @@ function create_array_field_type(path_value, array_definition, field_options, fi
 	const item_definition = array_definition.length === 1 ? array_definition[0] : undefined;
 
 	array_options.of_field_type = create_of_field_type(path_value, item_definition, field_registry);
-	return field_registry.create_field_type(path_value, 'Array', array_options);
+	return field_registry.create(path_value, 'Array', array_options);
 }
 
 function create_union_field_types(path_value, union_of_definition, field_registry) {
@@ -177,7 +174,7 @@ function create_union_candidate_field_type(path_value, union_definition, field_r
 	}
 
 	if(field_registry.has_field_type(union_definition)) {
-		return field_registry.create_field_type(path_value, union_definition, {});
+		return field_registry.create(path_value, union_definition, {});
 	}
 
 	if(is_plain_object(union_definition) && should_use_explicit_type(union_definition, field_registry)) {
@@ -191,7 +188,7 @@ function create_of_field_type(path_value, of_definition, field_registry) {
 	const item_path = path_value + '.$';
 
 	if(of_definition === undefined) {
-		return field_registry.create_field_type(item_path, 'Mixed', {});
+		return field_registry.create(item_path, 'Mixed', {});
 	}
 
 	if(is_array(of_definition)) {
@@ -199,7 +196,7 @@ function create_of_field_type(path_value, of_definition, field_registry) {
 	}
 
 	if(field_registry.has_field_type(of_definition)) {
-		return field_registry.create_field_type(item_path, of_definition, {});
+		return field_registry.create(item_path, of_definition, {});
 	}
 
 	if(is_plain_object(of_definition)) {
@@ -207,12 +204,10 @@ function create_of_field_type(path_value, of_definition, field_registry) {
 			return create_explicit_field_type(item_path, of_definition, field_registry);
 		}
 
-		return field_registry.create_field_type(item_path, 'Mixed', {});
+		return field_registry.create(item_path, 'Mixed', {});
 	}
 
 	throw new Error('Unsupported "of" definition at path "' + path_value + '"');
 }
 
-function is_plain_object(value) {
-	return value !== null && typeof value === 'object' && is_not_array(value);
-}
+export default field_definition_parser;

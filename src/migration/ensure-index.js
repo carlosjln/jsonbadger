@@ -3,7 +3,7 @@ import {build_path_literal, split_dot_path} from '#src/utils/object-path.js';
 import sql_runner from '#src/sql/sql-runner.js';
 import {is_object, is_string} from '#src/utils/value.js';
 
-export default async function ensure_index(table_name, index_definition, data_column) {
+async function ensure_index(table_name, index_definition, data_column) {
 	assert_identifier(table_name, 'table_name');
 	assert_identifier(data_column, 'data_column');
 	assert_sql_safe_index_definition(index_definition);
@@ -143,3 +143,5 @@ function build_index_name(table_name, data_column, path_suffix) {
 	const normalized_name = raw_name.toLowerCase().replace(/[^a-z0-9_]/g, '_');
 	return normalized_name.slice(0, 63);
 }
+
+export default ensure_index;

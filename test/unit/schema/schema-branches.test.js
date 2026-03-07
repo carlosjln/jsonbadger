@@ -14,7 +14,7 @@ describe('Schema guard and explicit-array index behavior', function () {
 		);
 	});
 
-	test('returns path metadata through public runtime helpers', function () {
+	test('returns path descriptors through public runtime helpers', function () {
 		const schema_instance = new Schema({name: String});
 
 		expect(schema_instance.get_path('name').instance).toBe('String');
@@ -23,7 +23,7 @@ describe('Schema guard and explicit-array index behavior', function () {
 		expect(schema_instance.is_array_root('tags')).toBe(false);
 	});
 
-	test('preserves user-declared metadata path definitions and still exposes metadata paths', function () {
+	test('preserves user-declared base-field path definitions and still exposes base fields', function () {
 		const schema_instance = new Schema({
 			id: Number,
 			created_at: String,

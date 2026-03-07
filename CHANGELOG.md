@@ -17,6 +17,9 @@
 - `Document#save()` now supports update-on-existing-document flow using dirty paths and base-field assignment tracking (instead of insert-only behavior).
 - Query compilers now resolve schema field types via `schema.get_path(...)`.
 - Added shared `is_plain_object(...)` in `src/utils/value.js` and reused it in query compilation paths.
+- Source modules now use bottom-of-file exports consistently, with grouped multiline export blocks instead of inline export declarations.
+- Removed low-value file header banners in favor of localized comments near the relevant logic.
+- Centralized runtime UUIDv7 validation in `src/utils/value.js` and reused it across field types and base-field query compilation.
 
 ### Added
 
@@ -26,11 +29,14 @@
 
 ### Docs
 
-- Updated `README.md`, `docs/api.md`, `docs/examples.md`, and `docs/query-translation.md` to align with base-field terminology, index descriptor behavior, and current API/runtime semantics.
+- Split the old monolithic API doc into module-scoped pages under `docs/api/`.
+- Consolidated connection lifecycle and shared-pool examples into `docs/api/connection.md` and removed the duplicate legacy connection page.
+- Updated `README.md`, `docs/api/`, `docs/examples.md`, and `docs/query-translation.md` to align with base-field terminology, index descriptor behavior, and current API/runtime semantics.
 
 ### Testing
 
 - Expanded and updated migration/model/query/schema test coverage to validate the refactor (index normalization contract, timestamp/base-field routing, runtime save/delete behavior, and docs-aligned API expectations).
+- Added focused coverage around cloning semantics, connection lifecycle helpers, query builders/compilers, and document runtime behavior; unit coverage now exceeds 98% statements/lines and 97% branches.
 
 ## 0.1.0 - 2026-02-24
 

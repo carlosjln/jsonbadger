@@ -204,5 +204,36 @@ describe('document-instance branch behavior', function () {
 
 		expect(doc.is_modified('runtime_date')).toBe(false);
 	});
+
+	test('schema root properties proxy get and set, while prototype conflicts are skipped', function () {
+		const schema_instance = new Schema({
+			profile: {
+				city: String
+			},
+			save: {
+				value: String
+			}
+		});
+		const User = model(schema_instance, {table_name: 'users'});
+		const doc = new User({});
+
+		doc.profile = {
+			city: 'Miami'
+		};
+
+		expect(doc.profile).toEqual({city: 'Miami'});
+		expect(doc.data.profile).toEqual({city: 'Miami'});
+		expect(Object.prototype.hasOwnProperty.call(User.prototype, 'profile')).toBe(true);
+		expect(typeof doc.save).toBe('function');
+	});
+
+	test('apply_document_row tolerates non-object targets by returning them unchanged', function () {
+		const User = model(new Schema({name: String}), {table_name: 'users'});
+
+		expect(User.apply_document_row(null, {
+			id: 1,
+			data: {name: 'john'}
+		})).toBeNull();
+	});
 });
 

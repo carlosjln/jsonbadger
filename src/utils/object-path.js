@@ -1,15 +1,15 @@
 import {assert_path} from '#src/utils/assert.js';
 
-export function split_dot_path(path_value) {
+function split_dot_path(path_value) {
 	assert_path(path_value, 'path');
 	return path_value.split('.');
 }
 
-export function build_path_literal(path_segments) {
+function build_path_literal(path_segments) {
 	return '{' + path_segments.join(',') + '}';
 }
 
-export function build_nested_object(path_value, leaf_value) {
+function build_nested_object(path_value, leaf_value) {
 	const path_segments = split_dot_path(path_value);
 	const root_object = {};
 	let current_object = root_object;
@@ -31,3 +31,9 @@ export function build_nested_object(path_value, leaf_value) {
 
 	return root_object;
 }
+
+export {
+	split_dot_path,
+	build_path_literal,
+	build_nested_object
+};

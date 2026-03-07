@@ -208,46 +208,133 @@ describe('where_compiler branch coverage', function () {
 		}).toThrow('Unsupported operator inside $elem_match: $unknown');
 	});
 
-	test('routes reserved metadata fields to table columns and validates allowed operators', function () {
-		const metadata_result = where_compiler({
+	test('routes base fields to table columns and validates allowed operators', function () {
+		const base_field_result = where_compiler({
 			id: {$in: ['1', '2']},
 			created_at: {$gte: '2026-02-27T00:00:00.000Z'},
 			updated_at: {$lt: new Date('2026-02-28T00:00:00.000Z')}
 		});
 
-		expect(metadata_result.sql).toContain('"id" = ANY($1::bigint[])');
-		expect(metadata_result.sql).toContain('"created_at" >= $2::timestamptz');
-		expect(metadata_result.sql).toContain('"updated_at" < $3::timestamptz');
-		expect(metadata_result.params).toEqual([
+		expect(base_field_result.sql).toContain('"id" = ANY($1::bigint[])');
+		expect(base_field_result.sql).toContain('"created_at" >= $2::timestamptz');
+		expect(base_field_result.sql).toContain('"updated_at" < $3::timestamptz');
+		expect(base_field_result.params).toEqual([
 			['1', '2'],
 			'2026-02-27T00:00:00.000Z',
 			'2026-02-28T00:00:00.000Z'
 		]);
 	});
 
-	test('rejects dotted reserved paths and unsupported reserved-field operators', function () {
-		expect(function compile_dotted_reserved_path() {
+	test('rejects dotted base-field paths and unsupported base-field operators', function () {
+		expect(function compile_dotted_base_field_path() {
 			where_compiler({'created_at.value': {$eq: '2026-02-27T00:00:00.000Z'}});
-		}).toThrow('Reserved metadata fields only support top-level paths');
+		}).toThrow('Base fields only support top-level paths');
 
-		expect(function compile_reserved_regex_operator() {
+		expect(function compile_base_field_regex_operator() {
 			where_compiler({id: {$regex: '^1'}});
-		}).toThrow('Operator is not supported for reserved metadata field');
+		}).toThrow('Operator is not supported for base field');
 
-		expect(function compile_reserved_json_operator() {
+		expect(function compile_base_field_json_operator() {
 			where_compiler({created_at: {$json_path_exists: '$.x'}});
-		}).toThrow('Operator is not supported for reserved metadata field');
+		}).toThrow('Operator is not supported for base field');
+	});
+
+	test('rejects unsupported base-field comparison shapes', function () {
+		expect(function compile_base_field_regexp() {
+			where_compiler({created_at: /2026/});
+		}).toThrow('Base field does not support regular expression matching');
+
+		expect(function compile_base_field_elem_match() {
+			where_compiler({updated_at: {$elem_match: {$eq: '2026-02-27T00:00:00.000Z'}}});
+		}).toThrow('Base field does not support $elem_match');
+
+		expect(function compile_base_field_plain_object() {
+			where_compiler({created_at: {iso: '2026-02-27T00:00:00.000Z'}});
+		}).toThrow('Base field only supports scalar values or operator objects');
+
+		expect(function compile_base_field_options() {
+			where_compiler({created_at: {$eq: '2026-02-27T00:00:00.000Z', $options: 'i'}});
+		}).toThrow('Base field does not support $options');
+	});
+
+	test('covers base-field eq ne in and nin branches for timestamps and ids', function () {
+		const bigint_id = BigInt(7);
+		const result = where_compiler({
+			id: {
+				$eq: bigint_id,
+				$ne: 8,
+				$nin: [9n, 10]
+			},
+			created_at: {
+				$eq: '2026-02-27T00:00:00.000Z',
+				$ne: new Date('2026-02-28T00:00:00.000Z'),
+				$in: '2026-03-01T00:00:00.000Z',
+				$nin: ['2026-03-02T00:00:00.000Z']
+			}
+		});
+
+		expect(result.sql).toContain('"id" = $1::bigint');
+		expect(result.sql).toContain('"id" != $2::bigint');
+		expect(result.sql).toContain('NOT ("id" = ANY($3::bigint[]))');
+		expect(result.sql).toContain('"created_at" = $4::timestamptz');
+		expect(result.sql).toContain('"created_at" != $5::timestamptz');
+		expect(result.sql).toContain('"created_at" = ANY($6::timestamptz[])');
+		expect(result.sql).toContain('NOT ("created_at" = ANY($7::timestamptz[]))');
+		expect(result.params).toEqual([
+			'7',
+			'8',
+			['9', '10'],
+			'2026-02-27T00:00:00.000Z',
+			'2026-02-28T00:00:00.000Z',
+			['2026-03-01T00:00:00.000Z'],
+			['2026-03-02T00:00:00.000Z']
+		]);
+	});
+
+	test('rejects invalid base-field scalar and timestamp values', function () {
+		expect(function compile_base_field_null_value() {
+			where_compiler({created_at: {$eq: null}});
+		}).toThrow('Invalid value for base field');
+
+		expect(function compile_base_field_array_value() {
+			where_compiler({updated_at: {$eq: ['2026-02-27T00:00:00.000Z']}});
+		}).toThrow('Invalid value for base field');
+
+		expect(function compile_base_field_plain_object_value() {
+			where_compiler({created_at: {$eq: {iso: '2026-02-27T00:00:00.000Z'}}});
+		}).toThrow('Invalid value for base field');
+
+		expect(function compile_base_field_invalid_timestamp() {
+			where_compiler({updated_at: {$lte: 'not-a-timestamp'}});
+		}).toThrow('Invalid timestamp value for base field');
+	});
+
+	test('rejects invalid numeric ids and accepts integer numbers for bigserial ids', function () {
+		const valid_result = where_compiler({
+			id: {
+				$eq: 11,
+				$in: [12, 13]
+			}
+		});
+
+		expect(valid_result.sql).toContain('"id" = $1::bigint');
+		expect(valid_result.sql).toContain('"id" = ANY($2::bigint[])');
+		expect(valid_result.params).toEqual(['11', ['12', '13']]);
+
+		expect(function compile_invalid_decimal_id() {
+			where_compiler({id: {$eq: 1.25}});
+		}).toThrow('Invalid id value for bigserial id_strategy');
 	});
 
 	test('uses uuid parameter casts for id filters when id_strategy is uuidv7', function () {
-		const metadata_result = where_compiler({
+		const base_field_result = where_compiler({
 			id: {$eq: '0194f028-579a-7b5b-8107-b9ad31395f43'}
 		}, {
 			id_strategy: 'uuidv7'
 		});
 
-		expect(metadata_result.sql).toContain('"id" = $1::uuid');
-		expect(metadata_result.params).toEqual(['0194f028-579a-7b5b-8107-b9ad31395f43']);
+		expect(base_field_result.sql).toContain('"id" = $1::uuid');
+		expect(base_field_result.params).toEqual(['0194f028-579a-7b5b-8107-b9ad31395f43']);
 	});
 
 	test('rejects invalid id values for selected id_strategy', function () {

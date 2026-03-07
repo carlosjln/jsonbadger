@@ -1,9 +1,7 @@
-/*
-- Assumptions and trade-offs:
-- Introspection resolves declared FieldType paths plus nested object path metadata.
-*/
-export function create_path_introspection(parsed_schema) {
+function create_path_introspection(parsed_schema) {
 	const parsed_value = parsed_schema ?? {};
+
+	// Parent object paths do not have FieldType instances, so track them separately.
 	const field_types = get_paths_map(parsed_value);
 	const object_paths = resolve_object_paths(parsed_value);
 
@@ -13,7 +11,7 @@ export function create_path_introspection(parsed_schema) {
 	};
 }
 
-export function get_path_field_type(path_introspection, path_name) {
+function get_path_field_type(path_introspection, path_name) {
 	if(!path_introspection || !path_name) {
 		return null;
 	}
@@ -22,7 +20,7 @@ export function get_path_field_type(path_introspection, path_name) {
 	return field_types[path_name] ?? null;
 }
 
-export function get_path_type(path_introspection, path_name) {
+function get_path_type(path_introspection, path_name) {
 	const field_type = get_path_field_type(path_introspection, path_name);
 
 	if(field_type) {
@@ -38,7 +36,7 @@ export function get_path_type(path_introspection, path_name) {
 	return null;
 }
 
-export function is_array_root(path_introspection, path_name) {
+function is_array_root(path_introspection, path_name) {
 	if(!path_introspection || !path_name) {
 		return false;
 	}
@@ -80,3 +78,10 @@ function resolve_object_paths(value) {
 
 	return new Set();
 }
+
+export {
+	create_path_introspection,
+	get_path_field_type,
+	get_path_type,
+	is_array_root
+};

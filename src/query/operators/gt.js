@@ -2,7 +2,7 @@ import QueryError from '#src/errors/query-error.js';
 import {bind_parameter} from '#src/sql/parameter-binder.js';
 import {is_nan} from '#src/utils/value.js';
 
-export default function gt_operator(sql_expression, comparison_value, parameter_state) {
+function gt_operator(sql_expression, comparison_value, parameter_state) {
 	if(is_nan(comparison_value)) {
 		throw new QueryError('Invalid value for $gt operator', {
 			operator: '$gt',
@@ -14,3 +14,5 @@ export default function gt_operator(sql_expression, comparison_value, parameter_
 	const placeholder = bind_parameter(parameter_state, numeric_value);
 	return '(' + sql_expression + ')::numeric > ' + placeholder;
 }
+
+export default gt_operator;

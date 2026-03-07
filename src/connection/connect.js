@@ -9,7 +9,7 @@ import {scan_server_capabilities, assert_id_strategy_capability} from '#src/conn
 import {is_string} from '#src/utils/value.js';
 import {get_pool, has_pool, set_pool} from '#src/connection/pool-store.js';
 
-export default async function connect(uri, options) {
+async function connect(uri, options) {
 	assert_condition(is_string(uri) && uri.length > 0, 'connection_uri is required');
 
 	if(has_pool()) {
@@ -55,3 +55,5 @@ async function close_pool_quietly(pool_instance) {
 		// Ignore cleanup failures so the original connection/capability error is preserved.
 	}
 }
+
+export default connect;

@@ -1,6 +1,6 @@
 import {is_nan} from '#src/utils/value.js';
 
-export default function limit_skip_compiler(limit_value, skip_value) {
+function limit_skip_compiler(limit_value, skip_value) {
 	let sql_fragment = '';
 
 	if(is_valid_integer(limit_value)) {
@@ -29,3 +29,5 @@ function is_valid_integer(value) {
 function normalize_integer(value) {
 	return Math.floor(Number(value));
 }
+
+export default limit_skip_compiler;

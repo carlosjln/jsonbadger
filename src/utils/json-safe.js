@@ -1,4 +1,4 @@
-export function safe_json_stringify(value) {
+function safe_json_stringify(value) {
 	try {
 		return JSON.stringify(value);
 	} catch(error) {
@@ -7,3 +7,7 @@ export function safe_json_stringify(value) {
 }
 
 export default safe_json_stringify;
+
+export {
+	safe_json_stringify
+};

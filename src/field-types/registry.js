@@ -1,9 +1,3 @@
-/*
-Registry contract:
-- The default registry is process-level. It owns built-ins and user-registered field types.
-- Aliases resolve to one canonical type name before instantiation.
-- Unknown aliases fail fast. The registry does not guess or silently fallback.
-*/
 import {get_foundational_field_types} from '#src/field-types/builtins/index.js';
 import {deep_clone} from '#src/utils/object.js';
 
@@ -112,6 +106,7 @@ FieldTypeRegistry.prototype.create = function (path_value, type_alias, options) 
 function register_aliases(type_name_by_alias, resolved_name, resolved_aliases) {
 	let alias_index = 0;
 
+	// Resolve aliases once at registration time so later lookups stay canonical.
 	while(alias_index < resolved_aliases.length) {
 		type_name_by_alias.set(resolved_aliases[alias_index], resolved_name);
 		alias_index += 1;
@@ -145,4 +140,10 @@ function create(path_value, type_alias, options) {
 	return default_field_type_registry.create(path_value, type_alias, options);
 }
 
-export {create, default_field_type_registry, FieldTypeRegistry, register, resolve};
+export {
+	create,
+	default_field_type_registry,
+	FieldTypeRegistry,
+	register,
+	resolve
+};

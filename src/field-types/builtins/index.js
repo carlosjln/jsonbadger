@@ -1,8 +1,3 @@
-/*
-Assumptions and trade-offs:
-- Foundational FieldTypes focus on deterministic cast/validate behavior for save-path use.
-- Advanced type families and deep collection sub-schema behavior are deferred to later phases.
-*/
 import BaseFieldType from '#src/field-types/base-field-type.js';
 import {
 	decimal128_type_reference,
@@ -15,8 +10,8 @@ import {
 	union_type_reference,
 	UnionFieldType
 } from './advanced.js';
+import {is_uuid_v7} from '#src/utils/value.js';
 
-const uuidv7_pattern = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const boolean_convert_to_true = new Set([true, 'true', 1, '1', 'yes']);
 const boolean_convert_to_false = new Set([false, 'false', 0, '0', 'no']);
 
@@ -311,7 +306,7 @@ UUIDv7FieldType.prototype.cast = function (value) {
 
 	const normalized_value = value.toLowerCase();
 
-	if(!uuidv7_pattern.test(normalized_value)) {
+	if(!is_uuid_v7(normalized_value)) {
 		throw this.create_field_error('cast_error', 'Cast to UUIDv7 failed for path "' + this.path + '"', value);
 	}
 
@@ -480,79 +475,79 @@ function get_foundational_field_types() {
 	return {
 		String: {
 			constructor: StringFieldType,
-			references: [String, 'String']
+			aliases: [String, 'String']
 		},
 
 		Number: {
 			constructor: NumberFieldType,
-			references: [Number, 'Number']
+			aliases: [Number, 'Number']
 		},
 
 		Date: {
 			constructor: DateFieldType,
-			references: [Date, 'Date']
+			aliases: [Date, 'Date']
 		},
 
 		Boolean: {
 			constructor: BooleanFieldType,
-			references: [Boolean, 'Boolean']
+			aliases: [Boolean, 'Boolean']
 		},
 
 		UUIDv7: {
 			constructor: UUIDv7FieldType,
-			references: [uuidv7_type_reference, 'UUIDv7']
+			aliases: [uuidv7_type_reference, 'UUIDv7']
 		},
 
 		Buffer: {
 			constructor: BufferFieldType,
-			references: [Buffer, 'Buffer']
+			aliases: [Buffer, 'Buffer']
 		},
 
 		Mixed: {
 			constructor: MixedFieldType,
-			references: ['Mixed', Object]
+			aliases: ['Mixed', Object]
 		},
 
 		Array: {
 			constructor: ArrayFieldType,
-			references: [Array, 'Array']
+			aliases: [Array, 'Array']
 		},
 
 		Map: {
 			constructor: MapFieldType,
-			references: [Map, 'Map']
+			aliases: [Map, 'Map']
 		},
 
 		// Advanced FieldTypes
 		Decimal128: {
 			constructor: Decimal128FieldType,
-			references: [decimal128_type_reference, 'Decimal128']
+			aliases: [decimal128_type_reference, 'Decimal128']
 		},
 
 		BigInt: {
 			constructor: BigIntFieldType,
-			references: [BigInt, 'BigInt']
+			aliases: [BigInt, 'BigInt']
 		},
 
 		Double: {
 			constructor: DoubleFieldType,
-			references: [double_type_reference, 'Double']
+			aliases: [double_type_reference, 'Double']
 		},
 
 		Int32: {
 			constructor: Int32FieldType,
-			references: [int32_type_reference, 'Int32']
+			aliases: [int32_type_reference, 'Int32']
 		},
 
 		Union: {
 			constructor: UnionFieldType,
-			references: [union_type_reference, 'Union']
+			aliases: [union_type_reference, 'Union']
 		}
 	};
 }
 
 export {
-	// Type references
+	// Type aliases
 	decimal128_type_reference,
 	double_type_reference,
 	int32_type_reference,
@@ -580,6 +575,5 @@ export {
 
 	// Constants
 	boolean_convert_to_false,
-	boolean_convert_to_true,
-	uuidv7_pattern
+	boolean_convert_to_true
 };

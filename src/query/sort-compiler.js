@@ -4,7 +4,7 @@ import {has_own} from '#src/utils/object.js';
 import {build_text_expression} from '#src/query/path-parser.js';
 import {split_dot_path} from '#src/utils/object-path.js';
 
-const reserved_metadata_sort_columns = Object.freeze({
+const base_field_sort_columns = Object.freeze({
 	id: '"id"',
 	created_at: '"created_at"',
 	updated_at: '"updated_at"'
@@ -20,7 +20,7 @@ const reserved_metadata_sort_columns = Object.freeze({
  * Returns an empty string for missing/invalid sort definitions so callers can
  * safely append the result to a larger SQL fragment.
  */
-export default function sort_compiler(sort_definition, compile_options) {
+function sort_compiler(sort_definition, compile_options) {
 	if(!sort_definition || typeof sort_definition !== 'object') {
 		return '';
 	}
@@ -52,28 +52,30 @@ export default function sort_compiler(sort_definition, compile_options) {
 /**
  * Resolves a sort path to the SQL expression used in ORDER BY.
  *
- * Reserved metadata fields (`id`, `created_at`, `updated_at`) are mapped to
+ * Base fields (`id`, `created_at`, `updated_at`) are mapped to
  * dedicated table columns instead of JSON path lookups. These fields are
  * intentionally restricted to top-level usage only: `created_at` is valid,
  * but `created_at.anything` is rejected.
  *
- * Non-reserved paths are treated as JSON data paths and may be dotted.
+ * Non-base-field paths are treated as JSON data paths and may be dotted.
  */
 function resolve_sort_expression(path_value, data_column_reference) {
 	const path_segments = split_dot_path(path_value);
 	const root_path = path_segments[0];
 
-	if(has_own(reserved_metadata_sort_columns, root_path)) {
-		// Prevent ambiguity: reserved metadata columns do not support dotted access.
+	if(has_own(base_field_sort_columns, root_path)) {
+		// Prevent ambiguity: base-field columns do not support dotted access.
 		if(path_segments.length > 1) {
-			throw new QueryError('Reserved metadata fields only support top-level sort paths', {
+			throw new QueryError('Base fields only support top-level sort paths', {
 				path: path_value,
 				field: root_path
 			});
 		}
 
-		return reserved_metadata_sort_columns[root_path];
+		return base_field_sort_columns[root_path];
 	}
 
 	return build_text_expression(data_column_reference, path_value);
 }
+
+export default sort_compiler;

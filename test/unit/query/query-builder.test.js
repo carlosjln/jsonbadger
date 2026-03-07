@@ -15,6 +15,28 @@ describe('QueryBuilder.exec read behavior', function () {
 		sql_runner_mock.mockReset();
 	});
 
+	test('constructor requires model_constructor.model_options', function () {
+		expect(function () {
+			return new QueryBuilder({}, 'find', {}, null);
+		}).toThrow('QueryBuilder requires model_constructor.model_options');
+	});
+
+	test('constructor and chain methods normalize falsy inputs to their defaults', function () {
+		const query_builder = new QueryBuilder({
+			schema_instance: null,
+			model_options: {table_name: 'users', data_column: 'data'}
+		}, 'find', null, undefined);
+
+		expect(query_builder.base_filter).toEqual({});
+		expect(query_builder.projection_value).toBeNull();
+
+		expect(query_builder.where()).toBe(query_builder);
+		expect(query_builder.where_filter).toEqual({});
+
+		expect(query_builder.sort(0)).toBe(query_builder);
+		expect(query_builder.sort_definition).toBeNull();
+	});
+
 	test('find_one does not auto-create tables via ensure_table', async function () {
 		const ensure_table_spy = jest.fn();
 		sql_runner_mock.mockResolvedValueOnce({
@@ -141,6 +163,42 @@ describe('QueryBuilder.exec read behavior', function () {
 		expect(result).toBeNull();
 	});
 
+	test('find_one defaults limit to 1 and uses create_document_from_row when available', async function () {
+		const hydrated_document = {hydrated: true};
+		const create_document_from_row = jest.fn().mockReturnValue(hydrated_document);
+
+		sql_runner_mock.mockResolvedValueOnce({
+			rows: [{
+				id: '7',
+				data: {user_name: 'john'},
+				created_at: new Date('2026-02-27T10:00:00.000Z'),
+				updated_at: new Date('2026-02-27T11:00:00.000Z')
+			}]
+		});
+
+		const query_builder = new QueryBuilder({
+			schema_instance: null,
+			model_options: {table_name: 'users', data_column: 'data'},
+			create_document_from_row: create_document_from_row,
+			resolve_id_strategy: function () {
+				return 'uuidv7';
+			}
+		}, 'find_one', {id: '0194f028-579a-7b5b-8107-b9ad31395f43'}, null);
+
+		const result = await query_builder.exec();
+		const sql_text = sql_runner_mock.mock.calls[0][0];
+
+		expect(result).toBe(hydrated_document);
+		expect(create_document_from_row).toHaveBeenCalledWith({
+			id: '7',
+			data: {user_name: 'john'},
+			created_at: new Date('2026-02-27T10:00:00.000Z'),
+			updated_at: new Date('2026-02-27T11:00:00.000Z')
+		});
+		expect(sql_text).toContain(' LIMIT 1');
+		expect(sql_text).toContain('WHERE "id" = $1::uuid');
+	});
+
 	test('find_one respects an explicit limit and does not overwrite it with 1', async function () {
 		sql_runner_mock.mockResolvedValueOnce({
 			rows: [{
@@ -163,5 +221,59 @@ describe('QueryBuilder.exec read behavior', function () {
 		const sql_text = sql_runner_mock.mock.calls[0][0];
 		expect(sql_text).toContain(' LIMIT 5');
 		expect(sql_text).not.toContain(' LIMIT 1 OFFSET');
+	});
+
+	test('find row fallback strips payload base fields and normalizes raw row metadata', async function () {
+		sql_runner_mock.mockResolvedValueOnce({
+			rows: [{
+				id: null,
+				data: {
+					user_name: 'john',
+					id: 'drop-me',
+					created_at: 'drop-me-too',
+					updated_at: 'drop-me-three'
+				},
+				created_at: 'not-a-date',
+				updated_at: undefined
+			}]
+		});
+
+		const query_builder = new QueryBuilder({
+			schema_instance: null,
+			model_options: {table_name: 'users', data_column: 'data'}
+		}, 'find', {user_name: 'john'}, null);
+
+		const result = await query_builder.exec();
+
+		expect(result).toEqual([{
+			user_name: 'john',
+			id: null,
+			created_at: 'not-a-date',
+			updated_at: undefined
+		}]);
+	});
+
+	test('find row fallback ignores non-object payloads and normalizes valid timestamp strings', async function () {
+		sql_runner_mock.mockResolvedValueOnce({
+			rows: [{
+				id: 5,
+				data: 'not-an-object',
+				created_at: '2026-02-27T10:00:00.000Z',
+				updated_at: '2026-02-27T10:30:00.000Z'
+			}]
+		});
+
+		const query_builder = new QueryBuilder({
+			schema_instance: null,
+			model_options: {table_name: 'users', data_column: 'data'}
+		}, 'find', {user_name: 'john'}, null);
+
+		const result = await query_builder.exec();
+
+		expect(result).toEqual([{
+			id: '5',
+			created_at: '2026-02-27T10:00:00.000Z',
+			updated_at: '2026-02-27T10:30:00.000Z'
+		}]);
 	});
 });

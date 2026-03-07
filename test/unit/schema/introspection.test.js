@@ -3,7 +3,7 @@ import {describe, expect, test} from '@jest/globals';
 import Schema from '#src/schema/schema.js';
 
 describe('Schema path introspection', function () {
-	test('returns path metadata and supports get_path_type and is_array_root', function () {
+	test('returns path descriptors and supports get_path_type and is_array_root', function () {
 		const schema_instance = new Schema({
 			name: {
 				type: String,

@@ -1,8 +1,3 @@
-/*
-Assumptions and trade-offs:
-- Universal options are normalized here, while runtime-only behaviors are stored for later phases.
-- Validation/casting fails fast per path and defers aggregation to schema_compiler.
-*/
 function BaseFieldType(path_value, options) {
 	this.path = path_value;
 	this.options = options || {};

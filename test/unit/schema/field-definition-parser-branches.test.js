@@ -34,11 +34,11 @@ describe('field_definition_parser branch coverage', function () {
 			has_field_type: function (value) {
 				return value === 'BogusType';
 			},
-			resolve_field_type_name: function () {
+			resolve: function () {
 				return null;
 			},
-			create_field_type: function () {
-				throw new Error('create_field_type should not be called');
+			create: function () {
+				throw new Error('create should not be called');
 			}
 		};
 

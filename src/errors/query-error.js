@@ -1,4 +1,4 @@
-export default function QueryError(message, details) {
+function QueryError(message, details) {
 	this.name = 'query_error';
 	this.message = message || 'Query failed';
 	this.details = details || null;
@@ -21,3 +21,5 @@ QueryError.prototype.to_json = function () {
 		}
 	};
 };
+
+export default QueryError;

@@ -106,7 +106,7 @@ const path_runtime = Object.freeze({
  * @param {Function} model_constructor
  * @returns {void}
  */
-export default function document_instance(model_constructor) {
+function document_instance(model_constructor) {
 	const schema_instance = model_constructor.schema_instance;
 	const alias_path_map = build_alias_path_map(schema_instance);
 
@@ -1195,3 +1195,4 @@ function run_path_operation(operation_name, root_object, path_segments, operatio
 	return {exists: false};
 }
 
+export default document_instance;

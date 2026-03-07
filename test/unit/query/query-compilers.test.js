@@ -26,7 +26,7 @@ describe('query compilers', function () {
 		expect(build_elem_text_expression('elem', ['stats', 'score'])).toBe("elem #>> '{stats,score}'");
 	});
 
-	test('parse_path returns root/child metadata and validates path input', function () {
+	test('parse_path returns root/child path details and validates path input', function () {
 		expect(parse_path('profile.city')).toEqual({
 			path_segments: ['profile', 'city'],
 			root_path: 'profile',
@@ -59,13 +59,13 @@ describe('query compilers', function () {
 		);
 	});
 
-	test('sort_compiler maps reserved metadata fields to table columns and rejects dotted reserved paths', function () {
+	test('sort_compiler maps base fields to table columns and rejects dotted base-field paths', function () {
 		expect(sort_compiler({id: 1, created_at: -1, updated_at: 1})).toBe(
 			' ORDER BY "id" ASC, "created_at" DESC, "updated_at" ASC'
 		);
 
-		expect(function compile_invalid_reserved_sort_path() {
+		expect(function compile_invalid_base_field_sort_path() {
 			sort_compiler({'created_at.value': 1});
-		}).toThrow('Reserved metadata fields only support top-level sort paths');
+		}).toThrow('Base fields only support top-level sort paths');
 	});
 });

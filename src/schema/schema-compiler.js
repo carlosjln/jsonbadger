@@ -1,8 +1,3 @@
-/*
-Assumptions and trade-offs:
-- Validation/casting is FieldType-driven and unknown payload keys are preserved.
-- Error aggregation mirrors abortEarly=false behavior with deterministic per-path detail records.
-*/
 import field_definition_parser from '#src/schema/field-definition-parser.js';
 
 import {
@@ -17,7 +12,7 @@ import {has_own} from '#src/utils/object.js';
 const schema_validation_error_message = 'Schema validation failed';
 const schema_validation_error_code = 'validation_error';
 
-export default function compile_schema(schema_definition = {}) {
+function compile_schema(schema_definition = {}) {
 	const parsed_schema = field_definition_parser(schema_definition);
 	const path_introspection = create_path_introspection(parsed_schema);
 	const field_types = path_introspection.field_types;
@@ -65,6 +60,7 @@ function validate_payload(payload, sorted_paths, field_types) {
 	const detail_list = [];
 	let path_index = 0;
 
+	// Normalize only declared schema paths and leave unknown payload keys untouched.
 	while(path_index < sorted_paths.length) {
 		const path_name = sorted_paths[path_index];
 		const field_type = field_types[path_name];
@@ -217,3 +213,5 @@ function clone_value(value) {
 
 	return value;
 }
+
+export default compile_schema;

@@ -75,6 +75,28 @@ describe('pool-store', function () {
 		}));
 	});
 
+	test('isolates nested connection options on write and read boundaries', function () {
+		const input_options = {
+			debug: true,
+			ssl: {
+				rejectUnauthorized: false
+			}
+		};
+
+		set_pool({tag: 'pool'}, input_options, null);
+		input_options.ssl.rejectUnauthorized = true;
+
+		const first_read = get_connection_options();
+		first_read.ssl.rejectUnauthorized = true;
+
+		expect(get_connection_options()).toEqual(Object.assign({}, defaults.connection_options, {
+			debug: true,
+			ssl: {
+				rejectUnauthorized: false
+			}
+		}));
+	});
+
 	test('falls back to default connection options when options are omitted', function () {
 		set_pool({tag: 'pool'}, undefined, null);
 

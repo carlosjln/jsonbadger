@@ -123,7 +123,7 @@ describe('connect', function () {
 		expect(scan_server_capabilities_mock).not.toHaveBeenCalled();
 	});
 
-	test('fails fast and closes pool when uuidv7 capability assertion fails', async function () {
+test('fails fast and closes pool when uuidv7 capability assertion fails', async function () {
 		assert_id_strategy_capability_mock.mockImplementation(function () {
 			throw new Error('uuidv7 unsupported');
 		});
@@ -132,6 +132,39 @@ describe('connect', function () {
 			id_strategy: 'uuidv7',
 			auto_index: true
 		})).rejects.toThrow('uuidv7 unsupported');
+
+		expect(pool_instance_state.end).toHaveBeenCalledTimes(1);
+		expect(pool_store_state.set_pool_calls).toHaveLength(0);
+	});
+
+	test('preserves the original startup error when the pool has no end method', async function () {
+		const startup_error = new Error('startup failed');
+
+		Pool_mock.mockImplementation(function () {
+			return {
+				query: jest.fn().mockRejectedValue(startup_error)
+			};
+		});
+
+		await expect(connect('postgresql://example/db', {
+			id_strategy: 'bigserial',
+			auto_index: true
+		})).rejects.toThrow('startup failed');
+
+		expect(pool_store_state.set_pool_calls).toHaveLength(0);
+	});
+
+	test('preserves the original startup error when pool shutdown also fails', async function () {
+		const startup_error = new Error('startup failed');
+		const shutdown_error = new Error('shutdown failed');
+
+		pool_instance_state.query.mockRejectedValue(startup_error);
+		pool_instance_state.end.mockRejectedValue(shutdown_error);
+
+		await expect(connect('postgresql://example/db', {
+			id_strategy: 'bigserial',
+			auto_index: true
+		})).rejects.toThrow('startup failed');
 
 		expect(pool_instance_state.end).toHaveBeenCalledTimes(1);
 		expect(pool_store_state.set_pool_calls).toHaveLength(0);
