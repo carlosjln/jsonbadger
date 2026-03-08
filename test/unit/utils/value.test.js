@@ -1,6 +1,6 @@
 import {describe, expect, test} from '@jest/globals';
 
-import {is_plain_object, is_uuid_v7} from '#src/utils/value.js';
+import {is_function, is_plain_object, is_uuid_v7} from '#src/utils/value.js';
 
 function CustomInstance() {
 	this.ok = true;
@@ -25,5 +25,14 @@ describe('utils/value', function () {
 		expect(is_uuid_v7(valid_uuid)).toBe(true);
 		expect(is_uuid_v7(invalid_uuid)).toBe(false);
 		expect(is_uuid_v7(123)).toBe(false);
+	});
+
+	test('is_function only accepts functions', function () {
+		expect(is_function(function () {
+		})).toBe(true);
+		expect(is_function(() => {
+		})).toBe(true);
+		expect(is_function({})).toBe(false);
+		expect(is_function(null)).toBe(false);
 	});
 });

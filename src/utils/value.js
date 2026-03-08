@@ -45,6 +45,10 @@ function is_string(value) {
 	return typeof value === 'string';
 }
 
+function is_function(value) {
+	return typeof value === 'function';
+}
+
 export {
 	is_object,
 	is_plain_object,
@@ -52,7 +56,8 @@ export {
 	is_nan,
 	is_uuid_v7,
 	to_number,
-	is_string
+	is_string,
+	is_function
 };
 
 export default {
@@ -62,5 +67,6 @@ export default {
 	is_nan,
 	is_uuid_v7,
 	to_number,
-	is_string
+	is_string,
+	is_function
 };
