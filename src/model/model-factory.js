@@ -21,7 +21,7 @@ import {is_array} from '#src/utils/array.js';
 import {has_own} from '#src/utils/object.js';
 import {build_path_literal} from '#src/utils/object-path.js';
 import {jsonb_stringify} from '#src/utils/json.js';
-import {is_not_object} from '#src/utils/value.js';
+import {is_function, is_not_object, is_plain_object} from '#src/utils/value.js';
 
 const update_path_root_segment_pattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const update_path_nested_segment_pattern = /^(?:[a-zA-Z_][a-zA-Z0-9_]*|[0-9]+)$/;
@@ -29,8 +29,8 @@ const row_base_fields = new Set(['id', 'created_at', 'updated_at']);
 const timestamp_fields = new Set(['created_at', 'updated_at']);
 const unsafe_hydrate_keys = new Set(['__proto__', 'constructor', 'prototype']);
 
-function model(schema_instance, model_configuration) {
-	assert_condition(schema_instance && typeof schema_instance.validate === 'function', 'schema_instance is required');
+function model(schema_instance, model_configuration, connection_context, model_name) {
+	assert_condition(schema_instance && is_function(schema_instance.validate), 'schema_instance is required');
 	assert_condition(is_not_object(model_configuration) === false, 'model options are required');
 	assert_condition(
 		has_own(model_configuration, 'data_column') === false,
@@ -39,7 +39,7 @@ function model(schema_instance, model_configuration) {
 
 	const model_options = Object.assign({}, defaults.model_options, model_configuration);
 	model_options.data_column = defaults.model_options.data_column;
-	
+
 	assert_identifier(model_options.table_name, 'table_name');
 	assert_identifier(model_options.data_column, 'data_column');
 
@@ -54,12 +54,13 @@ function model(schema_instance, model_configuration) {
 		this.data = data || {};
 	}
 
-	Model.model_name = model_options.table_name;
+	Model.model_name = model_name || model_options.table_name;
 	Model.schema_instance = schema_instance;
 	Model.model_options = model_options;
-	
+	Model.connection = connection_context || null;
+
 	Model.resolve_id_strategy = function () {
-		const connection_options = get_connection_options();
+		const connection_options = resolve_model_connection_options(Model);
 		const model_id_strategy = model_options.id_strategy;
 		const server_id_strategy = connection_options.id_strategy;
 		const final_id_strategy = model_id_strategy ?? server_id_strategy;
@@ -70,7 +71,7 @@ function model(schema_instance, model_configuration) {
 	};
 
 	Model.resolve_auto_index = function () {
-		const connection_options = get_connection_options();
+		const connection_options = resolve_model_connection_options(Model);
 		const model_auto_index = model_options.auto_index;
 		const server_auto_index = connection_options.auto_index;
 		const final_auto_index = model_auto_index ?? server_auto_index;
@@ -188,7 +189,7 @@ function model(schema_instance, model_configuration) {
 			schema: schema_instance,
 			id_strategy: Model.resolve_id_strategy()
 		});
-		
+
 		const parameter_state = create_parameter_state(where_result.next_index);
 		let data_expression = data_identifier;
 
@@ -221,7 +222,7 @@ function model(schema_instance, model_configuration) {
 			'target_table.' + data_identifier + ' AS data, ' +
 			'target_table.created_at AS created_at, ' +
 			'target_table.updated_at AS updated_at';
-			
+
 		const sql_params = where_result.params.concat(parameter_state.params);
 		const query_result = await sql_runner(sql_text, sql_params);
 
@@ -250,7 +251,7 @@ function model(schema_instance, model_configuration) {
 			'target_table.' + data_identifier + ' AS data, ' +
 			'target_table.created_at AS created_at, ' +
 			'target_table.updated_at AS updated_at';
-			
+
 		let query_result;
 
 		try {
@@ -305,15 +306,15 @@ function model(schema_instance, model_configuration) {
 		}
 
 		if(has_set_updates && is_not_object(set_definition)) {
-			throw new QueryError('update_definition.$set must be an object', { allowed: allowed_operators });
+			throw new QueryError('update_definition.$set must be an object', {allowed: allowed_operators});
 		}
 
 		if(has_insert_updates && is_not_object(insert_definition)) {
-			throw new QueryError('update_definition.$insert must be an object', { allowed: allowed_operators });
+			throw new QueryError('update_definition.$insert must be an object', {allowed: allowed_operators});
 		}
 
 		if(has_set_lax_updates && is_not_object(set_lax_definition)) {
-			throw new QueryError('update_definition.$set_lax must be an object', { allowed: allowed_operators });
+			throw new QueryError('update_definition.$set_lax must be an object', {allowed: allowed_operators});
 		}
 
 		const update_path_entries = collect_update_path_entries([
@@ -351,10 +352,6 @@ function model(schema_instance, model_configuration) {
 	}
 
 	function apply_set_updates(data_expression, set_definition, parameter_state) {
-		if(set_definition === undefined) {
-			return data_expression;
-		}
-
 		let next_expression = data_expression;
 
 		for(const [path, value] of Object.entries(set_definition)) {
@@ -604,10 +601,16 @@ function model(schema_instance, model_configuration) {
 	}
 
 	function assert_model_id_strategy_supported(final_id_strategy) {
-		if(final_id_strategy !== IdStrategies.uuidv7 || !has_pool()) {
+		if(final_id_strategy !== IdStrategies.uuidv7) {
 			return;
 		}
-		const server_capabilities = get_server_capabilities();
+
+		const server_capabilities = resolve_model_server_capabilities(Model);
+
+		if(!server_capabilities) {
+			return;
+		}
+
 		assert_id_strategy_capability(final_id_strategy, server_capabilities);
 	}
 
@@ -623,8 +626,8 @@ function model(schema_instance, model_configuration) {
 		}
 	}
 
-	if(has_pool()) {
-		const connection_options = get_connection_options();
+	if(Model.connection || has_pool()) {
+		const connection_options = resolve_model_connection_options(Model);
 		const eager_id_strategy = model_options.id_strategy ?? connection_options.id_strategy;
 
 		if(eager_id_strategy === IdStrategies.uuidv7) {
@@ -633,6 +636,26 @@ function model(schema_instance, model_configuration) {
 	}
 
 	return Model;
+}
+
+function resolve_model_connection_options(Model) {
+	if(Model.connection && is_plain_object(Model.connection.options)) {
+		return Model.connection.options;
+	}
+
+	return get_connection_options();
+}
+
+function resolve_model_server_capabilities(Model) {
+	if(Model.connection && Model.connection.server_capabilities) {
+		return Model.connection.server_capabilities;
+	}
+
+	if(!has_pool()) {
+		return null;
+	}
+
+	return get_server_capabilities();
 }
 
 function resolve_hydrate_allowed_keys(schema_instance) {

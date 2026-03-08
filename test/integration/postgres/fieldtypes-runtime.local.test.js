@@ -2,10 +2,11 @@ import {afterAll, beforeAll, describe, expect, test} from '@jest/globals';
 
 import jsonbadger from '#src/index.js';
 import {quote_identifier} from '#src/utils/assert.js';
+import {has_own} from '#src/utils/object.js';
 import local_env_config from '#test/config/local-env-config.js';
 
 describe('FieldTypes runtime PostgreSQL integration', function () {
-	let pool_instance;
+	let connection;
 	let pg_config;
 	let jb_config;
 
@@ -14,7 +15,7 @@ describe('FieldTypes runtime PostgreSQL integration', function () {
 		pg_config = env_config.postgres;
 		jb_config = env_config.jsonbadger;
 
-		pool_instance = await jsonbadger.connect(pg_config.uri, {
+		connection = await jsonbadger.connect(pg_config.uri, {
 			debug: jb_config.debug,
 			max: pg_config.pool_max,
 			ssl: pg_config.ssl
@@ -22,45 +23,19 @@ describe('FieldTypes runtime PostgreSQL integration', function () {
 	});
 
 	afterAll(async function teardown_database() {
-		if(pool_instance) {
-			await jsonbadger.disconnect();
+		if(connection) {
+			await connection.disconnect();
 		}
 	});
 
-	test('supports runtime document behaviors and JSON update operators end to end', async function () {
+	test('applies runtime field behavior before persistence', async function () {
 		const test_table_name = build_test_table_name();
 		const table_identifier = quote_identifier(test_table_name);
 		const created_at = new Date('2026-02-23T12:00:00.000Z');
+		const Account = create_account_model(connection, test_table_name);
 
 		try {
-			await pool_instance.query('DROP TABLE IF EXISTS ' + table_identifier + ';');
-
-			const account_schema = new jsonbadger.Schema({
-				user_name: {
-					type: String,
-					alias: 'userName',
-					set: function (value) { return String(value).trim(); },
-					get: function (value) { return String(value).toUpperCase(); }
-				},
-				status: {
-					type: String,
-					immutable: true
-				},
-				tags: [String],
-				payload: {},
-				runtime_date: Date
-			}, {
-				to_json: {
-					transform: function (doc, ret) {
-						ret.kind = 'account';
-						return ret;
-					}
-				}
-			});
-
-			const Account = jsonbadger.model(account_schema, {
-				table_name: test_table_name
-			});
+			await drop_table_if_exists(connection, table_identifier);
 
 			const account_document = new Account({
 				status: 'active',
@@ -98,6 +73,33 @@ describe('FieldTypes runtime PostgreSQL integration', function () {
 			expect(account_document.is_modified('payload')).toBe(true);
 			expect(account_document.is_modified('payload.prefs')).toBe(true);
 			expect(account_document.is_modified('runtime_date')).toBe(true);
+		} finally {
+			await drop_table_if_exists(connection, table_identifier);
+		}
+	});
+
+	test('persists document state and transitions to a persisted lifecycle', async function () {
+		const test_table_name = build_test_table_name();
+		const table_identifier = quote_identifier(test_table_name);
+		const created_at = new Date('2026-02-23T12:00:00.000Z');
+		const Account = create_account_model(connection, test_table_name);
+
+		try {
+			await drop_table_if_exists(connection, table_identifier);
+
+			const account_document = new Account({
+				user_name: 'john',
+				status: 'active',
+				tags: ['alpha'],
+				payload: {
+					legacy: true,
+					prefs: {theme: 'dark'}
+				},
+				runtime_date: created_at
+			});
+
+			account_document.mark_modified('payload');
+			account_document.mark_modified('runtime_date');
 
 			const saved_data = await account_document.save();
 
@@ -108,6 +110,32 @@ describe('FieldTypes runtime PostgreSQL integration', function () {
 			expect(function () {
 				account_document.set('status', 'disabled');
 			}).toThrow('immutable');
+		} finally {
+			await drop_table_if_exists(connection, table_identifier);
+		}
+	});
+
+	test('applies JSON update operators and reads persisted changes back', async function () {
+		const test_table_name = build_test_table_name();
+		const table_identifier = quote_identifier(test_table_name);
+		const created_at = new Date('2026-02-23T12:00:00.000Z');
+		const Account = create_account_model(connection, test_table_name);
+
+		try {
+			await drop_table_if_exists(connection, table_identifier);
+
+			const account_document = new Account({
+				user_name: 'john',
+				status: 'active',
+				tags: ['alpha'],
+				payload: {
+					legacy: true,
+					prefs: {theme: 'light'}
+				},
+				runtime_date: created_at
+			});
+
+			await account_document.save();
 
 			const updated_data = await Account.update_one({user_name: 'john'}, {
 				$set: {
@@ -130,19 +158,53 @@ describe('FieldTypes runtime PostgreSQL integration', function () {
 			expect(updated_data.user_name).toBe('john');
 			expect(updated_data.tags).toEqual(['alpha', 'beta']);
 			expect(updated_data.payload.prefs.theme).toBe('solarized');
-			expect(Object.prototype.hasOwnProperty.call(updated_data.payload, 'legacy')).toBe(false);
+			expect(has_own(updated_data.payload, 'legacy')).toBe(false);
 
 			const persisted_lookup = await Account.find_one({user_name: 'john'}).exec();
 			expect(persisted_lookup.tags).toEqual(['alpha', 'beta']);
 			expect(persisted_lookup.payload.prefs.theme).toBe('solarized');
-			expect(Object.prototype.hasOwnProperty.call(persisted_lookup.payload, 'legacy')).toBe(false);
+			expect(has_own(persisted_lookup.payload, 'legacy')).toBe(false);
 		} finally {
-			if(pool_instance) {
-				await pool_instance.query('DROP TABLE IF EXISTS ' + table_identifier + ';');
-			}
+			await drop_table_if_exists(connection, table_identifier);
 		}
 	});
 });
+
+function create_account_model(connection, table_name) {
+	const model_name = 'Account_' + table_name;
+	const account_schema = new jsonbadger.Schema({
+		user_name: {
+			type: String,
+			alias: 'userName',
+			set: function (value) {return String(value).trim();},
+			get: function (value) {return String(value).toUpperCase();}
+		},
+		status: {
+			type: String,
+			immutable: true
+		},
+		tags: [String],
+		payload: {},
+		runtime_date: Date
+	}, {
+		to_json: {
+			transform: function (doc, ret) {
+				ret.kind = 'account';
+				return ret;
+			}
+		}
+	});
+
+	return connection.model({
+		name: model_name,
+		schema: account_schema,
+		table_name: table_name
+	});
+}
+
+async function drop_table_if_exists(connection, table_identifier) {
+	await connection.pool_instance.query('DROP TABLE IF EXISTS ' + table_identifier + ';');
+}
 
 function build_test_table_name() {
 	const random_suffix = String(Math.floor(Math.random() * 1000000));

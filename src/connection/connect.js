@@ -1,19 +1,20 @@
 import {Pool} from 'pg';
 
 import defaults from '#src/constants/defaults.js';
+import Connection from '#src/connection/connection.js';
 import debug_logger from '#src/debug/debug-logger.js';
 
 import {assert_condition} from '#src/utils/assert.js';
 import {assert_valid_id_strategy} from '#src/constants/id-strategies.js';
 import {scan_server_capabilities, assert_id_strategy_capability} from '#src/connection/server-capabilities.js';
 import {is_string} from '#src/utils/value.js';
-import {get_pool, has_pool, set_pool} from '#src/connection/pool-store.js';
+import {get_connection, has_pool, set_pool} from '#src/connection/pool-store.js';
 
 async function connect(uri, options) {
 	assert_condition(is_string(uri) && uri.length > 0, 'connection_uri is required');
 
 	if(has_pool()) {
-		return get_pool();
+		return get_connection();
 	}
 
 	const final_options = Object.assign({}, defaults.connection_options, options);
@@ -29,11 +30,18 @@ async function connect(uri, options) {
 		await pool_instance.query('SELECT 1');
 		server_capabilities = await scan_server_capabilities(pool_instance);
 		assert_id_strategy_capability(id_strategy, server_capabilities);
-		set_pool(pool_instance, final_options, server_capabilities);
 	} catch(error) {
 		await close_pool_quietly(pool_instance);
 		throw error;
 	}
+
+	const connection_instance = new Connection(pool_instance, final_options, server_capabilities);
+	set_pool({
+		pool_instance,
+		connection_instance,
+		options: final_options,
+		server_capabilities
+	});
 
 	debug_logger(debug, 'connection_ready', {
 		max: pool_options.max,
@@ -41,7 +49,7 @@ async function connect(uri, options) {
 		supports_uuidv7: server_capabilities.supports_uuidv7
 	});
 
-	return pool_instance;
+	return connection_instance;
 }
 
 async function close_pool_quietly(pool_instance) {

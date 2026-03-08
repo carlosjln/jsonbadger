@@ -1,8 +1,9 @@
 import debug_logger from '#src/debug/debug-logger.js';
 import defaults from '#src/constants/defaults.js';
+import ModelOverwriteError from '#src/errors/model-overwrite-error.js';
 import model_factory from '#src/model/model-factory.js';
 import {assert_condition, assert_identifier} from '#src/utils/assert.js';
-import {has_own} from '#src/utils/object.js';
+import {are_equal} from '#src/utils/object.js';
 import {pluralize} from '#src/utils/string.js';
 import {is_function, is_plain_object} from '#src/utils/value.js';
 
@@ -29,7 +30,8 @@ function Connection(pool_instance, options, server_capabilities) {
  * @param {*} model_definition.schema Schema instance.
  * @param {string} [model_definition.table_name] Explicit table name override.
  * @returns {Function}
- * @throws {Error} When the definition is invalid or the model name is duplicated.
+ * @throws {Error} When the definition is invalid.
+ * @throws {ModelOverwriteError} When an existing model is redefined with different schema/options.
  */
 Connection.prototype.model = function (model_definition) {
 	assert_condition(is_plain_object(model_definition), 'model_definition is required');
@@ -38,14 +40,21 @@ Connection.prototype.model = function (model_definition) {
 	const schema_instance = model_definition.schema;
 
 	assert_identifier(model_name, 'model_definition.name');
-	assert_condition(schema_instance && is_function(schema_instance.validate), 'model_definition.schema is required');
-	assert_condition(!has_own(this.models, model_name), 'model "' + model_name + '" is already registered on this connection');
 
+	const existing_model = this.models[model_name];
 	const model_options = create_model_options(model_definition);
-	const Model = model_factory(schema_instance, model_options);
+	const requested_definition = {
+		name: model_name,
+		schema_instance,
+		model_options
+	};
 
-	Model.connection = this;
-	Model.connection_model_name = model_name;
+	if(existing_model) {
+		assert_model_definition_match(existing_model, requested_definition);
+		return existing_model;
+	}
+
+	const Model = model_factory(schema_instance, model_options, this, model_name);
 
 	this.models[model_name] = Model;
 	return Model;
@@ -84,6 +93,36 @@ function create_model_options(model_definition) {
 	}
 
 	return model_options;
+}
+
+/**
+ * Enforces idempotent model registration on a connection.
+ *
+ * Re-registering the same model name is allowed only when schema and
+ * normalized model options match the existing model.
+ *
+ * @param {Function} existing_model
+ * @param {object} requested_definition
+ * @throws {ModelOverwriteError}
+ */
+function assert_model_definition_match(existing_model, requested_definition) {
+	const {
+		name,
+		schema_instance,
+		model_options
+	} = requested_definition;
+
+	if(existing_model.schema_instance !== schema_instance) {
+		throw new ModelOverwriteError('model "' + name + '" is already registered with a different schema', {
+			name
+		});
+	}
+
+	if(!are_equal(existing_model.model_options, model_options)) {
+		throw new ModelOverwriteError('model "' + name + '" is already registered with different model options', {
+			name
+		});
+	}
 }
 
 export default Connection;

@@ -1,6 +1,6 @@
 import {describe, expect, test} from '@jest/globals';
 
-import object_utils, {deep_clone, has_own, merge, normalize} from '#src/utils/object.js';
+import object_utils, {are_equal, deep_clone, has_own, merge, normalize} from '#src/utils/object.js';
 
 function run_without_structured_clone(callback) {
 	const original_structured_clone = globalThis.structuredClone;
@@ -24,12 +24,38 @@ describe('utils/object', function () {
 		const child_object = Object.create(base_object);
 		child_object.own_flag = true;
 
+		expect(object_utils.are_equal).toBe(are_equal);
 		expect(object_utils.has_own).toBe(has_own);
 		expect(object_utils.deep_clone).toBe(deep_clone);
 		expect(object_utils.normalize).toBe(normalize);
 		expect(object_utils.merge).toBe(merge);
 		expect(has_own(child_object, 'own_flag')).toBe(true);
 		expect(has_own(child_object, 'inherited_flag')).toBe(false);
+	});
+
+	test('are_equal handles primitives, arrays, dates, objects, and circular references', function () {
+		const shared_child = {id: 1};
+		const circular_a = {profile: shared_child};
+		const circular_b = {profile: {id: 1}};
+		circular_a.self = circular_a;
+		circular_b.self = circular_b;
+
+		expect(are_equal('a', 'a')).toBe(true);
+		expect(are_equal(NaN, NaN)).toBe(true);
+		expect(are_equal('a', 'b')).toBe(false);
+		expect(are_equal([], {})).toBe(false);
+		expect(are_equal([1, 2], [1])).toBe(false);
+		expect(are_equal([1, 2], [1, 3])).toBe(false);
+		expect(are_equal([1, {ok: true}], [1, {ok: true}])).toBe(true);
+		expect(are_equal(new Date('2026-03-08T10:00:00.000Z'), new Date('2026-03-08T10:00:00.000Z'))).toBe(true);
+		expect(are_equal(new Date('2026-03-08T10:00:00.000Z'), new Date('2026-03-08T11:00:00.000Z'))).toBe(false);
+		expect(are_equal(new Date('2026-03-08T10:00:00.000Z'), {})).toBe(false);
+		expect(are_equal(new Date('2026-03-08T10:00:00.000Z'), '2026-03-08T10:00:00.000Z')).toBe(false);
+		expect(are_equal({name: 'Alice'}, {name: 'Alice', extra: true})).toBe(false);
+		expect(are_equal({name: 'Alice'}, {city: 'San Juan'})).toBe(false);
+		expect(are_equal({name: 'Alice'}, {name: 'Bob'})).toBe(false);
+		expect(are_equal(circular_a, circular_b)).toBe(true);
+		expect(are_equal(circular_a, {profile: {id: 2}, self: circular_a})).toBe(false);
 	});
 
 	test('deep_clone clones nested plain structures', function () {

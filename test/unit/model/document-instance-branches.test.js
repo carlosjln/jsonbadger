@@ -1,5 +1,6 @@
 import {describe, expect, test} from '@jest/globals';
 
+const {default: document_instance} = await import('#src/model/document-instance.js');
 const {default: Schema} = await import('#src/schema/schema.js');
 const {default: model} = await import('#src/model/model-factory.js');
 
@@ -227,6 +228,46 @@ describe('document-instance branch behavior', function () {
 		expect(typeof doc.save).toBe('function');
 	});
 
+	test('base-field property installation skips pre-existing prototype properties', function () {
+		function ExistingIdModel(data) {
+			this.data = data || {};
+		}
+
+		ExistingIdModel.prototype.id = 'from-prototype';
+		ExistingIdModel.schema_instance = new Schema({
+			name: String
+		});
+		ExistingIdModel.model_options = {
+			table_name: 'users',
+			data_column: 'data'
+		};
+		ExistingIdModel.connection = null;
+		ExistingIdModel.resolve_id_strategy = function () {
+			return 'bigserial';
+		};
+		ExistingIdModel.resolve_auto_index = function () {
+			return false;
+		};
+		ExistingIdModel.assert_id_strategy_supported = function () {
+			return 'bigserial';
+		};
+		ExistingIdModel.ensure_table = async function () {
+		};
+		ExistingIdModel.update_one = async function () {
+			return null;
+		};
+		ExistingIdModel.delete_one = async function () {
+			return null;
+		};
+
+		document_instance(ExistingIdModel);
+
+		const doc = new ExistingIdModel({name: 'john'});
+
+		expect(doc.id).toBe('from-prototype');
+		expect(Object.getOwnPropertyDescriptor(ExistingIdModel.prototype, 'id').value).toBe('from-prototype');
+	});
+
 	test('apply_document_row tolerates non-object targets by returning them unchanged', function () {
 		const User = model(new Schema({name: String}), {table_name: 'users'});
 
@@ -235,5 +276,13 @@ describe('document-instance branch behavior', function () {
 			data: {name: 'john'}
 		})).toBeNull();
 	});
-});
 
+	test('id property setter rejects direct assignment', function () {
+		const User = model(new Schema({name: String}), {table_name: 'users'});
+		const doc = new User({name: 'john'});
+
+		expect(function () {
+			doc.id = '10';
+		}).toThrow('Read-only base field cannot be assigned by property setter');
+	});
+});

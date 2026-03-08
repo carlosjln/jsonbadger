@@ -1,6 +1,6 @@
 import {describe, expect, test} from '@jest/globals';
 
-import {is_function, is_plain_object, is_uuid_v7} from '#src/utils/value.js';
+import {is_function, is_plain_object, is_uuid_v7, to_number} from '#src/utils/value.js';
 
 function CustomInstance() {
 	this.ok = true;
@@ -25,6 +25,17 @@ describe('utils/value', function () {
 		expect(is_uuid_v7(valid_uuid)).toBe(true);
 		expect(is_uuid_v7(invalid_uuid)).toBe(false);
 		expect(is_uuid_v7(123)).toBe(false);
+	});
+
+	test('to_number coerces numeric values and falls back to zero for invalid input', function () {
+		expect(to_number('12.5')).toBe(12.5);
+		expect(to_number(8)).toBe(8);
+		expect(to_number(0)).toBe(0);
+		expect(to_number('')).toBe(0);
+		expect(to_number(null)).toBe(0);
+		expect(to_number(undefined)).toBe(0);
+		expect(to_number('not-a-number')).toBe(0);
+		expect(to_number(Infinity)).toBe(0);
 	});
 
 	test('is_function only accepts functions', function () {
