@@ -7,6 +7,8 @@ describe('index exports', function () {
 		expect(index_module.field_type).toBe(jsonbadger.field_type);
 		expect(typeof index_module.field_type.register).toBe('function');
 		expect(typeof index_module.field_type.resolve).toBe('function');
+		expect(index_module.disconnect).toBeUndefined();
+		expect(jsonbadger.disconnect).toBeUndefined();
 		expect(index_module.model).toBeUndefined();
 		expect(jsonbadger.model).toBeUndefined();
 

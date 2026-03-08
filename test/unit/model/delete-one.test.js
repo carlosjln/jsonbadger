@@ -2,10 +2,6 @@
 
 const ensure_table_mock = jest.fn();
 const sql_runner_mock = jest.fn();
-const connection_options_state = {
-	id_strategy: 'bigserial',
-	auto_index: false
-};
 
 jest.unstable_mockModule('#src/migration/ensure-table.js', function () {
 	return {
@@ -16,22 +12,6 @@ jest.unstable_mockModule('#src/migration/ensure-table.js', function () {
 jest.unstable_mockModule('#src/sql/sql-runner.js', function () {
 	return {
 		default: sql_runner_mock
-	};
-});
-
-jest.unstable_mockModule('#src/connection/pool-store.js', function () {
-	return {
-		get_connection_options: function () {
-			return connection_options_state;
-		},
-
-		has_pool: function () {
-			return false;
-		},
-
-		get_server_capabilities: function () {
-			return null;
-		}
 	};
 });
 
@@ -51,8 +31,6 @@ describe('Model.delete_one', function () {
 				updated_at: new Date('2026-02-27T11:00:00.000Z')
 			}]
 		});
-		connection_options_state.id_strategy = 'bigserial';
-		connection_options_state.auto_index = false;
 	});
 
 	test('deletes one matching row and returns deleted data', async function () {
@@ -170,5 +148,24 @@ describe('Model.delete_one', function () {
 
 		await expect(document_instance.delete().exec()).rejects.toThrow('Document id is required for delete operations');
 		expect(sql_runner_mock).not.toHaveBeenCalled();
+	});
+
+	test('forwards model-owned connection context through delete queries', async function () {
+		const connection = {
+			pool_instance: {query: jest.fn()},
+			options: {
+				debug: false,
+				id_strategy: 'bigserial',
+				auto_index: false
+			}
+		};
+		const schema_instance = new Schema({
+			user_name: String
+		});
+		const user_model = model(schema_instance, {table_name: 'users'}, connection, 'User');
+
+		await user_model.delete_one({user_name: 'john'});
+
+		expect(sql_runner_mock).toHaveBeenCalledWith(expect.any(String), expect.any(Array), connection);
 	});
 });

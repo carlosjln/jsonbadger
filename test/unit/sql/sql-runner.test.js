@@ -1,19 +1,10 @@
 import {beforeEach, describe, expect, jest, test} from '@jest/globals';
 
 const debug_logger_mock = jest.fn();
-const get_debug_mode_mock = jest.fn();
-const get_pool_mock = jest.fn();
 
 jest.unstable_mockModule('#src/debug/debug-logger.js', function () {
 	return {
 		default: debug_logger_mock
-	};
-});
-
-jest.unstable_mockModule('#src/connection/pool-store.js', function () {
-	return {
-		get_debug_mode: get_debug_mode_mock,
-		get_pool: get_pool_mock
 	};
 });
 
@@ -23,21 +14,18 @@ const {default: sql_runner} = await import('#src/sql/sql-runner.js');
 describe('sql_runner', function () {
 	beforeEach(function () {
 		debug_logger_mock.mockReset();
-		get_debug_mode_mock.mockReset();
-		get_pool_mock.mockReset();
 	});
 
-	test('runs SQL with provided params and logs sql_query event', async function () {
+	test('runs SQL through the owning connection and logs sql_query event', async function () {
 		const query_mock = jest.fn().mockResolvedValueOnce({rows: [{id: 1}]});
+		const connection = {
+			pool_instance: {query: query_mock},
+			options: {debug: true}
+		};
 
-		get_debug_mode_mock.mockReturnValueOnce(true);
-		get_pool_mock.mockReturnValueOnce({query: query_mock});
-
-		const result = await sql_runner('SELECT 1', ['x']);
+		const result = await sql_runner('SELECT 1', ['x'], connection);
 
 		expect(result).toEqual({rows: [{id: 1}]});
-		expect(get_debug_mode_mock).toHaveBeenCalledTimes(1);
-		expect(get_pool_mock).toHaveBeenCalledTimes(1);
 		expect(query_mock).toHaveBeenCalledWith('SELECT 1', ['x']);
 		expect(debug_logger_mock).toHaveBeenCalledTimes(1);
 		expect(debug_logger_mock).toHaveBeenCalledWith(true, 'sql_query', {
@@ -48,11 +36,12 @@ describe('sql_runner', function () {
 
 	test('uses empty params array when sql_params is omitted', async function () {
 		const query_mock = jest.fn().mockResolvedValueOnce({rows: []});
+		const connection = {
+			pool_instance: {query: query_mock},
+			options: {debug: false}
+		};
 
-		get_debug_mode_mock.mockReturnValueOnce(false);
-		get_pool_mock.mockReturnValueOnce({query: query_mock});
-
-		await sql_runner('SELECT 1');
+		await sql_runner('SELECT 1', undefined, connection);
 
 		expect(query_mock).toHaveBeenCalledWith('SELECT 1', []);
 		expect(debug_logger_mock).toHaveBeenCalledWith(false, 'sql_query', {
@@ -61,17 +50,41 @@ describe('sql_runner', function () {
 		});
 	});
 
-	test('logs sql_error and throws QueryError when pool query fails', async function () {
+	test('uses the connection pool instance directly', async function () {
+		const query_mock = jest.fn().mockResolvedValueOnce({rows: [{id: 2}]});
+		const connection = {
+			pool_instance: {query: query_mock},
+			options: {debug: true}
+		};
+
+		const result = await sql_runner('SELECT 2', ['y'], connection);
+
+		expect(result).toEqual({rows: [{id: 2}]});
+		expect(query_mock).toHaveBeenCalledWith('SELECT 2', ['y']);
+		expect(debug_logger_mock).toHaveBeenCalledWith(true, 'sql_query', {
+			sql_text: 'SELECT 2',
+			params: ['y']
+		});
+	});
+
+	test('rejects missing connection pool instances', async function () {
+		await expect(sql_runner('SELECT 3', ['z'], {
+			options: {debug: false}
+		})).rejects.toThrow('sql_runner requires connection.pool_instance');
+	});
+
+	test('logs sql_error and throws QueryError when connection pool query fails', async function () {
 		const pool_error = new Error('db offline');
 		const query_mock = jest.fn().mockRejectedValueOnce(pool_error);
-
-		get_debug_mode_mock.mockReturnValueOnce(true);
-		get_pool_mock.mockReturnValueOnce({query: query_mock});
+		const connection = {
+			pool_instance: {query: query_mock},
+			options: {debug: true}
+		};
 
 		let thrown_error = null;
 
 		try {
-			await sql_runner('SELECT * FROM users WHERE id = $1', [7]);
+			await sql_runner('SELECT * FROM users WHERE id = $1', [7], connection);
 		} catch(error) {
 			thrown_error = error;
 		}

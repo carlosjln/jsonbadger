@@ -40,8 +40,7 @@ const options = {
 	auto_index: true,
 	id_strategy: JsonBadger.IdStrategies.bigserial // server default: bigserial | uuidv7 (native PostgreSQL uuidv7() required)
 };
-
-await JsonBadger.connect(db_uri, options);
+const connection = await JsonBadger.connect(db_uri, options);
 
 // 2. Define schema (FieldType format)
 const user_schema = new JsonBadger.Schema({
@@ -56,7 +55,9 @@ const user_schema = new JsonBadger.Schema({
 user_schema.create_index({using: 'btree', paths: {name: 1, type: -1}});
 
 // 4. Create model
-const User = JsonBadger.model(user_schema, {
+const User = connection.model({
+	name: 'User',
+	schema: user_schema,
 	table_name: 'users',
 	auto_index: false, // optional model-level override
 	id_strategy: JsonBadger.IdStrategies.bigserial // optional model-level override (uuidv7 uses DB-generated ids)

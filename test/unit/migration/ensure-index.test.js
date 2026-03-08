@@ -97,4 +97,16 @@ describe('ensure_index', function () {
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('USING GIN');
 		expect(sql_runner_mock.mock.calls[0][0]).not.toContain('CREATE UNIQUE INDEX');
 	});
+
+	test('forwards explicit connection context to sql_runner when provided', async function () {
+		const connection = {pool_instance: {query: jest.fn()}, options: {debug: false}};
+
+		await ensure_index('users', {
+			using: 'btree',
+			path: 'email',
+			order: 1
+		}, 'data', connection);
+
+		expect(sql_runner_mock).toHaveBeenCalledWith(expect.any(String), [], connection);
+	});
 });

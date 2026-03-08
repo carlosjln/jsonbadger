@@ -123,7 +123,7 @@ Notes:
 Teardown example:
 
 ```js
-await JsonBadger.disconnect();
+await connection.disconnect();
 ```
 
 Connection failure pattern (before a pool is established in the process):

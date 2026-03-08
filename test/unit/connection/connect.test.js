@@ -17,13 +17,6 @@ const server_capabilities = {
 	supports_uuidv7: true
 };
 
-const pool_store_state = {
-	has_pool: false,
-	pool_instance: null,
-	connection_instance: null,
-	set_pool_updates: []
-};
-
 const pool_instance_state = {
 	query: jest.fn(),
 	end: jest.fn()
@@ -48,24 +41,6 @@ jest.unstable_mockModule('#src/connection/server-capabilities.js', function () {
 	};
 });
 
-jest.unstable_mockModule('#src/connection/pool-store.js', function () {
-	return {
-		has_pool: function () {
-			return pool_store_state.has_pool;
-		},
-
-		get_connection: function () {
-			return pool_store_state.connection_instance;
-		},
-
-		set_pool: function (state_update) {
-			pool_store_state.pool_instance = state_update.pool_instance;
-			pool_store_state.connection_instance = state_update.connection_instance;
-			pool_store_state.set_pool_updates.push(state_update);
-		}
-	};
-});
-
 const {default: connect} = await import('#src/connection/connect.js');
 
 describe('connect', function () {
@@ -76,11 +51,6 @@ describe('connect', function () {
 		assert_id_strategy_capability_mock.mockReset();
 		pool_instance_state.query.mockReset();
 		pool_instance_state.end.mockReset();
-
-		pool_store_state.has_pool = false;
-		pool_store_state.pool_instance = null;
-		pool_store_state.connection_instance = null;
-		pool_store_state.set_pool_updates = [];
 
 		Pool_mock.mockImplementation(function () {
 			return pool_instance_state;
@@ -94,8 +64,8 @@ describe('connect', function () {
 		});
 	});
 
-	describe('connection startup', function () {
-		test('returns a connection and stores capabilities in pool state', async function () {
+		describe('connection startup', function () {
+		test('returns a connection and stores capabilities on the connection instance', async function () {
 			const connection = await connect(uri, default_connect_options);
 
 			expect(connection).toBeInstanceOf(Connection);
@@ -106,52 +76,51 @@ describe('connect', function () {
 			expect(scan_server_capabilities_mock).toHaveBeenCalledWith(pool_instance_state);
 
 			expect(assert_id_strategy_capability_mock).toHaveBeenCalledWith('bigserial', server_capabilities);
-
-			expect(pool_store_state.connection_instance).toBe(connection);
-			expect(pool_store_state.set_pool_updates).toHaveLength(1);
-
-			const stored_state_update = pool_store_state.set_pool_updates[0];
-
-			expect(stored_state_update.pool_instance).toBe(pool_instance_state);
-			expect(stored_state_update.options).toEqual(expect.objectContaining({
-				id_strategy: 'bigserial',
-				auto_index: true,
-				debug: false
-			}));
-			expect(stored_state_update.server_capabilities).toEqual(server_capabilities);
-			expect(stored_state_update.connection_instance).toBe(connection);
 		});
 
 		test('stores normalized default options when connect options are omitted', async function () {
 			const connection = await connect(uri);
 
 			expect(connection).toBeInstanceOf(Connection);
-			expect(pool_store_state.set_pool_updates).toHaveLength(1);
-			expect(pool_store_state.set_pool_updates[0].options).toEqual(expect.objectContaining({
+			expect(connection.options).toEqual(expect.objectContaining({
 				id_strategy: 'bigserial',
 				auto_index: true,
 				debug: false
 			}));
-		});
-	});
-
-	describe('connection reuse', function () {
-		test('returns existing connection without rescanning when already connected', async function () {
-			const existing_connection = new Connection({existing_pool: true}, {}, null);
-
-			pool_store_state.has_pool = true;
-			pool_store_state.connection_instance = existing_connection;
-
-			const connection = await connect(uri, {
-				id_strategy: 'bigserial'
 			});
-
-			expect(connection).toBe(existing_connection);
-			expect(Pool_mock).not.toHaveBeenCalled();
-			expect(scan_server_capabilities_mock).not.toHaveBeenCalled();
-			expect(pool_store_state.set_pool_updates).toHaveLength(0);
 		});
-	});
+
+		describe('connection identity', function () {
+			test('returns a distinct connection on each call', async function () {
+				const first_pool_instance = {
+					query: jest.fn().mockResolvedValue({rows: []}),
+					end: jest.fn().mockResolvedValue(undefined)
+				};
+				const second_pool_instance = {
+					query: jest.fn().mockResolvedValue({rows: []}),
+					end: jest.fn().mockResolvedValue(undefined)
+				};
+
+				Pool_mock
+					.mockImplementationOnce(function () {
+						return first_pool_instance;
+					})
+					.mockImplementationOnce(function () {
+						return second_pool_instance;
+					});
+
+				const first_connection = await connect(uri, {id_strategy: 'bigserial'});
+				const second_connection = await connect(uri, {id_strategy: 'bigserial'});
+
+				expect(first_connection).toBeInstanceOf(Connection);
+				expect(second_connection).toBeInstanceOf(Connection);
+				expect(second_connection).not.toBe(first_connection);
+				expect(Pool_mock).toHaveBeenCalledTimes(2);
+				expect(scan_server_capabilities_mock).toHaveBeenCalledTimes(2);
+				expect(first_connection.pool_instance).toBe(first_pool_instance);
+				expect(second_connection.pool_instance).toBe(second_pool_instance);
+			});
+		});
 
 	describe('startup failure cleanup', function () {
 		test('fails fast and closes pool when uuidv7 capability assertion fails', async function () {
@@ -165,7 +134,6 @@ describe('connect', function () {
 			})).rejects.toThrow('uuidv7 unsupported');
 
 			expect(pool_instance_state.end).toHaveBeenCalledTimes(1);
-			expect(pool_store_state.set_pool_updates).toHaveLength(0);
 		});
 
 		test('preserves the original startup error when the pool has no end method', async function () {
@@ -182,7 +150,6 @@ describe('connect', function () {
 				auto_index: true
 			})).rejects.toThrow('startup failed');
 
-			expect(pool_store_state.set_pool_updates).toHaveLength(0);
 		});
 
 		test('preserves the original startup error when pool shutdown also fails', async function () {
@@ -198,7 +165,6 @@ describe('connect', function () {
 			})).rejects.toThrow('startup failed');
 
 			expect(pool_instance_state.end).toHaveBeenCalledTimes(1);
-			expect(pool_store_state.set_pool_updates).toHaveLength(0);
 		});
 	});
 

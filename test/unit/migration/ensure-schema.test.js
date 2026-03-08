@@ -67,4 +67,17 @@ describe('ensure_schema', function () {
 		expect(ensure_table_mock.mock.invocationCallOrder[0]).toBeLessThan(ensure_index_mock.mock.invocationCallOrder[0]);
 		expect(ensure_index_mock.mock.invocationCallOrder[0]).toBeLessThan(ensure_index_mock.mock.invocationCallOrder[1]);
 	});
+
+	test('forwards explicit connection context to ensure_table and ensure_index', async function () {
+		const connection = {pool_instance: {query: jest.fn()}, options: {debug: false}};
+
+		resolve_schema_indexes_mock.mockReturnValue([
+			{using: 'gin', path: 'profile.city'}
+		]);
+
+		await ensure_schema('users', 'data', {schema: true}, 'bigserial', connection);
+
+		expect(ensure_table_mock).toHaveBeenCalledWith('users', 'data', 'bigserial', connection);
+		expect(ensure_index_mock).toHaveBeenCalledWith('users', {using: 'gin', path: 'profile.city'}, 'data', connection);
+	});
 });

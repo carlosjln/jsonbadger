@@ -413,7 +413,7 @@ function install_instance_methods(model_constructor, schema_instance, alias_path
 				create_row_base_fields,
 				model_constructor.resolve_id_strategy()
 			);
-			const query_result = await sql_runner(insert_statement.sql_text, insert_statement.sql_params);
+			const query_result = await sql_runner(insert_statement.sql_text, insert_statement.sql_params, model_constructor.connection);
 			const saved_row = query_result.rows[0];
 
 			apply_row_state(this, saved_row);
@@ -598,6 +598,7 @@ function resolve_modified_set_payload(document_value, payload_without_base_field
 	return next_payload;
 }
 
+// TODO:  doesn't look optimal
 /**
  * Central serializer for `to_object` and `to_json`.
  *

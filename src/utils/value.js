@@ -49,6 +49,10 @@ function is_function(value) {
 	return typeof value === 'function';
 }
 
+function is_boolean(value) {
+	return typeof value === 'boolean';
+}
+
 export {
 	is_object,
 	is_plain_object,
@@ -57,7 +61,8 @@ export {
 	is_uuid_v7,
 	to_number,
 	is_string,
-	is_function
+	is_function,
+	is_boolean
 };
 
 export default {
@@ -68,5 +73,6 @@ export default {
 	is_uuid_v7,
 	to_number,
 	is_string,
-	is_function
+	is_function,
+	is_boolean
 };

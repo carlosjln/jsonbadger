@@ -8,14 +8,9 @@ import {assert_condition} from '#src/utils/assert.js';
 import {assert_valid_id_strategy} from '#src/constants/id-strategies.js';
 import {scan_server_capabilities, assert_id_strategy_capability} from '#src/connection/server-capabilities.js';
 import {is_string} from '#src/utils/value.js';
-import {get_connection, has_pool, set_pool} from '#src/connection/pool-store.js';
 
 async function connect(uri, options) {
 	assert_condition(is_string(uri) && uri.length > 0, 'connection_uri is required');
-
-	if(has_pool()) {
-		return get_connection();
-	}
 
 	const final_options = Object.assign({}, defaults.connection_options, options);
 	const {debug, id_strategy, auto_index, ...pool_options} = final_options;
@@ -36,12 +31,6 @@ async function connect(uri, options) {
 	}
 
 	const connection_instance = new Connection(pool_instance, final_options, server_capabilities);
-	set_pool({
-		pool_instance,
-		connection_instance,
-		options: final_options,
-		server_capabilities
-	});
 
 	debug_logger(debug, 'connection_ready', {
 		max: pool_options.max,

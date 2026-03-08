@@ -3,7 +3,8 @@ import {build_path_literal, split_dot_path} from '#src/utils/object-path.js';
 import sql_runner from '#src/sql/sql-runner.js';
 import {is_object, is_string} from '#src/utils/value.js';
 
-async function ensure_index(table_name, index_definition, data_column) {
+// TODO: should receive a single object param
+async function ensure_index(table_name, index_definition, data_column, connection) {
 	assert_identifier(table_name, 'table_name');
 	assert_identifier(data_column, 'data_column');
 	assert_sql_safe_index_definition(index_definition);
@@ -19,7 +20,7 @@ async function ensure_index(table_name, index_definition, data_column) {
 			'CREATE INDEX IF NOT EXISTS ' + index_identifier +
 			' ON ' + table_identifier + ' USING GIN ((' + expression + '));';
 
-		await sql_runner(sql_text, []);
+		await sql_runner(sql_text, [], connection);
 		return;
 	}
 
@@ -44,7 +45,7 @@ async function ensure_index(table_name, index_definition, data_column) {
 		'CREATE ' + unique_prefix + 'INDEX IF NOT EXISTS ' + index_identifier +
 		' ON ' + table_identifier + ' (' + expression_list.join(', ') + ');';
 
-	await sql_runner(sql_text, []);
+	await sql_runner(sql_text, [], connection);
 }
 
 function assert_sql_safe_index_definition(index_definition) {

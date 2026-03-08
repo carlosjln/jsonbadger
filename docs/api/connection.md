@@ -4,27 +4,19 @@
 
 - [Connection API](#connection-api)
 - [connect](#connect)
-- [disconnect](#disconnect)
 - [Connection Options](#connection-options)
+- [Connection Lifecycle](#connection-lifecycle)
 - [UUIDv7 Compatibility](#uuidv7-compatibility)
-- [Shared Connection Pattern](#shared-connection-pattern)
+- [Connection Reuse Pattern](#connection-reuse-pattern)
 - [Cross-File Example](#cross-file-example)
 
 ## connect
 
 ```js
-await JsonBadger.connect(uri, options);
+const connection = await JsonBadger.connect(uri, options);
 ```
 
-`connect(...)` opens or reuses the shared PostgreSQL pool.
-
-## disconnect
-
-```js
-await JsonBadger.disconnect();
-```
-
-`disconnect()` closes the shared pool when connected.
+`connect(...)` opens a PostgreSQL pool and returns a `Connection` instance.
 
 ## Connection Options
 
@@ -34,6 +26,15 @@ await JsonBadger.disconnect();
 - `id_strategy`: server-wide default row-id strategy (`IdStrategies.bigserial` or `IdStrategies.uuidv7`)
 - any supported `pg` pool options (`ssl`, `host`, `port`, `user`, `password`, `database`)
 
+## Connection Lifecycle
+
+Close the connection through the returned instance:
+
+```js
+const connection = await JsonBadger.connect(uri, options);
+await connection.disconnect();
+```
+
 ## UUIDv7 Compatibility
 
 - `connect(...)` performs a PostgreSQL capability scan and caches the result
@@ -42,35 +43,35 @@ await JsonBadger.disconnect();
 
 > **Note:** Troubleshooting SQL like `SELECT version();` and `SHOW server_version;` is optional. Runtime checks are machine-readable and internal.
 
-## Shared Connection Pattern
+## Connection Reuse Pattern
 
-Call `connect(...)` once at startup and reuse that shared pool across files.
+If your app wants one shared connection, keep the returned instance and reuse it explicitly.
 
 ```js
 import JsonBadger from 'jsonbadger';
 
-let shared_pool = null;
+let shared_connection = null;
 
 export async function connect_db() {
-	if(shared_pool) {
-		return shared_pool;
+	if(shared_connection) {
+		return shared_connection;
 	}
 
 	const uri = 'postgresql://user:pass@localhost:5432/dbname';
 	const options = {max: 10, debug: false};
 
-	shared_pool = await JsonBadger.connect(uri, options);
-	return shared_pool;
+	shared_connection = await JsonBadger.connect(uri, options);
+	return shared_connection;
 }
 ```
 
-Repeated calls reuse the same pool instance:
+Repeated calls to your own bootstrap helper reuse the same connection:
 
 ```js
-const pool_a = await connect_db();
-const pool_b = await connect_db();
+const connection_a = await connect_db();
+const connection_b = await connect_db();
 
-pool_a === pool_b;
+connection_a === connection_b;
 // returns: true
 ```
 
@@ -83,18 +84,18 @@ Keep the connection bootstrap separate from model and controller code.
 ```js
 import JsonBadger from 'jsonbadger';
 
-let shared_pool = null;
+let shared_connection = null;
 
 export async function connect_db() {
-	if(shared_pool) {
-		return shared_pool;
+	if(shared_connection) {
+		return shared_connection;
 	}
 
 	const uri = 'postgresql://user:pass@localhost:5432/dbname';
 	const options = {max: 10, debug: false};
 
-	shared_pool = await JsonBadger.connect(uri, options);
-	return shared_pool;
+	shared_connection = await JsonBadger.connect(uri, options);
+	return shared_connection;
 }
 ```
 
@@ -102,15 +103,15 @@ export async function connect_db() {
 
 ```js
 import JsonBadger from 'jsonbadger';
+import {connect_db} from '../config/db.js';
 
+const connection = await connect_db();
 const user_schema = new JsonBadger.Schema({
 	username: {type: String, required: true, index: true},
 	email: {type: String, required: true, index: {unique: true, name: 'idx_users_email_unique'}}
 });
 
-export const UserModel = JsonBadger.model(user_schema, {
-	table_name: 'users'
-});
+export const UserModel = connection.model({name: 'User', schema: user_schema, table_name: 'users'});
 ```
 
 `controllers/user-controller.js`

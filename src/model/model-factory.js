@@ -1,7 +1,6 @@
 import defaults from '#src/constants/defaults.js';
 import QueryError from '#src/errors/query-error.js';
 
-import {get_connection_options, get_server_capabilities, has_pool} from '#src/connection/pool-store.js';
 import {assert_id_strategy_capability} from '#src/connection/server-capabilities.js';
 import ensure_index from '#src/migration/ensure-index.js';
 import ensure_schema from '#src/migration/ensure-schema.js';
@@ -93,7 +92,7 @@ function model(schema_instance, model_configuration, connection_context, model_n
 		const final_table_name = model_options.table_name;
 		const final_id_strategy = Model.assert_id_strategy_supported();
 
-		await ensure_table(final_table_name, model_options.data_column, final_id_strategy);
+		await ensure_table(final_table_name, model_options.data_column, final_id_strategy, Model.connection);
 
 		if(indexes_ensured || !Model.resolve_auto_index()) {
 			return;
@@ -107,7 +106,7 @@ function model(schema_instance, model_configuration, connection_context, model_n
 		const final_table_name = model_options.table_name;
 		const final_id_strategy = Model.assert_id_strategy_supported();
 
-		await ensure_table(final_table_name, model_options.data_column, final_id_strategy);
+		await ensure_table(final_table_name, model_options.data_column, final_id_strategy, Model.connection);
 		await ensure_schema_indexes(final_table_name);
 
 		indexes_ensured = true;
@@ -115,7 +114,7 @@ function model(schema_instance, model_configuration, connection_context, model_n
 
 	Model.ensure_schema = async function () {
 		const final_id_strategy = Model.assert_id_strategy_supported();
-		await ensure_schema(model_options.table_name, model_options.data_column, schema_instance, final_id_strategy);
+		await ensure_schema(model_options.table_name, model_options.data_column, schema_instance, final_id_strategy, Model.connection);
 		indexes_ensured = true;
 	};
 
@@ -224,7 +223,7 @@ function model(schema_instance, model_configuration, connection_context, model_n
 			'target_table.updated_at AS updated_at';
 
 		const sql_params = where_result.params.concat(parameter_state.params);
-		const query_result = await sql_runner(sql_text, sql_params);
+		const query_result = await sql_runner(sql_text, sql_params, Model.connection);
 
 		if(query_result.rows.length === 0) {
 			return null;
@@ -255,7 +254,7 @@ function model(schema_instance, model_configuration, connection_context, model_n
 		let query_result;
 
 		try {
-			query_result = await sql_runner(sql_text, where_result.params);
+			query_result = await sql_runner(sql_text, where_result.params, Model.connection);
 		} catch(error) {
 			if(is_missing_relation_query_error(error)) {
 				return null;
@@ -621,12 +620,13 @@ function model(schema_instance, model_configuration, connection_context, model_n
 			await ensure_index(
 				final_table_name,
 				index_definition,
-				model_options.data_column
+				model_options.data_column,
+				Model.connection
 			);
 		}
 	}
 
-	if(Model.connection || has_pool()) {
+	if(Model.connection) {
 		const connection_options = resolve_model_connection_options(Model);
 		const eager_id_strategy = model_options.id_strategy ?? connection_options.id_strategy;
 
@@ -643,7 +643,7 @@ function resolve_model_connection_options(Model) {
 		return Model.connection.options;
 	}
 
-	return get_connection_options();
+	return defaults.connection_options;
 }
 
 function resolve_model_server_capabilities(Model) {
@@ -651,11 +651,7 @@ function resolve_model_server_capabilities(Model) {
 		return Model.connection.server_capabilities;
 	}
 
-	if(!has_pool()) {
-		return null;
-	}
-
-	return get_server_capabilities();
+	return null;
 }
 
 function resolve_hydrate_allowed_keys(schema_instance) {

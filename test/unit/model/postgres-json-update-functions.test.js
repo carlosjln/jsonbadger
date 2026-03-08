@@ -2,10 +2,6 @@
 
 const ensure_table_mock = jest.fn();
 const sql_runner_mock = jest.fn();
-const connection_options_state = {
-	id_strategy: 'bigserial',
-	auto_index: false
-};
 
 jest.unstable_mockModule('#src/migration/ensure-table.js', function () {
 	return {
@@ -19,22 +15,6 @@ jest.unstable_mockModule('#src/sql/sql-runner.js', function () {
 	};
 });
 
-jest.unstable_mockModule('#src/connection/pool-store.js', function () {
-	return {
-		get_connection_options: function () {
-			return connection_options_state;
-		},
-
-		has_pool: function () {
-			return false;
-		},
-
-		get_server_capabilities: function () {
-			return null;
-		}
-	};
-});
-
 const {default: Schema} = await import('#src/schema/schema.js');
 const {default: model} = await import('#src/model/model-factory.js');
 
@@ -43,9 +23,6 @@ describe('PostgreSQL JSON update function SQL generation', function () {
 		ensure_table_mock.mockReset();
 		sql_runner_mock.mockReset();
 		sql_runner_mock.mockResolvedValue({rows: [{data: {ok: true}}]});
-
-		connection_options_state.id_strategy = 'bigserial';
-		connection_options_state.auto_index = false;
 	});
 
 	test('maps $set to jsonb_set with create-missing enabled', async function () {

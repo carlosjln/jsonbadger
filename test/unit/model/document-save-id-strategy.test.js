@@ -2,13 +2,6 @@ import {beforeEach, describe, expect, jest, test} from '@jest/globals';
 
 const ensure_table_mock = jest.fn();
 const sql_runner_mock = jest.fn();
-const connection_options_state = {id_strategy: 'bigserial', auto_index: true};
-const pool_state = {connected: false};
-const server_capabilities_state = {
-	server_version: '18.0',
-	server_version_num: 180000,
-	supports_uuidv7: true
-};
 const saved_name = 'Saved';
 const saved_payload_json = '{"name":"Saved"}';
 const saved_id = '9';
@@ -30,37 +23,42 @@ jest.unstable_mockModule('#src/sql/sql-runner.js', function build_sql_runner_moc
 	};
 });
 
-jest.unstable_mockModule('#src/connection/pool-store.js', function build_pool_store_mock() {
+function create_connection(conn_options = {}, srv_capabilities = undefined) {
+	const default_connection_options = {
+		debug: false,
+		id_strategy: 'bigserial',
+		auto_index: true
+	};
+	const default_capabilities = {
+		server_version: '18.0',
+		server_version_num: 180000,
+		supports_uuidv7: true
+	};
+	const options = Object.assign({}, default_connection_options, conn_options);
+
 	return {
-		get_connection_options: function () {
-			return connection_options_state;
-		},
+		options,
+		server_capabilities: srv_capabilities === undefined ? default_capabilities : srv_capabilities
+	};
+}
 
-		has_pool: function () {
-			return pool_state.connected;
-		},
-
-		get_server_capabilities: function () {
-			return server_capabilities_state;
+function build_schema_instance() {
+	return {
+		validate: function (input_payload) {
+			return input_payload;
 		}
 	};
-});
+}
 
 const {default: model} = await import('#src/model/model-factory.js');
 
 describe('Document save id strategy', function () {
+	let connection;
+
 	beforeEach(function reset_test_state() {
 		ensure_table_mock.mockReset();
 		sql_runner_mock.mockReset();
-
-		connection_options_state.id_strategy = 'bigserial';
-		connection_options_state.auto_index = true;
-
-		pool_state.connected = false;
-
-		server_capabilities_state.server_version = '18.0';
-		server_capabilities_state.server_version_num = 180000;
-		server_capabilities_state.supports_uuidv7 = true;
+		connection = create_connection();
 
 		sql_runner_mock.mockResolvedValue({
 			rows: [{
@@ -73,20 +71,21 @@ describe('Document save id strategy', function () {
 	});
 
 	test('uses database-generated uuidv7 ids for uuidv7 strategy', async function () {
-		connection_options_state.id_strategy = 'uuidv7';
+		connection = create_connection({id_strategy: 'uuidv7'});
 
 		const schema_instance = build_schema_instance();
-		const event_model = model(schema_instance, {table_name: 'events'});
+		const event_model = model(schema_instance, {table_name: 'events'}, connection, 'Event');
 		const event_document = new event_model({name: saved_name});
-		pool_state.connected = true;
 
 		const saved_value = await event_document.save();
 
-		expect(ensure_table_mock).toHaveBeenCalledWith('events', 'data', 'uuidv7');
+		expect(ensure_table_mock).toHaveBeenCalledWith('events', 'data', 'uuidv7', connection);
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
+
 		expect(sql_runner_mock.mock.calls[0][0]).toContain(
 			'INSERT INTO "events" ("data", created_at, updated_at) VALUES ($1::jsonb, $2::timestamptz, $3::timestamptz)'
 		);
+
 		expect(sql_runner_mock.mock.calls[0][0]).not.toContain('("data", id,');
 		expect(sql_runner_mock.mock.calls[0][1][0]).toBe(saved_payload_json);
 		expect(sql_runner_mock.mock.calls[0][1]).toHaveLength(3);
@@ -97,18 +96,38 @@ describe('Document save id strategy', function () {
 			created_at: saved_created_at,
 			updated_at: saved_updated_at
 		});
+
+		expect(sql_runner_mock).toHaveBeenCalledWith(expect.any(String), expect.any(Array), connection);
+	});
+
+	test('forwards model-owned connection context through save and ensure_table', async function () {
+		const connection = {
+			pool_instance: {query: jest.fn()},
+			options: {
+				debug: false,
+				id_strategy: 'bigserial',
+				auto_index: true
+			}
+		};
+		const schema_instance = build_schema_instance();
+		const event_model = model(schema_instance, {table_name: 'events'}, connection, 'Event');
+		const event_document = new event_model({name: saved_name});
+
+		await event_document.save();
+
+		expect(ensure_table_mock).toHaveBeenCalledWith('events', 'data', 'bigserial', connection);
+		expect(sql_runner_mock).toHaveBeenCalledWith(expect.any(String), expect.any(Array), connection);
 	});
 
 	test('passes caller-provided uuidv7 id on create when present', async function () {
-		connection_options_state.id_strategy = 'uuidv7';
+		connection = create_connection({id_strategy: 'uuidv7'});
 
 		const schema_instance = build_schema_instance();
-		const event_model = model(schema_instance, {table_name: 'events'});
+		const event_model = model(schema_instance, {table_name: 'events'}, connection, 'Event');
 		const event_document = new event_model({
 			id: provided_uuidv7_id,
 			name: saved_name
 		});
-		pool_state.connected = true;
 
 		await event_document.save();
 
@@ -121,20 +140,22 @@ describe('Document save id strategy', function () {
 		);
 	});
 
-	test('throws before save when uuidv7 is unsupported on connected server', async function () {
-		connection_options_state.id_strategy = 'uuidv7';
-		server_capabilities_state.server_version = '17.4';
-		server_capabilities_state.server_version_num = 170004;
-		server_capabilities_state.supports_uuidv7 = false;
+	test('throws during model construction when uuidv7 is unsupported on the owning connection', function () {
+		connection = create_connection(
+			{id_strategy: 'uuidv7'},
+			{
+				server_version: '17.4',
+				server_version_num: 170004,
+				supports_uuidv7: false
+			}
+		);
 
 		const schema_instance = build_schema_instance();
-		const event_model = model(schema_instance, {
-			table_name: 'events'
-		});
-		const event_document = new event_model({name: saved_name});
-		pool_state.connected = true;
 
-		await expect(event_document.save()).rejects.toThrow('id_strategy=uuidv7 requires PostgreSQL native uuidv7() support');
+		expect(function create_unsupported_event_model() {
+			model(schema_instance, {table_name: 'events'}, connection, 'Event');
+		}).toThrow('id_strategy=uuidv7 requires PostgreSQL native uuidv7() support');
+
 		expect(ensure_table_mock).not.toHaveBeenCalled();
 		expect(sql_runner_mock).not.toHaveBeenCalled();
 	});
@@ -145,9 +166,7 @@ describe('Document save id strategy', function () {
 				return {count64: 9007199254740993n};
 			}
 		};
-		const counter_model = model(schema_instance, {
-			table_name: 'counters'
-		});
+		const counter_model = model(schema_instance, {table_name: 'counters'}, connection, 'Counter');
 		const counter_document = new counter_model({});
 
 		const saved_value = await counter_document.save();
@@ -162,9 +181,8 @@ describe('Document save id strategy', function () {
 
 	test('uses bigserial create semantics and omits caller-provided id', async function () {
 		const schema_instance = build_schema_instance();
-		const user_model = model(schema_instance, {
-			table_name: 'users'
-		});
+		const user_model_options = {table_name: 'users'};
+		const user_model = model(schema_instance, user_model_options, connection, 'User');
 		const user_document = new user_model({
 			id: 99,
 			name: saved_name
@@ -172,7 +190,7 @@ describe('Document save id strategy', function () {
 
 		const saved_value = await user_document.save();
 
-		expect(ensure_table_mock).toHaveBeenCalledWith('users', 'data', 'bigserial');
+		expect(ensure_table_mock).toHaveBeenCalledWith('users', 'data', 'bigserial', connection);
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
 		expect(sql_runner_mock.mock.calls[0][0]).toContain(
 			'INSERT INTO "users" ("data", created_at, updated_at) VALUES ($1::jsonb, $2::timestamptz, $3::timestamptz)'
@@ -184,9 +202,7 @@ describe('Document save id strategy', function () {
 
 	test('uses caller-provided timestamps on create and keeps base fields out of payload json', async function () {
 		const schema_instance = build_schema_instance();
-		const user_model = model(schema_instance, {
-			table_name: 'users'
-		});
+		const user_model = model(schema_instance, {table_name: 'users'}, connection, 'User');
 		const user_document = new user_model({
 			name: saved_name,
 			created_at: caller_created_at,
@@ -205,9 +221,7 @@ describe('Document save id strategy', function () {
 
 	test('auto-fills timestamps on create when omitted', async function () {
 		const schema_instance = build_schema_instance();
-		const user_model = model(schema_instance, {
-			table_name: 'users'
-		});
+		const user_model = model(schema_instance, {table_name: 'users'}, connection, 'User');
 		const user_document = new user_model({
 			name: saved_name
 		});
@@ -222,11 +236,3 @@ describe('Document save id strategy', function () {
 		expect(Number.isNaN(new Date(create_params[2]).getTime())).toBe(false);
 	});
 });
-
-function build_schema_instance() {
-	return {
-		validate: function (input_payload) {
-			return input_payload;
-		}
-	};
-}

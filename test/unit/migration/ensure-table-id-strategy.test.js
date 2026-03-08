@@ -34,6 +34,14 @@ describe('ensure_table id strategy', function () {
 		expect(sql_runner_mock.mock.calls[0][1]).toEqual([]);
 	});
 
+	test('forwards explicit connection context to sql_runner when provided', async function () {
+		const connection = {pool_instance: {query: jest.fn()}, options: {debug: false}};
+
+		await ensure_table('users', 'data', 'bigserial', connection);
+
+		expect(sql_runner_mock).toHaveBeenCalledWith(expect.any(String), [], connection);
+	});
+
 	test('throws when id_strategy is omitted', async function () {
 		await expect(ensure_table('logs', 'data')).rejects.toThrow('id_strategy must be one of: bigserial, uuidv7');
 	});

@@ -2,10 +2,6 @@ import {beforeEach, describe, expect, jest, test} from '@jest/globals';
 
 const ensure_table_mock = jest.fn();
 const sql_runner_mock = jest.fn();
-const connection_options_state = {
-	id_strategy: 'bigserial',
-	auto_index: false
-};
 
 jest.unstable_mockModule('#src/migration/ensure-table.js', function () {
 	return {
@@ -16,22 +12,6 @@ jest.unstable_mockModule('#src/migration/ensure-table.js', function () {
 jest.unstable_mockModule('#src/sql/sql-runner.js', function () {
 	return {
 		default: sql_runner_mock
-	};
-});
-
-jest.unstable_mockModule('#src/connection/pool-store.js', function () {
-	return {
-		get_connection_options: function () {
-			return connection_options_state;
-		},
-
-		has_pool: function () {
-			return false;
-		},
-
-		get_server_capabilities: function () {
-			return null;
-		}
 	};
 });
 
@@ -51,9 +31,6 @@ describe('Document runtime behaviors', function () {
 				updated_at: new Date('2026-03-06T11:00:00.000Z')
 			}]
 		});
-
-		connection_options_state.id_strategy = 'bigserial';
-		connection_options_state.auto_index = false;
 	});
 
 	describe('construction and runtime initialization', function () {

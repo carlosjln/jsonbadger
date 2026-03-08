@@ -1,5 +1,4 @@
 import connect from '#src/connection/connect.js';
-import disconnect from '#src/connection/disconnect.js';
 import IdStrategies from '#src/constants/id-strategies.js';
 import Schema from '#src/schema/schema.js';
 import field_type from '#src/field-types/field-type-namespace.js';
@@ -7,7 +6,6 @@ import {boolean_convert_to_false, boolean_convert_to_true, uuidv7_type_reference
 
 const jsonbadger = {
 	connect,
-	disconnect,
 	field_type,
 	Schema,
 	IdStrategies,
@@ -20,7 +18,6 @@ const jsonbadger = {
 
 export {
 	connect,
-	disconnect,
 	field_type,
 	Schema,
 	IdStrategies

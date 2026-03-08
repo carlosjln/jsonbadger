@@ -5,11 +5,6 @@ const ensure_index_mock = jest.fn();
 const ensure_schema_mock = jest.fn();
 const sql_runner_mock = jest.fn();
 const assert_id_strategy_capability_mock = jest.fn();
-const connection_options_state = {
-	id_strategy: 'bigserial',
-	auto_index: false
-};
-let has_pool_state = false;
 
 jest.unstable_mockModule('#src/migration/ensure-table.js', function () {
 	return {
@@ -41,22 +36,6 @@ jest.unstable_mockModule('#src/connection/server-capabilities.js', function () {
 	};
 });
 
-jest.unstable_mockModule('#src/connection/pool-store.js', function () {
-	return {
-		get_connection_options: function () {
-			return connection_options_state;
-		},
-
-		get_server_capabilities: function () {
-			return null;
-		},
-
-		has_pool: function () {
-			return has_pool_state;
-		}
-	};
-});
-
 const {default: QueryBuilder} = await import('#src/query/query-builder.js');
 const {default: QueryError} = await import('#src/errors/query-error.js');
 const {default: Schema} = await import('#src/schema/schema.js');
@@ -81,10 +60,6 @@ describe('model-factory branch behavior', function () {
 				updated_at: new Date('2026-02-27T11:00:00.000Z')
 			}]
 		});
-
-		connection_options_state.id_strategy = 'bigserial';
-		connection_options_state.auto_index = false;
-		has_pool_state = false;
 	});
 
 	describe('construction and ownership', function () {
@@ -143,16 +118,16 @@ describe('model-factory branch behavior', function () {
 		});
 
 		test('resolve_id_strategy uses model override and falls back to connection default', function () {
-			connection_options_state.id_strategy = 'uuidv7';
+			const connection = create_connection({id_strategy: 'uuidv7'});
 
 			const override_model = create_model(build_schema_stub(), {
 				table_name: 'override_users',
 				id_strategy: 'bigserial'
-			});
+			}, connection, 'OverrideUser');
 
 			const fallback_model = create_model(build_schema_stub(), {
 				table_name: 'fallback_users'
-			});
+			}, connection, 'FallbackUser');
 
 			expect(override_model.resolve_id_strategy()).toBe('bigserial');
 			expect(fallback_model.resolve_id_strategy()).toBe('uuidv7');
@@ -237,19 +212,37 @@ describe('model-factory branch behavior', function () {
 	});
 
 	describe('ensure_index', function () {
-		test('creates table and applies schema indexes even when uuidv7 is selected without a pool', async function () {
-			connection_options_state.id_strategy = 'uuidv7';
+		test('creates table and applies schema indexes using the owning connection defaults', async function () {
+			const connection = create_connection({id_strategy: 'uuidv7'});
 
 			const schema_instance = build_schema_stub({
 				indexes: [{using: 'gin', path: 'name'}]
 			});
 
-			const user_model = create_model(schema_instance);
+			const user_model = create_model(schema_instance, {}, connection, 'User');
 
 			await user_model.ensure_index();
 
-			expect(ensure_table_mock).toHaveBeenCalledWith('users', 'data', 'uuidv7');
-			expect(ensure_index_mock).toHaveBeenCalledWith('users', {using: 'gin', path: 'name'}, 'data');
+			expect(ensure_table_mock).toHaveBeenCalledWith('users', 'data', 'uuidv7', connection);
+			expect(ensure_index_mock).toHaveBeenCalledWith('users', {using: 'gin', path: 'name'}, 'data', connection);
+		});
+
+		test('forwards model-owned connection context through ensure_index and ensure_schema', async function () {
+			const connection = {
+				pool_instance: {query: jest.fn()},
+				options: {id_strategy: 'bigserial', auto_index: true}
+			};
+			const schema_instance = build_schema_stub({
+				indexes: [{using: 'gin', path: 'name'}]
+			});
+			const user_model = create_model(schema_instance, {}, connection, 'User');
+
+			await user_model.ensure_index();
+			await user_model.ensure_schema();
+
+			expect(ensure_table_mock).toHaveBeenCalledWith('users', 'data', 'bigserial', connection);
+			expect(ensure_index_mock).toHaveBeenCalledWith('users', {using: 'gin', path: 'name'}, 'data', connection);
+			expect(ensure_schema_mock).toHaveBeenCalledWith('users', 'data', schema_instance, 'bigserial', connection);
 		});
 	});
 
@@ -414,6 +407,26 @@ describe('model-factory branch behavior', function () {
 			);
 		});
 
+		test('forwards model-owned connection context through update_one queries', async function () {
+			const connection = {
+				pool_instance: {query: jest.fn()},
+				options: {
+					debug: false,
+					id_strategy: 'bigserial',
+					auto_index: false
+				}
+			};
+			const user_model = create_model(new Schema({name: String}), {}, connection, 'User');
+
+			await user_model.update_one({name: 'john'}, {
+				$set: {
+					name: 'jane'
+				}
+			});
+
+			expect(sql_runner_mock).toHaveBeenCalledWith(expect.any(String), expect.any(Array), connection);
+		});
+
 		test('passes through explicit created_at updates into row assignments', async function () {
 			const user_model = create_model(new Schema({name: String}));
 
@@ -536,6 +549,15 @@ describe('model-factory branch behavior', function () {
 	});
 });
 
+function create_connection(options = {}, server_capabilities = null) {
+	return {
+		options: Object.assign({id_strategy: 'bigserial', auto_index: false}, options),
+		server_capabilities
+	};
+}
+
+
+// TODO: too many params, evaluate changing to single param object
 function create_model(schema_instance, model_options = {}, connection = undefined, model_name = undefined) {
 	return model(
 		schema_instance,

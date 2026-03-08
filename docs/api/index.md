@@ -12,10 +12,8 @@ Use this directory for module-scoped API contracts instead of one monolithic API
 
 Named exports:
 - `connect(uri, options)`
-- `disconnect()`
 - `Schema`
 - `IdStrategies`
-- `model(schema_instance, model_options)`
 - `field_type`
 
 Default export (`JsonBadger`) includes the same plus:

@@ -13,6 +13,7 @@ function QueryBuilder(model_constructor, operation_name, query_filter, projectio
 	assert_condition(model_constructor && is_object(model_constructor.model_options), 'QueryBuilder requires model_constructor.model_options');
 
 	this.model_constructor = model_constructor;
+	this.execution_context = resolve_model_execution_context(model_constructor);
 	this.operation_name = operation_name;
 	this.base_filter = query_filter || {};
 	this.where_filter = {};
@@ -61,7 +62,7 @@ QueryBuilder.prototype.exec = async function () {
 
 	if(this.operation_name === 'count_documents') {
 		const count_sql = 'SELECT COUNT(*)::int AS total_count FROM ' + table_identifier + ' WHERE ' + where_result.sql;
-		const count_result = await sql_runner(count_sql, where_result.params);
+		const count_result = await sql_runner(count_sql, where_result.params, this.execution_context);
 
 		if(count_result.rows.length === 0) {
 			return 0;
@@ -90,7 +91,7 @@ QueryBuilder.prototype.exec = async function () {
 
 	sql_text += limit_skip_compiler(this.limit_count, this.skip_count);
 
-	const query_result = await sql_runner(sql_text, where_result.params);
+	const query_result = await sql_runner(sql_text, where_result.params, this.execution_context);
 
 	if(this.operation_name === 'find_one') {
 		if(query_result.rows.length === 0) {
@@ -164,6 +165,15 @@ function resolve_model_id_strategy(model_constructor) {
 	}
 
 	return model_constructor.model_options.id_strategy ?? 'bigserial';
+}
+
+// TODO: revise if necesary after phase 5
+function resolve_model_execution_context(model_constructor) {
+	if(is_object(model_constructor.connection)) {
+		return model_constructor.connection;
+	}
+
+	return null;
 }
 
 export default QueryBuilder;

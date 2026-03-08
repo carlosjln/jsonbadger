@@ -81,6 +81,11 @@ describe('QueryBuilder.exec read behavior', function () {
 		expect(result).toBe(2);
 		expect(ensure_table_spy).not.toHaveBeenCalled();
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
+		expect(sql_runner_mock).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.any(Array),
+			null
+		);
 	});
 
 	test('count_documents returns zero when no rows are returned', async function () {
@@ -166,6 +171,10 @@ describe('QueryBuilder.exec read behavior', function () {
 	test('find_one defaults limit to 1 and uses create_document_from_row when available', async function () {
 		const hydrated_document = {hydrated: true};
 		const create_document_from_row = jest.fn().mockReturnValue(hydrated_document);
+		const connection = {
+			pool_instance: {query: jest.fn()},
+			options: {debug: true}
+		};
 
 		sql_runner_mock.mockResolvedValueOnce({
 			rows: [{
@@ -177,6 +186,7 @@ describe('QueryBuilder.exec read behavior', function () {
 		});
 
 		const query_builder = new QueryBuilder({
+			connection: connection,
 			schema_instance: null,
 			model_options: {table_name: 'users', data_column: 'data'},
 			create_document_from_row: create_document_from_row,
@@ -195,6 +205,11 @@ describe('QueryBuilder.exec read behavior', function () {
 			created_at: new Date('2026-02-27T10:00:00.000Z'),
 			updated_at: new Date('2026-02-27T11:00:00.000Z')
 		});
+		expect(sql_runner_mock).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.any(Array),
+			connection
+		);
 		expect(sql_text).toContain(' LIMIT 1');
 		expect(sql_text).toContain('WHERE "id" = $1::uuid');
 	});

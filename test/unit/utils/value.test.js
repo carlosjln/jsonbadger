@@ -1,6 +1,6 @@
 import {describe, expect, test} from '@jest/globals';
 
-import {is_function, is_plain_object, is_uuid_v7, to_number} from '#src/utils/value.js';
+import {is_boolean, is_function, is_plain_object, is_uuid_v7, to_number} from '#src/utils/value.js';
 
 function CustomInstance() {
 	this.ok = true;
@@ -45,5 +45,13 @@ describe('utils/value', function () {
 		})).toBe(true);
 		expect(is_function({})).toBe(false);
 		expect(is_function(null)).toBe(false);
+	});
+
+	test('is_boolean only accepts booleans', function () {
+		expect(is_boolean(true)).toBe(true);
+		expect(is_boolean(false)).toBe(true);
+		expect(is_boolean(0)).toBe(false);
+		expect(is_boolean('true')).toBe(false);
+		expect(is_boolean(null)).toBe(false);
 	});
 });

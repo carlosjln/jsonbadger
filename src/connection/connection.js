@@ -73,6 +73,7 @@ Connection.prototype.disconnect = async function () {
 	}
 
 	await pool_instance.end();
+
 	debug_logger(this.options.debug, 'connection_closed', null);
 };
 
