@@ -598,7 +598,6 @@ function resolve_modified_set_payload(document_value, payload_without_base_field
 	return next_payload;
 }
 
-// TODO:  doesn't look optimal
 /**
  * Central serializer for `to_object` and `to_json`.
  *

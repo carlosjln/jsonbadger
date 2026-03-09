@@ -12,8 +12,8 @@ const base_field_keys = new Set(['id', 'created_at', 'updated_at']);
 function QueryBuilder(model_constructor, operation_name, query_filter, projection_value) {
 	assert_condition(model_constructor && is_object(model_constructor.model_options), 'QueryBuilder requires model_constructor.model_options');
 
+	this.execution_context = model_constructor.connection || null;
 	this.model_constructor = model_constructor;
-	this.execution_context = resolve_model_execution_context(model_constructor);
 	this.operation_name = operation_name;
 	this.base_filter = query_filter || {};
 	this.where_filter = {};
@@ -165,15 +165,6 @@ function resolve_model_id_strategy(model_constructor) {
 	}
 
 	return model_constructor.model_options.id_strategy ?? 'bigserial';
-}
-
-// TODO: revise if necesary after phase 5
-function resolve_model_execution_context(model_constructor) {
-	if(is_object(model_constructor.connection)) {
-		return model_constructor.connection;
-	}
-
-	return null;
 }
 
 export default QueryBuilder;

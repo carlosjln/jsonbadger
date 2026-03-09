@@ -155,6 +155,9 @@ function create_connection(options = {}, server_capabilities = undefined) {
 
 function build_schema_instance() {
 	return {
+		get_indexes: function () {
+			return [];
+		},
 		validate: function (input_payload) {
 			return input_payload;
 		}

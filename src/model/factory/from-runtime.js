@@ -34,7 +34,7 @@ function resolve_source_data(schema_instance, source_value) {
 			continue;
 		}
 
-		const field_type = resolve_schema_field_type(schema_instance, base_field_key);
+		const field_type = schema_instance.get_path(base_field_key);
 
 		if(!field_type || !is_function(field_type.normalize)) {
 			continue;
@@ -201,28 +201,13 @@ function build_document_instance(Model, normalized_payload, base_fields, is_pers
 }
 
 /**
- * Resolves the schema field type for a path when available.
- *
- * @param {object} schema_instance Schema-like object.
- * @param {string} path_name Schema path name.
- * @returns {*}
- */
-function resolve_schema_field_type(schema_instance, path_name) {
-	if(!schema_instance || !is_function(schema_instance.get_path)) {
-		return null;
-	}
-
-	return schema_instance.get_path(path_name);
-}
-
-/**
  * Resolves declared schema path names when available.
  *
  * @param {*} schema_instance Schema-like object.
  * @returns {string[]}
  */
 function resolve_schema_path_names(schema_instance) {
-	if(is_not_object(schema_instance) || is_not_object(schema_instance.paths)) {
+	if(is_not_object(schema_instance.paths)) {
 		return [];
 	}
 
@@ -236,7 +221,6 @@ export {
 	filter_strict_payload_branch,
 	normalize_payload,
 	resolve_from_strict_mode,
-	resolve_schema_field_type,
 	resolve_schema_path_names,
 	resolve_source_data
 };

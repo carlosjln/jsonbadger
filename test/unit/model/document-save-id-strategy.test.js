@@ -44,6 +44,9 @@ function create_connection(conn_options = {}, srv_capabilities = undefined) {
 
 function build_schema_instance() {
 	return {
+		get_indexes: function () {
+			return [];
+		},
 		validate: function (input_payload) {
 			return input_payload;
 		}
@@ -172,6 +175,9 @@ describe('Document save id strategy', function () {
 
 	test('serializes bigint values safely for JSONB inserts', async function () {
 		const schema_instance = {
+			get_indexes: function () {
+				return [];
+			},
 			validate: function () {
 				return {count64: 9007199254740993n};
 			}
