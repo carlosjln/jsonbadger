@@ -7,7 +7,9 @@ import {
 	is_array_root as resolve_is_array_root
 } from '#src/schema/path-introspection.js';
 
+import {is_array} from '#src/utils/array.js';
 import {has_own} from '#src/utils/object.js';
+import {is_plain_object} from '#src/utils/value.js';
 
 const schema_validation_error_message = 'Schema validation failed';
 const schema_validation_error_code = 'validation_error';
@@ -42,7 +44,7 @@ function compile_schema(schema_definition = {}) {
 }
 
 function validate_payload(payload, sorted_paths, field_types) {
-	if(payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+	if(payload === null || typeof payload !== 'object' || is_array(payload)) {
 		return {
 			value: payload,
 			error: {
@@ -161,13 +163,7 @@ function write_path(root_object, path_segments, next_value) {
 			return;
 		}
 
-		// TODO: implement a code review agent that catches these 
-		if(
-			!has_own(current_value, segment_value) ||
-			current_value[segment_value] === null ||
-			typeof current_value[segment_value] !== 'object' ||
-			Array.isArray(current_value[segment_value])
-		) {
+		if(!has_own(current_value, segment_value) || !is_plain_object(current_value[segment_value])) {
 			current_value[segment_value] = {};
 		}
 
@@ -177,7 +173,7 @@ function write_path(root_object, path_segments, next_value) {
 }
 
 function clone_value(value) {
-	if(Array.isArray(value)) {
+	if(is_array(value)) {
 		const cloned_array = [];
 		let value_index = 0;
 

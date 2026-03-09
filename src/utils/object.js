@@ -172,8 +172,8 @@ function deep_clone(value, cache = new WeakMap()) {
 
 	return result;
 }
-// TODO: rename this? maybe?
-function normalize(schema, value, cache = new WeakMap()) {
+
+function conform(schema, value, cache = new WeakMap()) {
 	// 1. Array Handling
 	if(Array.isArray(schema)) {
 		const item_schema = schema.length ? schema[0] : undefined;
@@ -191,7 +191,7 @@ function normalize(schema, value, cache = new WeakMap()) {
 			// If strict object matching is needed, skip invalid items
 			if(is_object(item_schema) && !is_object(item)) continue;
 
-			result_list.push(normalize(item_schema, item, cache));
+			result_list.push(conform(item_schema, item, cache));
 		}
 
 		return result_list;
@@ -211,7 +211,7 @@ function normalize(schema, value, cache = new WeakMap()) {
 		for(let i = 0; i < keys.length; i++) {
 			const key = keys[i];
 			const sub_value = source_obj ? source_obj[key] : undefined;
-			result_obj[key] = normalize(schema[key], sub_value, cache);
+			result_obj[key] = conform(schema[key], sub_value, cache);
 		}
 
 		return result_obj;
@@ -251,7 +251,7 @@ function merge(schema, base, value, cache = new WeakMap()) {
 	if(Array.isArray(schema)) {
 		if(!Array.isArray(value)) return base;
 		// Arrays are replaced by the new list (normalized), not merged element-wise
-		return normalize(schema, value, cache);
+		return conform(schema, value, cache);
 	}
 
 	if(is_object(schema)) {
@@ -264,11 +264,9 @@ function merge(schema, base, value, cache = new WeakMap()) {
 
 		const keys = Object.keys(schema);
 		for(let i = 0; i < keys.length; i++) {
-			const key = keys[i];
 			// Use base value if available, else create default
-			const base_child = base && has_own(base, key)
-				? base[key]
-				: normalize(schema[key], undefined);
+			const key = keys[i];
+			const base_child = base && has_own(base, key) ? base[key] : conform(schema[key], undefined);
 
 			if(has_own(value, key)) {
 				merged[key] = merge(schema[key], base_child, value[key], cache);
@@ -280,14 +278,14 @@ function merge(schema, base, value, cache = new WeakMap()) {
 		return merged;
 	}
 
-	return normalize(schema, value, cache);
+	return conform(schema, value, cache);
 }
 
 export {
 	are_equal,
 	has_own,
 	deep_clone,
-	normalize,
+	conform,
 	merge
 };
 
@@ -295,6 +293,6 @@ export default {
 	are_equal,
 	has_own,
 	deep_clone,
-	normalize,
+	conform,
 	merge
 };

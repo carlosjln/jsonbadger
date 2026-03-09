@@ -1,6 +1,6 @@
 import {describe, expect, test} from '@jest/globals';
 
-import object_utils, {are_equal, deep_clone, has_own, merge, normalize} from '#src/utils/object.js';
+import object_utils, {are_equal, conform, deep_clone, has_own, merge} from '#src/utils/object.js';
 
 function run_without_structured_clone(callback) {
 	const original_structured_clone = globalThis.structuredClone;
@@ -27,7 +27,7 @@ describe('utils/object', function () {
 		expect(object_utils.are_equal).toBe(are_equal);
 		expect(object_utils.has_own).toBe(has_own);
 		expect(object_utils.deep_clone).toBe(deep_clone);
-		expect(object_utils.normalize).toBe(normalize);
+		expect(object_utils.conform).toBe(conform);
 		expect(object_utils.merge).toBe(merge);
 		expect(has_own(child_object, 'own_flag')).toBe(true);
 		expect(has_own(child_object, 'inherited_flag')).toBe(false);
@@ -182,11 +182,11 @@ describe('utils/object', function () {
 		expect(cloned_set_entry).not.toBe(original_set_entry);
 	});
 
-	test('normalize handles array schemas including empty schema, invalid items and circular array cache reuse', function () {
+	test('conform handles array schemas including empty schema, invalid items and circular array cache reuse', function () {
 		const object_array_schema = [{name: ''}];
-		const normalized_empty_schema = normalize([], ['anything']);
-		const normalized_non_array_input = normalize([String], 'nope');
-		const normalized_object_list = normalize(object_array_schema, [
+		const normalized_empty_schema = conform([], ['anything']);
+		const normalized_non_array_input = conform([String], 'nope');
+		const normalized_object_list = conform(object_array_schema, [
 			{name: '  Alice  '},
 			'not-an-object',
 			{name: 'Bob'}
@@ -202,11 +202,11 @@ describe('utils/object', function () {
 		const circular_list = [];
 		circular_list.push(circular_list);
 
-		const circular_result = normalize([[String]], circular_list);
+		const circular_result = conform([[String]], circular_list);
 		expect(circular_result[0]).toBe(circular_result);
 	});
 
-	test('normalize handles object schemas, defaults, sanitization and circular object cache reuse', function () {
+	test('conform handles object schemas, defaults, sanitization and circular object cache reuse', function () {
 		const schema = {
 			name: '',
 			age: 0,
@@ -217,7 +217,7 @@ describe('utils/object', function () {
 			}
 		};
 
-		const normalized_value = normalize(schema, {
+		const normalized_value = conform(schema, {
 			name: '  Alice  ',
 			age: '12.9',
 			active: 1,
@@ -229,7 +229,7 @@ describe('utils/object', function () {
 			extra_root: 'ignored'
 		});
 
-		const normalized_defaults = normalize(schema, 'not-an-object');
+		const normalized_defaults = conform(schema, 'not-an-object');
 
 		expect(normalized_value).toEqual({
 			name: 'Alice',
@@ -255,23 +255,23 @@ describe('utils/object', function () {
 		const circular_input = {};
 		circular_input.self = circular_input;
 
-		const circular_result = normalize(circular_schema, circular_input);
+		const circular_result = conform(circular_schema, circular_input);
 		expect(circular_result.self).toBe(circular_result);
 	});
 
-	test('normalize handles primitive defaults and fallback cloning behavior', function () {
+	test('conform handles primitive defaults and fallback cloning behavior', function () {
 		run_without_structured_clone(function () {
 			const object_default_schema = null;
 			const symbol_schema = Symbol('default');
 
-			expect(normalize('default', undefined)).toBe('default');
-			expect(normalize(10, '4.9')).toBe(4);
-			expect(normalize(10, '-5')).toBe(10);
-			expect(normalize(1.5, '2.75')).toBe(2.75);
-			expect(normalize(7, 'not-a-number')).toBe(7);
-			expect(normalize(false, 'value')).toBe(true);
-			expect(normalize(object_default_schema, undefined)).toBeNull();
-			expect(normalize(symbol_schema, 'present')).toBe(symbol_schema);
+			expect(conform('default', undefined)).toBe('default');
+			expect(conform(10, '4.9')).toBe(4);
+			expect(conform(10, '-5')).toBe(10);
+			expect(conform(1.5, '2.75')).toBe(2.75);
+			expect(conform(7, 'not-a-number')).toBe(7);
+			expect(conform(false, 'value')).toBe(true);
+			expect(conform(object_default_schema, undefined)).toBeNull();
+			expect(conform(symbol_schema, 'present')).toBe(symbol_schema);
 		});
 	});
 
