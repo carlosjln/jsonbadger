@@ -27,7 +27,7 @@ const result = await User.find({status: 'active'}).sort({created_at: -1}).limit(
 Filter objects must be plain JSON-like objects:
 - use object literals for operator objects like `{age: {$gte: 18}}`
 - use plain nested objects for JSON containment filters
-- do not pass custom class instances where JsonBadger expects an operator object
+- use plain objects instead of custom class instances for operator objects
 
 > **Note:** Base-field operator objects and nested filter objects only accept plain objects with a default or null prototype.
 

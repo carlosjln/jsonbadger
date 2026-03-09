@@ -1,7 +1,7 @@
 import debug_logger from '#src/debug/debug-logger.js';
 import defaults from '#src/constants/defaults.js';
 import ModelOverwriteError from '#src/errors/model-overwrite-error.js';
-import model_factory from '#src/model/model-factory.js';
+import model_factory from '#src/model/factory/index.js';
 import {assert_condition, assert_identifier} from '#src/utils/assert.js';
 import {are_equal} from '#src/utils/object.js';
 import {pluralize} from '#src/utils/string.js';

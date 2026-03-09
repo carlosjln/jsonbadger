@@ -23,6 +23,8 @@ function Schema(schema_definition = {}, options = {}) {
 	// 3. Initialize properties
 	this.indexes = [];
 	this.options = Object.assign({}, defaults.schema_options, options);
+
+	this.strict = this.options.strict !== false;
 	this.paths = Object.assign({}, this.$compiled_schema.get_introspection().field_types);
 	this.$field_registry = default_field_type_registry;
 

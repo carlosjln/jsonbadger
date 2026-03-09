@@ -1,4 +1,4 @@
-﻿import {beforeEach, describe, expect, jest, test} from '@jest/globals';
+import {beforeEach, describe, expect, jest, test} from '@jest/globals';
 
 const ensure_table_mock = jest.fn();
 const sql_runner_mock = jest.fn();
@@ -16,7 +16,7 @@ jest.unstable_mockModule('#src/sql/sql-runner.js', function () {
 });
 
 const {default: Schema} = await import('#src/schema/schema.js');
-const {default: model} = await import('#src/model/model-factory.js');
+const {default: model} = await import('#src/model/factory/index.js');
 
 describe('PostgreSQL JSON update function SQL generation', function () {
 	beforeEach(function () {
@@ -113,3 +113,4 @@ function create_test_model() {
 		table_name: 'users'
 	});
 }
+

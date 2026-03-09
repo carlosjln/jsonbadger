@@ -8,7 +8,9 @@ const defaults = {
 		id_strategy: IdStrategies.bigserial
 	},
 
-	schema_options: {},
+	schema_options: {
+		strict: true
+	},
 
 	model_options: {
 		table_name: null,

@@ -50,7 +50,7 @@ function build_schema_instance() {
 	};
 }
 
-const {default: model} = await import('#src/model/model-factory.js');
+const {default: model} = await import('#src/model/factory/index.js');
 
 describe('Document save id strategy', function () {
 	let connection;

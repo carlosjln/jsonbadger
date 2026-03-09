@@ -22,7 +22,7 @@ const user_schema = new JsonBadger.Schema(definition, options);
 `definition` must be a plain JSON-like object:
 - use object literals for nested schema branches
 - use field definitions like `{type: String, required: true}`
-- do not pass custom class instances as schema definition objects
+- avoid custom class instances for schema definition objects
 
 > **Note:** JsonBadger treats only default-prototype or null-prototype objects as plain schema objects. Custom instances are not parsed as nested schema branches.
 

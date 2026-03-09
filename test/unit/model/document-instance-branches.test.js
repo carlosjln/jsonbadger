@@ -2,7 +2,7 @@ import {describe, expect, test} from '@jest/globals';
 
 const {default: document_instance} = await import('#src/model/document-instance.js');
 const {default: Schema} = await import('#src/schema/schema.js');
-const {default: model} = await import('#src/model/model-factory.js');
+const {default: model} = await import('#src/model/factory/index.js');
 
 describe('document-instance branch behavior', function () {
 	test('get returns undefined for missing paths and returns raw values when no getter exists', function () {

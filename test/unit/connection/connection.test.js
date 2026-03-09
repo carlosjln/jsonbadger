@@ -10,7 +10,7 @@ jest.unstable_mockModule('#src/debug/debug-logger.js', function () {
 	};
 });
 
-jest.unstable_mockModule('#src/model/model-factory.js', function () {
+jest.unstable_mockModule('#src/model/factory/index.js', function () {
 	return {
 		default: model_factory_mock
 	};

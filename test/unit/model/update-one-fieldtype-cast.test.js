@@ -33,7 +33,7 @@ function create_model(schema_instance, connection) {
 }
 
 const {default: Schema} = await import('#src/schema/schema.js');
-const {default: model} = await import('#src/model/model-factory.js');
+const {default: model} = await import('#src/model/factory/index.js');
 
 describe('Model.update_one field type casting', function () {
 	let connection;
@@ -206,3 +206,4 @@ describe('Model.update_one field type casting', function () {
 		})).rejects.toThrow('Cast to Int32 failed');
 	});
 });
+

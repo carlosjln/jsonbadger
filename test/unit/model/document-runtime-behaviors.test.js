@@ -16,7 +16,7 @@ jest.unstable_mockModule('#src/sql/sql-runner.js', function () {
 });
 
 const {default: Schema} = await import('#src/schema/schema.js');
-const {default: model} = await import('#src/model/model-factory.js');
+const {default: model} = await import('#src/model/factory/index.js');
 
 describe('Document runtime behaviors', function () {
 	beforeEach(function () {

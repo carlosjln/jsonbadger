@@ -8,10 +8,20 @@ describe('Schema guard and explicit-array index behavior', function () {
 		const schema_instance = new Schema();
 
 		expect(schema_instance.options).toEqual(defaults.schema_options);
+		expect(schema_instance.strict).toBe(true);
 		expect(schema_instance.get_indexes()).toEqual([]);
 		expect(Object.keys(schema_instance.paths)).toEqual(
 			expect.arrayContaining(['id', 'created_at', 'updated_at'])
 		);
+	});
+
+	test('exposes schema-level strict from options', function () {
+		const schema_instance = new Schema({name: String}, {
+			strict: false
+		});
+
+		expect(schema_instance.options.strict).toBe(false);
+		expect(schema_instance.strict).toBe(false);
 	});
 
 	test('returns path descriptors through public runtime helpers', function () {

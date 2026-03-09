@@ -1,72 +1,151 @@
 # Model API
 
-Status:
-- current + proposed model API notes
-- `Model.from(...)` below is a planned contract, not implemented API yet
+Models are created through the owning connection:
+
+```js
+const connection = await JsonBadger.connect(uri, options);
+const User = connection.model({name: 'User', schema: user_schema, table_name: 'users'});
+```
 
 ## TOC
 
 - [Model API](#model-api)
+- [Construction](#construction)
+- [Static Methods](#static-methods)
 - [Model.from](#modelfrom)
-- [Contract](#contract)
-- [Behavior](#behavior)
-- [Row-like Input Rule](#row-like-input-rule)
-- [Internal API](#internal-api)
-- [Design Split](#design-split)
+- [Model.hydrate](#modelhydrate)
+- [Instance Methods](#instance-methods)
+- [Related Docs](#related-docs)
+
+## Construction
+
+Create a document instance with `new Model(payload)`:
+
+```js
+const user_document = new User({
+	name: 'john',
+	age: 30
+});
+```
+
+New documents start in the `is_new = true` state until they are persisted.
+
+## Static Methods
+
+- `Model.create(document_or_list)`
+  - validates and saves one or more documents
+- `Model.find(filter)`
+  - returns a query builder
+- `Model.find_one(filter)`
+  - returns a query builder that resolves to one document or `null`
+- `Model.find_by_id(id_value)`
+  - returns a query builder for one document by top-level `id`
+- `Model.count_documents(filter)`
+  - returns a query builder that resolves to a count
+- `Model.update_one(filter, update_definition)`
+  - updates one matching row and returns the updated document or `null`
+- `Model.delete_one(filter)`
+  - deletes one matching row and returns the deleted document or `null`
+- `Model.ensure_table()`
+  - creates the backing table when needed
+- `Model.ensure_index()`
+  - creates declared indexes
+- `Model.ensure_schema()`
+  - runs table + index setup together
+- `Model.from(source, options?)`
+  - builds a new document from external payload or row-like input without marking it persisted
+- `Model.hydrate(source)`
+  - builds a persisted document from existing raw data with no modified paths
+
+Example:
+
+```js
+const saved_user = await User.create({
+	name: 'maria',
+	age: 29
+});
+
+const found_user = await User.find_one({name: 'maria'}).exec();
+```
 
 ## Model.from
 
+Use `Model.from(...)` when you want schema casting/setters on imported input but still want a new document:
+
 ```js
-const user_document = User.from(source, options);
+const imported_user = User.from({
+	name: '  maria  ',
+	age: '29',
+	created_at: '2026-03-03T08:00:00.000Z'
+});
 ```
 
-Use `Model.from(...)` as the public entry point for constructing a document from external data.
+Behavior:
+- returns a new document instance
+- keeps `is_new = true`
+- applies schema casting/setters to known payload fields
+- reads top-level base fields (`id`, `created_at`, `updated_at`) from the source object
+- when `source.data` exists, it is treated as the payload source
+- drops unknown payload keys by default
 
-## Contract
+Options:
+- `strict`
+  - resolves as `options.strict ?? schema.strict`
+  - use `User.from(source, {strict: false})` to keep unknown payload keys
 
-- `Model.from(source, options?)`
-  - public
-  - always returns a constructed document
-  - always sets `is_new = true`
-  - if `source.data` exists, treat it as row-shaped input for payload extraction
-  - even in that case, `from(...)` does not mark the doc as persisted
-- `hydrate(...)`
-  - internal only
-  - used when data is known to come from the database/runtime persistence path
-  - sets `is_new = false`
-  - applies row/base-field hydration semantics
+## Model.hydrate
 
-## Behavior
+Use `Model.hydrate(...)` when the source data already represents a persisted document:
 
-- default: `strict = true`
-- known schema fields:
-  - apply setters/casting
-- unknown fields:
-  - dropped when `strict = true`
-  - copied as-is when `strict = false`
-- base fields:
-  - read from top-level source
-  - validate/cast if possible
-  - silently drop invalid values for now
+```js
+const hydrated_user = User.hydrate({
+	id: '7',
+	data: {
+		name: 'maria',
+		age: '29'
+	},
+	created_at: '2026-03-03T08:00:00.000Z',
+	updated_at: '2026-03-03T09:00:00.000Z'
+});
+```
 
-## Row-like Input Rule
+Behavior:
+- returns a new document instance
+- sets `is_new = false`
+- leaves no paths marked as modified initially
+- uses the same payload/base-field normalization rules as `Model.from(...)`
 
-- if `source.data` exists and is an object:
-  - treat `source.data` as the payload candidate
-  - read top-level base fields from the outer object
-  - `from(...)` still returns `is_new = true`
+## Instance Methods
 
-## Internal API
+- `doc.validate()`
+  - validates the current document payload
+- `doc.save()`
+  - inserts a new row or updates an existing persisted document
+- `doc.delete().exec()`
+  - deletes the current persisted document
+- `doc.get(path)`
+- `doc.set(path, value)`
+- `doc.mark_modified(path)`
+- `doc.clear_modified()`
+- `doc.is_modified(path?)`
+- `doc.to_object(options?)`
+- `doc.to_json(options?)`
 
-Use internal `hydrate(...)` for database-backed hydration only.
+Example:
 
-Expected internal behavior:
-- input is known runtime/persistence data
-- base fields are trusted as hydration candidates
-- hydrated document is marked persisted
-- `is_new = false`
+```js
+const user_document = new User({name: 'john'});
 
-## Design Split
+user_document.set('profile.city', 'Miami');
+await user_document.save();
 
-- `from(...)` = normalize external input into a new document
-- `hydrate(...)` = mark a document as DB-backed/persisted
+const snapshot = user_document.to_json();
+```
+
+## Related Docs
+
+- [`connection.md`](connection.md)
+- [`schema.md`](schema.md)
+- [`query-builder.md`](query-builder.md)
+- [`../lifecycle.md`](../lifecycle.md)
+- [`../examples.md`](../examples.md)

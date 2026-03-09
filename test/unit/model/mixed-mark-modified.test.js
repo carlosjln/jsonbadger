@@ -1,7 +1,7 @@
 import {describe, expect, test} from '@jest/globals';
 
 const {default: Schema} = await import('#src/schema/schema.js');
-const {default: model} = await import('#src/model/model-factory.js');
+const {default: model} = await import('#src/model/factory/index.js');
 
 describe('mark_modified mutable edge cases', function () {
 	test('in-place Mixed mutations require explicit mark_modified', function () {

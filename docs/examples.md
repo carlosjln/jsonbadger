@@ -102,7 +102,7 @@ const options = {
 	id_strategy: JsonBadger.IdStrategies.bigserial
 };
 
-await JsonBadger.connect(db_uri, options);
+const connection = await JsonBadger.connect(db_uri, options);
 ```
 
 UUIDv7 server default (PostgreSQL 18+ native `uuidv7()` required):
@@ -113,7 +113,7 @@ const options = {
 	id_strategy: JsonBadger.IdStrategies.uuidv7
 };
 
-await JsonBadger.connect(db_uri, options);
+const connection = await JsonBadger.connect(db_uri, options);
 ```
 
 Notes:
@@ -139,7 +139,7 @@ try {
 
 ## ID Strategy Examples
 
-Server-wide default (`connect`) plus model override (`model(...)`):
+Server-wide default (`connect`) plus model override (`conn.model(...)`):
 
 ```js
 const db_uri = 'postgresql://user:pass@localhost:5432/dbname';
@@ -147,18 +147,22 @@ const options = {
 	id_strategy: JsonBadger.IdStrategies.uuidv7 // PostgreSQL 18+ native uuidv7() required
 };
 
-await JsonBadger.connect(db_uri, options);
+const connection = await JsonBadger.connect(db_uri, options);
 
-const AuditLog = JsonBadger.model(new JsonBadger.Schema({
-	event_name: String
-}), {
+const AuditLog = connection.model({
+	name: 'AuditLog',
+	schema: new JsonBadger.Schema({
+		event_name: String
+	}),
 	table_name: 'audit_logs',
 	// inherits server id_strategy: uuidv7
 });
 
-const Counter = JsonBadger.model(new JsonBadger.Schema({
-	label: String
-}), {
+const Counter = connection.model({
+	name: 'Counter',
+	schema: new JsonBadger.Schema({
+		label: String
+	}),
 	table_name: 'counters',
 	id_strategy: JsonBadger.IdStrategies.bigserial // model override
 });
@@ -209,7 +213,10 @@ const user_schema = new JsonBadger.Schema({
 user_schema.create_index({using: 'gin', path: 'profile.city'});
 user_schema.create_index({using: 'btree', paths: {name: 1, age: -1}});
 
-const User = JsonBadger.model(user_schema, {
+const connection = await JsonBadger.connect(db_uri, options);
+const User = connection.model({
+	name: 'User',
+	schema: user_schema,
 	table_name: 'users',
 	auto_index: true,
 	id_strategy: JsonBadger.IdStrategies.bigserial
@@ -319,6 +326,30 @@ const created_user = await User.create({
 const same_user = await User.find_by_id(created_user.id).exec();
 ```
 
+Build a new document from external input without marking it persisted:
+
+```js
+const imported_user = User.from({
+	name: '  maria  ',
+	age: '29',
+	created_at: '2026-03-03T08:00:00.000Z'
+});
+```
+
+Hydrate a persisted document from raw row-like data:
+
+```js
+const hydrated_user = User.hydrate({
+	id: '7',
+	data: {
+		name: 'maria',
+		age: '29'
+	},
+	created_at: '2026-03-03T08:00:00.000Z',
+	updated_at: '2026-03-03T09:00:00.000Z'
+});
+```
+
 Timestamp helper examples on create:
 
 ```js
@@ -370,7 +401,9 @@ unique_user_schema.create_index({
 	name: 'idx_unique_users_email'
 });
 
-const UniqueUser = JsonBadger.model(unique_user_schema, {
+const UniqueUser = connection.model({
+	name: 'UniqueUser',
+	schema: unique_user_schema,
 	table_name: 'unique_users'
 });
 await UniqueUser.ensure_schema();
@@ -784,7 +817,9 @@ const alias_schema = new JsonBadger.Schema({
 	}
 });
 
-const AliasUser = JsonBadger.model(alias_schema, {
+const AliasUser = connection.model({
+	name: 'AliasUser',
+	schema: alias_schema,
 	table_name: 'alias_users'
 });
 const alias_doc = new AliasUser({profile: {city: 'Miami'}});
@@ -851,7 +886,7 @@ For the full lifecycle contract, see [`docs/lifecycle.md`](lifecycle.md).
 
 - [`README.md`](../README.md) (quick start + selected examples)
 - [`docs/api/index.md`](api/index.md) (module API map)
-- [`docs/api/model.md`](api/model.md) (model API contracts and planned method notes)
+- [`docs/api/model.md`](api/model.md) (model construction, queries, persistence, and document methods)
 - [`docs/api/schema.md`](api/schema.md) (schema API and index declaration rules)
 - [`docs/api/query-builder.md`](api/query-builder.md) (query builder chain and filter families)
 - [`docs/lifecycle.md`](lifecycle.md) (document phases, hydration/save flow, dirty tracking, and serialization)

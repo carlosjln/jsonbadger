@@ -46,7 +46,7 @@ function build_schema_instance(indexes) {
 	};
 }
 
-const {default: model} = await import('#src/model/model-factory.js');
+const {default: model} = await import('#src/model/factory/index.js');
 
 describe('Model auto index behavior', function () {
 	let connection;

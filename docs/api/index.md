@@ -1,6 +1,6 @@
 # API Index
 
-Use this directory for module-scoped API contracts instead of one monolithic API file.
+Use this directory for module-scoped API reference pages.
 
 ## TOC
 

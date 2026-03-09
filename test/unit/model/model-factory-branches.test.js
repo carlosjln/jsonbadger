@@ -39,7 +39,7 @@ jest.unstable_mockModule('#src/connection/server-capabilities.js', function () {
 const {default: QueryBuilder} = await import('#src/query/query-builder.js');
 const {default: QueryError} = await import('#src/errors/query-error.js');
 const {default: Schema} = await import('#src/schema/schema.js');
-const {default: model} = await import('#src/model/model-factory.js');
+const {default: model} = await import('#src/model/factory/index.js');
 
 describe('model-factory branch behavior', function () {
 	beforeEach(function () {
@@ -476,75 +476,192 @@ describe('model-factory branch behavior', function () {
 		});
 	});
 
-	describe('hydrate', function () {
-		test('copies own schema/base field keys and silently ignores invalid or unsafe keys', function () {
+	describe('from', function () {
+		test('builds a new document from schema-defined payload and top-level base fields', function () {
 			const user_model = create_model(new Schema({
-				name: String,
-				profile: {
-					city: String
-				}
+				name: {type: String, set: function (value) {return value.trim();}},
+				age: Number
 			}));
 
-			const target = {
-				name: 'before',
-				profile: {city: 'old'},
-				id: '1',
-				created_at: 'old-created',
-				updated_at: 'old-updated',
-				extra: 'keep'
-			};
-
-			const source = {
-				name: 'after',
-				profile: {city: 'new'},
-				id: '2',
-				created_at: '2026-02-27T10:00:00.000Z',
-				updated_at: undefined,
-				__proto__: {polluted: true},
-				extra: 'ignore'
-			};
-
-			const hydrated = user_model.hydrate(target, source);
-
-			expect(hydrated).toBe(target);
-			expect(target).toEqual({
-				name: 'after',
-				profile: {city: 'new'},
-				id: '2',
-				created_at: '2026-02-27T10:00:00.000Z',
-				updated_at: undefined,
-				extra: 'keep'
+			const imported_document = user_model.from({
+				name: '  maria  ',
+				age: '29',
+				created_at: '2026-03-03T08:00:00.000Z'
 			});
-			expect(user_model.hydrate(target, null)).toBe(target);
-			expect(user_model.hydrate(null, source)).toBeNull();
+
+			expect(imported_document).toBeInstanceOf(user_model);
+			expect(imported_document.is_new).toBe(true);
+			expect(imported_document.data).toEqual({
+				name: 'maria',
+				age: 29
+			});
+			expect(imported_document.created_at).toBeInstanceOf(Date);
+			expect(imported_document.created_at.toISOString()).toBe('2026-03-03T08:00:00.000Z');
 		});
 
-		test('allows base fields when schema paths are unavailable and ignores unknown keys', function () {
-			const user_model = create_model(build_schema_stub({
-				paths: undefined
+		test('uses source.data as payload input and ignores outer non-base payload keys', function () {
+			const user_model = create_model(new Schema({
+				name: String,
+				age: Number
 			}));
-			const target = {
-				id: '1',
-				created_at: 'old-created',
-				updated_at: 'old-updated',
-				extra: 'keep'
-			};
-			const source = {
-				id: '2',
-				created_at: '2026-02-27T10:00:00.000Z',
-				updated_at: '2026-02-27T11:00:00.000Z',
-				name: 'ignored'
-			};
 
-			const hydrated = user_model.hydrate(target, source);
-
-			expect(hydrated).toBe(target);
-			expect(target).toEqual({
-				id: '2',
-				created_at: '2026-02-27T10:00:00.000Z',
-				updated_at: '2026-02-27T11:00:00.000Z',
-				extra: 'keep'
+			const imported_document = user_model.from({
+				id: '7',
+				name: 'outer-ignore',
+				data: {
+					name: 'maria',
+					age: '29'
+				}
 			});
+
+			expect(imported_document.data).toEqual({
+				name: 'maria',
+				age: 29
+			});
+			expect(imported_document.id).toBe('7');
+		});
+
+		test('keeps unknown payload keys when strict is false', function () {
+			const user_model = create_model(new Schema({
+				name: String
+			}));
+
+			const imported_document = user_model.from({
+				name: 'maria',
+				role: 'admin',
+				profile: {
+					city: 'miami'
+				}
+			}, {
+				strict: false
+			});
+
+			expect(imported_document.data).toEqual({
+				name: 'maria',
+				role: 'admin',
+				profile: {
+					city: 'miami'
+				}
+			});
+		});
+
+		test('falls back to schema-level strict when local options are omitted', function () {
+			const user_model = create_model(new Schema({
+				name: String
+			}, {
+				strict: false
+			}));
+
+			const imported_document = user_model.from({
+				name: 'maria',
+				role: 'admin'
+			});
+
+			expect(imported_document.data).toEqual({
+				name: 'maria',
+				role: 'admin'
+			});
+		});
+
+		test('lets local strict override schema-level strict', function () {
+			const user_model = create_model(new Schema({
+				name: String
+			}, {
+				strict: false
+			}));
+
+			const imported_document = user_model.from({
+				name: 'maria',
+				role: 'admin'
+			}, {
+				strict: true
+			});
+
+			expect(imported_document.data).toEqual({
+				name: 'maria'
+			});
+		});
+
+		test('silently drops invalid base fields while preserving payload data', function () {
+			const user_model = create_model(new Schema({
+				id: {type: 'UUIDv7'},
+				name: String
+			}));
+
+			const imported_document = user_model.from({
+				id: 'not-a-uuid',
+				name: 'maria',
+				created_at: 'not-a-date'
+			});
+
+			expect(imported_document.data).toEqual({
+				name: 'maria'
+			});
+			expect(imported_document.id).toBeUndefined();
+			expect(imported_document.created_at).toBeUndefined();
+		});
+
+		test('returns a new empty document for non-object input', function () {
+			const user_model = create_model(new Schema({
+				name: String
+			}));
+
+			const imported_document = user_model.from(null);
+
+			expect(imported_document).toBeInstanceOf(user_model);
+			expect(imported_document.data).toEqual({});
+			expect(imported_document.is_new).toBe(true);
+		});
+	});
+
+	describe('hydrate', function () {
+		test('builds a persisted document from row-like data with no modified paths', function () {
+			const user_model = create_model(new Schema({
+				name: {type: String, set: function (value) {return value.trim();}},
+				age: Number
+			}));
+
+			const hydrated_document = user_model.hydrate({
+				id: 7,
+				data: {
+					name: '  maria  ',
+					age: '29'
+				},
+				created_at: '2026-03-03T08:00:00.000Z',
+				updated_at: new Date('2026-03-03T09:00:00.000Z')
+			});
+
+			expect(hydrated_document).toBeInstanceOf(user_model);
+			expect(hydrated_document.is_new).toBe(false);
+			expect(hydrated_document.data).toEqual({
+				name: 'maria',
+				age: 29
+			});
+			expect(hydrated_document.id).toBe('7');
+			expect(hydrated_document.created_at).toBe('2026-03-03T08:00:00.000Z');
+			expect(hydrated_document.updated_at).toBe('2026-03-03T09:00:00.000Z');
+			expect(hydrated_document.is_modified()).toBe(false);
+		});
+
+		test('builds a persisted document from plain source data and drops invalid base fields', function () {
+			const user_model = create_model(new Schema({
+				id: {type: 'UUIDv7'},
+				name: String
+			}));
+
+			const hydrated_document = user_model.hydrate({
+				id: 'not-a-uuid',
+				name: 'maria',
+				created_at: 'not-a-date'
+			});
+
+			expect(hydrated_document.is_new).toBe(false);
+			expect(hydrated_document.data).toEqual({
+				name: 'maria'
+			});
+			expect(hydrated_document.id).toBeUndefined();
+			expect(hydrated_document.created_at).toBeUndefined();
+			expect(hydrated_document.is_modified()).toBe(false);
 		});
 	});
 });
@@ -587,3 +704,4 @@ function build_schema_stub(overrides = {}) {
 		path
 	};
 }
+

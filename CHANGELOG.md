@@ -4,6 +4,9 @@
 
 ### Breaking
 
+- `connect(...)` now creates and returns a new `Connection` on every call; it no longer reuses a process-global current connection.
+- Root `disconnect()` was removed; teardown now happens through `await connection.disconnect()`.
+- Top-level `JsonBadger.model(...)` was removed; models are now registered through `connection.model({name, schema, table_name, ...})`.
 - `Schema#path(path_name)` was renamed to `Schema#get_path(path_name)`.
 - `Schema#create_index(...)` now accepts a single descriptor object (`index_definition`); legacy `(index_spec, index_options)` usage was removed.
 - `ensure_index(...)` now accepts `(table_name, index_definition, data_column)`; legacy separate `index_spec/index_options` args were removed.
@@ -20,18 +23,20 @@
 - Source modules now use bottom-of-file exports consistently, with grouped multiline export blocks instead of inline export declarations.
 - Removed low-value file header banners in favor of localized comments near the relevant logic.
 - Centralized runtime UUIDv7 validation in `src/utils/value.js` and reused it across field types and base-field query compilation.
+- Removed the process-global connection singleton bridge; connection ownership is now explicit across reads, writes, and migration helpers.
 
 ### Added
 
 - `Model.create(document_or_list)` convenience helper for single and batched create flows.
 - `Model.find_by_id(id_value)` convenience query helper.
+- `Model.from(source, options?)` for schema-aware document construction from external payload or row-like input while keeping `is_new = true`.
 - Instance deletion flow: `doc.delete().exec()`.
 
 ### Docs
 
 - Split the old monolithic API doc into module-scoped pages under `docs/api/`.
 - Consolidated connection lifecycle and shared-pool examples into `docs/api/connection.md` and removed the duplicate legacy connection page.
-- Updated `README.md`, `docs/api/`, `docs/examples.md`, and `docs/query-translation.md` to align with base-field terminology, index descriptor behavior, and current API/runtime semantics.
+- Updated `README.md`, `docs/api/`, `docs/examples.md`, and `docs/query-translation.md` to align with the connection-first API, base-field terminology, index descriptor behavior, and current runtime semantics.
 
 ### Testing
 

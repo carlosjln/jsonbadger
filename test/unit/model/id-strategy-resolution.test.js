@@ -30,7 +30,7 @@ jest.unstable_mockModule('#src/migration/ensure-schema.js', function build_ensur
 });
 
 const {default: defaults} = await import('#src/constants/defaults.js');
-const {default: model} = await import('#src/model/model-factory.js');
+const {default: model} = await import('#src/model/factory/index.js');
 
 describe('ID strategy resolution', function () {
 	let connection;

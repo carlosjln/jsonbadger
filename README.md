@@ -111,7 +111,7 @@ For the document state flow from `new Model(...)` through `save()`, hydration, d
 ## Documentation
 
 * [`docs/api/index.md`](docs/api/index.md)
-* [`docs/api/model.md`](docs/api/model.md) (model-specific API contracts and planned method notes)
+* [`docs/api/model.md`](docs/api/model.md) (model construction, queries, persistence, and document methods)
 * [`docs/api/schema.md`](docs/api/schema.md)
 * [`docs/api/query-builder.md`](docs/api/query-builder.md)
 * [`docs/api/connection.md`](docs/api/connection.md) (connection API, lifecycle, and shared-connection examples)
