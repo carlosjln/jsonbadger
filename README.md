@@ -105,7 +105,7 @@ For the document state flow from `new Model(...)` through `save()`, hydration, d
 * **Timestamp helper semantics**: `created_at` and `updated_at` are helper fields. Create keeps caller values when provided, otherwise auto-fills both. Updates keep caller `updated_at` when provided, otherwise auto-refresh `updated_at`.
 * **Configurable index lifecycle**: `auto_index` can be set at connection and overridden per model.
 * **UUIDv7 compatibility gating**: JsonBadger checks support automatically and fails early with server version/capability context when unavailable.
-* **Document instance returns**: data-returning methods return document instances with top-level base fields (`id`, `created_at`, `updated_at`), and `.to_json()` / `.to_object()` for plain-object snapshots.
+* **Document instance returns**: data-returning methods return document instances with top-level base fields (`id`, `created_at`, `updated_at`), and `.to_json()` / `.$serialize()` for plain-object snapshots.
 * **Modern**: Native ESM package.
 
 ## Documentation

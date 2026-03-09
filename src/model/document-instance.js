@@ -113,6 +113,7 @@ function document_instance(model_constructor) {
 	install_static_methods(model_constructor);
 	install_instance_methods(model_constructor, schema_instance, alias_path_map);
 	install_property_proxies(model_constructor, schema_instance, alias_path_map);
+	install_schema_methods(model_constructor, schema_instance);
 }
 
 /**
@@ -157,7 +158,7 @@ function install_static_methods(model_constructor) {
  * - validate: `validate`
  * - mutate: `set`, `mark_modified`, `is_modified`, `clear_modified`
  * - persist/hydrate: `save`
- * - serialize: `to_object`, `to_json`, `toJSON`
+ * - serialize: `$serialize`, `to_json`, `toJSON`
  *
  * @param {Function} model_constructor
  * @param {object} schema_instance
@@ -357,23 +358,21 @@ function install_instance_methods(model_constructor, schema_instance, alias_path
 	};
 
 	/**
-	 * Serialize to plain object shape.
+	/**
+	 * Serialize to plain object snapshot shape.
 	 *
 	 * Example output:
 	 * - `{ id, created_at, updated_at, ...data }`
 	 */
-	model_constructor.prototype.to_object = function (serialization_options) {
-		return serialize_document(this, model_constructor, 'to_object', serialization_options);
+	model_constructor.prototype.$serialize = function (serialization_options) {
+		return serialize_document(this, model_constructor, serialization_options);
 	};
 
 	/**
 	 * Serialize to JSON-ready plain object shape.
-	 *
-	 * Example output:
-	 * - `{ id, created_at, updated_at, ...data }`
 	 */
 	model_constructor.prototype.to_json = function (serialization_options) {
-		return serialize_document(this, model_constructor, 'to_json', serialization_options);
+		return this.$serialize(serialization_options);
 	};
 
 	/**
@@ -498,6 +497,25 @@ function install_property_proxies(model_constructor, schema_instance, alias_path
 }
 
 /**
+ * Install schema-defined instance methods on document prototype.
+ */
+function install_schema_methods(model_constructor, schema_instance) {
+	if(is_not_object(schema_instance) || is_not_object(schema_instance.methods)) {
+		return;
+	}
+
+	for(const method_name of Object.keys(schema_instance.methods)) {
+		const method_implementation = schema_instance.methods[method_name];
+
+		if(method_name in model_constructor.prototype) {
+			throw new Error('Schema method "' + method_name + '" conflicts with an existing document property');
+		}
+
+		model_constructor.prototype[method_name] = method_implementation;
+	}
+}
+
+/**
  * Build SQL insert statement for validated payload.
  *
  * Example:
@@ -599,7 +617,7 @@ function resolve_modified_set_payload(document_value, payload_without_base_field
 }
 
 /**
- * Central serializer for `to_object` and `to_json`.
+ * Central serializer for `$serialize(...)` and `to_json(...)`.
  *
  * Lifecycle relevance:
  * - serialize
@@ -607,15 +625,15 @@ function resolve_modified_set_payload(document_value, payload_without_base_field
  * Output shape example:
  * - `{ id: '7', created_at: '...', updated_at: '...', name: 'ana' }`
  */
-function serialize_document(document_instance, model_constructor, mode_value, serialization_options) {
+function serialize_document(document_instance, model_constructor, serialization_options) {
 	const schema_instance = model_constructor.schema_instance;
 	const call_options = is_object(serialization_options) ? serialization_options : {};
-	const schema_serialization_options = resolve_schema_serialization_options(schema_instance, mode_value);
+	const schema_serialization_options = resolve_schema_serialization_options(schema_instance);
 	const apply_getters = resolve_getters_option(call_options, schema_serialization_options);
 	let serialized_data = deep_clone(document_instance.data);
 
 	if(apply_getters) {
-		serialized_data = apply_schema_getters(serialized_data, schema_instance, mode_value);
+		serialized_data = apply_schema_getters(serialized_data, schema_instance);
 	}
 
 	if(is_object(serialized_data)) {
@@ -629,9 +647,7 @@ function serialize_document(document_instance, model_constructor, mode_value, se
 		return serialized_data;
 	}
 
-	const transform_result = transform_function.call(null, document_instance, serialized_data, {
-		mode: mode_value
-	});
+	const transform_result = transform_function.call(null, document_instance, serialized_data);
 
 	if(transform_result === undefined) {
 		return serialized_data;
@@ -641,15 +657,14 @@ function serialize_document(document_instance, model_constructor, mode_value, se
 }
 
 /**
- * Resolve schema serialization options for selected mode.
+ * Resolve schema serialization options.
  */
-function resolve_schema_serialization_options(schema_instance, mode_value) {
+function resolve_schema_serialization_options(schema_instance) {
 	if(!schema_instance || is_not_object(schema_instance.options)) {
 		return null;
 	}
 
-	const option_key = mode_value === 'to_json' ? 'to_json' : 'to_object';
-	const option_value = schema_instance.options[option_key];
+	const option_value = schema_instance.options.serialize;
 
 	if(is_not_object(option_value)) {
 		return null;
@@ -698,7 +713,7 @@ function resolve_transform_function(call_options, schema_serialization_options) 
  * Example:
  * - getter on `name` can transform `'ana' -> 'ANA'`.
  */
-function apply_schema_getters(serialized_value, schema_instance, mode_value) {
+function apply_schema_getters(serialized_value, schema_instance) {
 	if(!schema_instance || !is_function(schema_instance.get_path)) {
 		return serialized_value;
 	}
@@ -719,8 +734,7 @@ function apply_schema_getters(serialized_value, schema_instance, mode_value) {
 		const path_segments = path_name.split('.');
 		const apply_getter = (current_path_value) => {
 			return field_type.apply_get(current_path_value, {
-				path: path_name,
-				mode: mode_value
+				path: path_name
 			});
 		};
 

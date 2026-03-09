@@ -39,13 +39,13 @@ describe('document-instance branch behavior', function () {
 		expect(preserve_object_doc.data).toEqual({profile: {state: 'FL', city: 'Miami'}});
 	});
 
-	test('to_object returns original value when transform returns undefined', function () {
+	test('$serialize returns original value when transform returns undefined', function () {
 		const schema_instance = new Schema(
 			{
 				name: {type: String, get: function (value) {return value.toUpperCase();}}
 			},
 			{
-				to_object: {
+				serialize: {
 					transform: function () {
 						return undefined;
 					}
@@ -56,16 +56,16 @@ describe('document-instance branch behavior', function () {
 		const User = model(schema_instance, {table_name: 'users'});
 		const doc = new User({name: 'john'});
 
-		expect(doc.to_object()).toEqual({name: 'JOHN'});
+		expect(doc.$serialize()).toEqual({name: 'JOHN'});
 	});
 
-	test('to_object uses schema to_object.getters option when call option is omitted', function () {
+	test('$serialize uses schema serialize.getters option when call option is omitted', function () {
 		const schema_instance = new Schema(
 			{
 				name: {type: String, get: function (value) {return value.toUpperCase();}}
 			},
 			{
-				to_object: {
+				serialize: {
 					getters: false
 				}
 			}
@@ -73,10 +73,10 @@ describe('document-instance branch behavior', function () {
 		const User = model(schema_instance, {table_name: 'users'});
 		const doc = new User({name: 'john'});
 
-		expect(doc.to_object()).toEqual({name: 'john'});
+		expect(doc.$serialize()).toEqual({name: 'john'});
 	});
 
-	test('to_object handles schema stubs without options/get_path and with invalid schema_description paths', function () {
+	test('$serialize handles schema stubs without options/get_path and with invalid schema paths', function () {
 		const no_path_schema = {
 			validate: function (payload) {return payload;}
 		};
@@ -84,7 +84,7 @@ describe('document-instance branch behavior', function () {
 		const invalid_paths_schema = {
 			validate: function (payload) {return payload;},
 			options: {},
-			schema_description: {paths: 'bad'},
+			paths: 'bad',
 			get_path: function () {
 				return null;
 			}
@@ -98,11 +98,11 @@ describe('document-instance branch behavior', function () {
 		expect(no_path_doc.get('name')).toBe('john');
 		expect(no_path_doc.set('name', 'jane')).toBe(no_path_doc);
 		expect(no_path_doc.data).toEqual({name: 'jane'});
-		expect(no_path_doc.to_object()).toEqual({name: 'jane'});
-		expect(invalid_paths_doc.to_object()).toEqual({name: 'john'});
+		expect(no_path_doc.$serialize()).toEqual({name: 'jane'});
+		expect(invalid_paths_doc.$serialize()).toEqual({name: 'john'});
 	});
 
-	test('to_object skips getters when serialized value is not an object or getter path is missing', function () {
+	test('$serialize skips getters when serialized value is not an object or getter path is missing', function () {
 		const schema_instance = new Schema({
 			name: {type: String, get: function (value) {return value.toUpperCase();}},
 			profile: {
@@ -114,8 +114,8 @@ describe('document-instance branch behavior', function () {
 		const primitive_doc = new User('hello');
 		const missing_nested_doc = new User({name: 'john'});
 
-		expect(primitive_doc.to_object()).toBe('hello');
-		expect(missing_nested_doc.to_object()).toEqual({name: 'JOHN'});
+		expect(primitive_doc.$serialize()).toBe('hello');
+		expect(missing_nested_doc.$serialize()).toEqual({name: 'JOHN'});
 	});
 
 	test('getter application sorts same-depth paths deterministically', function () {
@@ -128,7 +128,7 @@ describe('document-instance branch behavior', function () {
 		const User = model(schema_instance, {table_name: 'users'});
 		const doc = new User({z_name: 'z', a_name: 'a'});
 
-		doc.to_object();
+		doc.$serialize();
 
 		expect(getter_order).toEqual(['a_name', 'z_name']);
 	});
@@ -167,7 +167,7 @@ describe('document-instance branch behavior', function () {
 	test('model creation tolerates schema.get_path entries without options when building alias map', function () {
 		const schema_stub = {
 			validate: function (payload) {return payload;},
-			schema_description: {paths: ['name']},
+			paths: {name: true},
 			get_path: function () {
 				return {};
 			}

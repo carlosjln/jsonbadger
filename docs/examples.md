@@ -278,7 +278,7 @@ Edge cases and practical notes:
 - In-place changes to `Mixed` (`{}`) values and `Date` objects do not mark the path dirty automatically; call `doc.mark_modified('path')` after mutating them.
 - Arrays default to `[]`; set `default: undefined` to disable the implicit empty-array default.
 - For `Map`-like paths, prefer `document.set('handles.github', 'name')` so casting and dirty tracking run.
-- Serialization applies getters by default; use `doc.to_object({ getters: false })` or `doc.to_json({ getters: false })` to bypass them.
+- Serialization applies getters by default; use `doc.$serialize({ getters: false })` or `doc.to_json({ getters: false })` to bypass them.
 
 ## Create and Save Documents
 
@@ -832,12 +832,31 @@ alias_doc.get('profile.city'); // 'Orlando'
 
 Aliases are path aliases for `doc.get(...)`, `doc.set(...)`, and `doc.mark_modified(...)`. Non-dotted alias names also get runtime property proxies (for example, `alias_doc.city`).
 
-Serialization helpers (`to_object`, `to_json`) apply getters by default:
+Serialization helpers (`$serialize`, `to_json`) apply getters by default:
 
 ```js
-const as_object = doc.to_object();
-const as_object_without_getters = doc.to_object({getters: false});
+const as_object = doc.$serialize();
+const as_object_without_getters = doc.$serialize({getters: false});
 const as_json_ready = doc.to_json();
+```
+
+Custom schema methods can wrap `$serialize(...)`:
+
+```js
+const user_schema = new JsonBadger.Schema({
+	name: {type: String, get: function (value) {return value.toUpperCase();}}
+}, {
+	serialize: {
+		transform: function (doc, ret) {
+			ret.kind = 'user';
+			return ret;
+		}
+	}
+});
+
+user_schema.method('to_object', function () {
+	return this.$serialize({transform: false});
+});
 ```
 
 Immutable behavior (`immutable: true`) after first persist:
@@ -865,7 +884,7 @@ Phase summary:
 - first runtime interaction (`set/get/save/delete`) -> runtime-ready
 - `save()` on new doc -> persisted
 - `find_one(...).exec()` / `find_by_id(...).exec()` -> queried/hydrated
-- `to_object()` / `to_json()` -> serialized snapshot
+- `$serialize()` / `to_json()` -> serialized snapshot
 
 For the full lifecycle contract, see [`docs/lifecycle.md`](lifecycle.md).
 

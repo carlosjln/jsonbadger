@@ -51,7 +51,7 @@ describe('FieldTypes runtime PostgreSQL integration', function () {
 
 			expect(account_document.userName).toBe('JOHN');
 			expect(account_document.get('userName', {getters: false})).toBe('john');
-			expect(account_document.to_object({getters: false}).user_name).toBe('john');
+			expect(account_document.$serialize({getters: false}).user_name).toBe('john');
 			expect(account_document.to_json()).toMatchObject({
 				user_name: 'JOHN',
 				kind: 'account'
@@ -187,7 +187,7 @@ function create_account_model(connection, table_name) {
 		payload: {},
 		runtime_date: Date
 	}, {
-		to_json: {
+		serialize: {
 			transform: function (doc, ret) {
 				ret.kind = 'account';
 				return ret;

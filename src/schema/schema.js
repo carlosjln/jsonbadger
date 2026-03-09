@@ -2,9 +2,9 @@ import defaults from '#src/constants/defaults.js';
 import ValidationError from '#src/errors/validation-error.js';
 import compile_schema from '#src/schema/schema-compiler.js';
 import {default_field_type_registry} from '#src/field-types/registry.js';
-import {assert_identifier, assert_path} from '#src/utils/assert.js';
+import {assert_condition, assert_identifier, assert_path} from '#src/utils/assert.js';
 import {has_own} from '#src/utils/object.js';
-import {is_object, is_string} from '#src/utils/value.js';
+import {is_function, is_object, is_string} from '#src/utils/value.js';
 
 const base_fields = Object.freeze({
 	id: Object.freeze({type: 'Mixed'}),
@@ -27,6 +27,7 @@ function Schema(schema_definition = {}, options = {}) {
 	this.strict = this.options.strict !== false;
 	this.paths = Object.assign({}, this.$compiled_schema.get_introspection().field_types);
 	this.$field_registry = default_field_type_registry;
+	this.methods = Object.create(null);
 
 	// 4. Extract and register indexes defined inline on fields
 	this.register_field_indexes(schema_definition);
@@ -84,6 +85,15 @@ Schema.prototype.get_indexes = function () {
 	}
 
 	return cloned_indexes;
+};
+
+Schema.prototype.method = function (method_name, method_implementation) {
+	assert_identifier(method_name, 'method_name');
+	assert_condition(is_function(method_implementation), 'method_implementation must be a function');
+	assert_condition(has_own(this.methods, method_name) === false, 'Schema method "' + method_name + '" already exists');
+
+	this.methods[method_name] = method_implementation;
+	return this;
 };
 
 Schema.prototype.collect_field_defined_indexes = function (schema_definition) {

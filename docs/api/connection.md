@@ -144,4 +144,4 @@ What to expect:
 - `find(...).exec()` returns document instances
 - `find_one(...).exec()` returns one document instance or `null`
 - `save()`, `update_one(...)`, and `delete_one(...)` return document instances
-- `doc.to_json()` and `doc.to_object()` return plain-object snapshots with top-level base fields
+- `doc.to_json()` and `doc.$serialize()` return plain-object snapshots with top-level base fields

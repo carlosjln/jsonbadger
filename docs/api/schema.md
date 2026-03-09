@@ -6,6 +6,7 @@
 - [Constructor](#constructor)
 - [Core Methods](#core-methods)
 - [create_index](#create_index)
+- [method](#method)
 - [Path-level Index Sugar](#path-level-index-sugar)
 
 ## Constructor
@@ -34,6 +35,7 @@ const user_schema = new JsonBadger.Schema(definition, options);
 - `is_array_root(path)`
 - `create_index(index_definition)`
 - `get_indexes()`
+- `method(name, method_implementation)`
 
 Base-field notes:
 - `id`, `created_at`, and `updated_at` exist in schema/runtime introspection
@@ -64,6 +66,22 @@ Rules:
 - `using: 'gin'` ignores `order` and `unique`
 - `using: 'btree'` requires `path` or `paths`
 - `order` is only valid when using a single `path` with `using: 'btree'`
+
+## method
+
+Install a custom instance method onto documents generated from the schema.
+
+```js
+schema.method('to_object', function () {
+	return this.$serialize({transform: false});
+});
+```
+
+Rules:
+- `name` must be a valid identifier
+- `method_implementation` must be a function
+- duplicate schema method names are rejected
+- names that conflict with built-in document properties are rejected when the model is created
 
 ## Path-level Index Sugar
 

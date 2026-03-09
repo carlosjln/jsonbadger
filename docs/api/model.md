@@ -128,7 +128,7 @@ Behavior:
 - `doc.mark_modified(path)`
 - `doc.clear_modified()`
 - `doc.is_modified(path?)`
-- `doc.to_object(options?)`
+- `doc.$serialize(options?)`
 - `doc.to_json(options?)`
 
 Example:

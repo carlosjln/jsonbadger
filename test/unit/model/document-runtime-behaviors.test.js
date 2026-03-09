@@ -388,7 +388,7 @@ describe('Document runtime behaviors', function () {
 	});
 
 	describe('serialization', function () {
-		test('to_object applies field getters by default without mutating document data', function () {
+		test('$serialize applies field getters by default without mutating document data', function () {
 			const schema_instance = new Schema({
 				name: {type: String, get: function (value) {return value.toUpperCase();}},
 				address: {
@@ -403,7 +403,7 @@ describe('Document runtime behaviors', function () {
 				address: {city: 'miami'}
 			});
 
-			const serialized = user_document.to_object();
+			const serialized = user_document.$serialize();
 
 			expect(serialized).toEqual({
 				name: 'JOHN',
@@ -415,7 +415,7 @@ describe('Document runtime behaviors', function () {
 			});
 		});
 
-		test('to_object can bypass getters with getters=false', function () {
+		test('$serialize can bypass getters with getters=false', function () {
 			const schema_instance = new Schema({
 				name: {type: String, get: function (value) {return value.toUpperCase();}}
 			});
@@ -424,18 +424,32 @@ describe('Document runtime behaviors', function () {
 			});
 			const user_document = new User({name: 'john'});
 
-			const serialized = user_document.to_object({
+			const serialized = user_document.$serialize({
 				getters: false
 			});
 
 			expect(serialized).toEqual({name: 'john'});
 		});
 
-		test('to_json applies schema transform and JSON.stringify uses toJSON', function () {
+		test('to_json delegates to $serialize and JSON.stringify uses toJSON', function () {
+			const User = model(new Schema({name: String}), {
+				table_name: 'users'
+			});
+			const user_document = new User({name: 'john'});
+			const serialize_spy = jest.fn().mockReturnValue({name: 'john', kind: 'user'});
+
+			user_document.$serialize = serialize_spy;
+
+			expect(user_document.to_json({getters: false})).toEqual({name: 'john', kind: 'user'});
+			expect(serialize_spy).toHaveBeenCalledWith({getters: false});
+			expect(JSON.parse(JSON.stringify(user_document))).toEqual({name: 'john', kind: 'user'});
+		});
+
+		test('to_json applies schema serialize transform', function () {
 			const schema_instance = new Schema({
 				name: {type: String, get: function (value) {return value.toUpperCase();}}
 			}, {
-				to_json: {
+				serialize: {
 					transform: function (doc, ret) {
 						ret.kind = 'user';
 						return ret;
@@ -451,17 +465,13 @@ describe('Document runtime behaviors', function () {
 				name: 'JOHN',
 				kind: 'user'
 			});
-			expect(JSON.parse(JSON.stringify(user_document))).toEqual({
-				name: 'JOHN',
-				kind: 'user'
-			});
 		});
 
 		test('call-level transform can override schema transform and disable transform', function () {
 			const schema_instance = new Schema({
 				name: String
 			}, {
-				to_json: {
+				serialize: {
 					transform: function (doc, ret) {
 						ret.kind = 'schema';
 						return ret;
@@ -481,6 +491,61 @@ describe('Document runtime behaviors', function () {
 			})).toEqual({name: 'john', kind: 'call'});
 
 			expect(user_document.to_json({transform: false})).toEqual({name: 'john'});
+		});
+	});
+
+	describe('schema methods', function () {
+		test('Schema.method installs custom instance methods and custom serialization wrappers can call $serialize', function () {
+			const schema_instance = new Schema({
+				name: {type: String, get: function (value) {return value.toUpperCase();}}
+			}, {
+				serialize: {
+					transform: function (doc, ret) {
+						ret.kind = 'schema';
+						return ret;
+					}
+				}
+			});
+
+			schema_instance.method('serialize_without_transform', function () {
+				return this.$serialize({transform: false});
+			});
+
+			const User = model(schema_instance, {
+				table_name: 'users'
+			});
+			const user_document = new User({name: 'john'});
+
+			expect(user_document.serialize_without_transform()).toEqual({name: 'JOHN'});
+			expect(user_document.to_json()).toEqual({name: 'JOHN', kind: 'schema'});
+		});
+
+		test('Schema.method rejects duplicate method registration', function () {
+			const schema_instance = new Schema({name: String});
+
+			schema_instance.method('summary', function () {
+				return this.$serialize();
+			});
+
+			expect(function () {
+				schema_instance.method('summary', function () {
+					return this.$serialize();
+				});
+			}).toThrow('already exists');
+		});
+
+		test('Schema.method rejects conflicts with existing document properties', function () {
+			const schema_instance = new Schema({name: String});
+
+			schema_instance.method('save', function () {
+				return this.$serialize();
+			});
+
+			expect(function () {
+				model(schema_instance, {
+					table_name: 'users'
+				});
+			}).toThrow('conflicts with an existing document property');
 		});
 	});
 });

@@ -6,7 +6,7 @@ Use this page when you need to answer:
 - when `is_new` changes
 - when base fields are populated
 - when dirty paths are tracked or cleared
-- what shape `to_object()` / `to_json()` return
+- what shape `$serialize()` / `to_json()` return
 
 ## Lifecycle Overview
 
@@ -29,7 +29,7 @@ Phases:
 - `persisted`: successful `doc.save()`
 - `queried/hydrated`: `find(...)`, `find_one(...)`, `find_by_id(...)`, `update_one(...)`, `delete_one(...)`
 - `mutated`: `set(...)`, `mark_modified(...)`, in-place mutation + manual `mark_modified(...)`
-- `serialized`: `to_object()`, `to_json()`, `toJSON()`
+- `serialized`: `$serialize()`, `to_json()`, `toJSON()`
 
 ## Transition Table
 
@@ -42,7 +42,7 @@ Phases:
 | `doc.save()` on existing document | mutated/persisted | persisted | modified payload paths are sent through `update_one(...)`, returned row re-hydrates document state |
 | `find(...).exec()` / `find_one(...).exec()` / `find_by_id(...).exec()` | none | queried/hydrated | rows become document instances with top-level base fields |
 | `update_one(...)` / `delete_one(...)` | none | queried/hydrated | returned row becomes a document instance, or `null` |
-| `to_object()` / `to_json()` | any document phase | serialized | returns plain object snapshot with base fields + payload |
+| `$serialize()` / `to_json()` | any document phase | serialized | returns plain object snapshot with base fields + payload |
 
 ## Constructed
 
@@ -153,7 +153,7 @@ Base-field write rules:
 ## Serialized
 
 ```js
-const as_object = doc.to_object();
+const as_object = doc.$serialize();
 const as_json = doc.to_json();
 ```
 
