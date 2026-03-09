@@ -5,7 +5,7 @@ import {assert_condition} from '#src/utils/assert.js';
 import {build_path_literal} from '#src/utils/object-path.js';
 import {jsonb_stringify} from '#src/utils/json.js';
 import {has_own} from '#src/utils/object.js';
-import {is_not_object} from '#src/utils/value.js';
+import {is_function, is_not_object} from '#src/utils/value.js';
 
 import {
 	timestamp_fields,
@@ -24,13 +24,13 @@ import {
 function cast_update_value(path_value, next_value, schema_instance) {
 	const field_type = resolve_update_field_type(path_value, schema_instance);
 
-	if(!field_type || typeof field_type.cast !== 'function') {
+	if(!field_type || !is_function(field_type.cast)) {
 		return next_value;
 	}
 
 	let casted_value = next_value;
 
-	if(typeof field_type.apply_set === 'function') {
+	if(is_function(field_type.apply_set)) {
 		casted_value = field_type.apply_set(casted_value, {path: path_value, mode: 'update'});
 	}
 
@@ -222,7 +222,7 @@ function is_missing_relation_query_error(error) {
  * @returns {*}
  */
 function resolve_update_field_type(path_value, schema_instance) {
-	if(!schema_instance || typeof schema_instance.get_path !== 'function') {
+	if(!schema_instance || !is_function(schema_instance.get_path)) {
 		return null;
 	}
 

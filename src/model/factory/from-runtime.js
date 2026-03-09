@@ -1,5 +1,5 @@
 import {deep_clone, has_own} from '#src/utils/object.js';
-import {is_not_object, is_plain_object} from '#src/utils/value.js';
+import {is_function, is_not_object, is_plain_object} from '#src/utils/value.js';
 
 import {
 	row_base_fields,
@@ -36,7 +36,7 @@ function resolve_source_data(schema_instance, source_value) {
 
 		const field_type = resolve_schema_field_type(schema_instance, base_field_key);
 
-		if(!field_type || typeof field_type.normalize !== 'function') {
+		if(!field_type || !is_function(field_type.normalize)) {
 			continue;
 		}
 
@@ -208,7 +208,7 @@ function build_document_instance(Model, normalized_payload, base_fields, is_pers
  * @returns {*}
  */
 function resolve_schema_field_type(schema_instance, path_name) {
-	if(!schema_instance || typeof schema_instance.get_path !== 'function') {
+	if(!schema_instance || !is_function(schema_instance.get_path)) {
 		return null;
 	}
 

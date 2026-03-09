@@ -7,7 +7,7 @@ import debug_logger from '#src/debug/debug-logger.js';
 import {assert_condition} from '#src/utils/assert.js';
 import {assert_valid_id_strategy} from '#src/constants/id-strategies.js';
 import {scan_server_capabilities, assert_id_strategy_capability} from '#src/connection/server-capabilities.js';
-import {is_string} from '#src/utils/value.js';
+import {is_function, is_string} from '#src/utils/value.js';
 
 async function connect(uri, options) {
 	assert_condition(is_string(uri) && uri.length > 0, 'connection_uri is required');
@@ -42,7 +42,7 @@ async function connect(uri, options) {
 }
 
 async function close_pool_quietly(pool_instance) {
-	if(!pool_instance || typeof pool_instance.end !== 'function') {
+	if(!pool_instance || !is_function(pool_instance.end)) {
 		return;
 	}
 

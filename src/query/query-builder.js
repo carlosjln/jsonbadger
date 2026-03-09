@@ -5,7 +5,7 @@ import where_compiler from '#src/query/where-compiler.js';
 import sql_runner from '#src/sql/sql-runner.js';
 
 import {assert_condition, quote_identifier} from '#src/utils/assert.js';
-import {is_object} from '#src/utils/value.js';
+import {is_function, is_object} from '#src/utils/value.js';
 
 const base_field_keys = new Set(['id', 'created_at', 'updated_at']);
 
@@ -107,7 +107,7 @@ QueryBuilder.prototype.exec = async function () {
 };
 
 function map_query_row(model_constructor, row_value) {
-	if(model_constructor && typeof model_constructor.create_document_from_row === 'function') {
+	if(model_constructor && is_function(model_constructor.create_document_from_row)) {
 		return model_constructor.create_document_from_row(row_value);
 	}
 
@@ -160,7 +160,7 @@ function normalize_timestamp_value(timestamp_value) {
 function resolve_model_id_strategy(model_constructor) {
 	const resolve_id_strategy = model_constructor.resolve_id_strategy;
 
-	if(typeof resolve_id_strategy === 'function') {
+	if(is_function(resolve_id_strategy)) {
 		return resolve_id_strategy.call(model_constructor);
 	}
 

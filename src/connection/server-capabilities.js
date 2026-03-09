@@ -1,10 +1,11 @@
 import IdStrategies from '#src/constants/id-strategies.js';
 import {assert_condition} from '#src/utils/assert.js';
+import {is_function} from '#src/utils/value.js';
 
 const MIN_POSTGRES_NATIVE_UUIDV7_VERSION_NUM = 180000;
 
 async function scan_server_capabilities(pool_instance) {
-	assert_condition(pool_instance && typeof pool_instance.query === 'function', 'pool_instance.query is required');
+	assert_condition(pool_instance && is_function(pool_instance.query), 'pool_instance.query is required');
 
 	const server_version_num_result = await pool_instance.query('SHOW server_version_num;');
 	const server_version_result = await pool_instance.query('SHOW server_version;');

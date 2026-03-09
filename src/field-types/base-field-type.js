@@ -1,3 +1,5 @@
+import {is_function} from '#src/utils/value.js';
+
 function BaseFieldType(path_value, options) {
 	this.path = path_value;
 	this.options = options || {};
@@ -15,7 +17,7 @@ BaseFieldType.prototype.register_universal_validators = function () {
 		});
 	}
 
-	if(typeof this.options.validate === 'function') {
+	if(is_function(this.options.validate)) {
 		this.validators.push({
 			kind: 'custom'
 		});
@@ -33,7 +35,7 @@ BaseFieldType.prototype.create_field_error = function (code_value, message, valu
 BaseFieldType.prototype.is_required = function (context_value) {
 	const required_option = this.options.required;
 
-	if(typeof required_option === 'function') {
+	if(is_function(required_option)) {
 		return Boolean(required_option.call(null, context_value || {}));
 	}
 
@@ -45,7 +47,7 @@ BaseFieldType.prototype.resolve_default = function (context_value) {
 		return undefined;
 	}
 
-	if(typeof this.options.default === 'function') {
+	if(is_function(this.options.default)) {
 		return this.options.default.call(null, context_value || {});
 	}
 
@@ -53,7 +55,7 @@ BaseFieldType.prototype.resolve_default = function (context_value) {
 };
 
 BaseFieldType.prototype.apply_set = function (value, context_value) {
-	if(typeof this.options.set !== 'function') {
+	if(!is_function(this.options.set)) {
 		return value;
 	}
 
@@ -61,7 +63,7 @@ BaseFieldType.prototype.apply_set = function (value, context_value) {
 };
 
 BaseFieldType.prototype.apply_get = function (value, context_value) {
-	if(typeof this.options.get !== 'function') {
+	if(!is_function(this.options.get)) {
 		return value;
 	}
 
@@ -73,7 +75,7 @@ BaseFieldType.prototype.cast = function (value) {
 };
 
 BaseFieldType.prototype.run_custom_validator = function (value, context_value) {
-	if(typeof this.options.validate !== 'function') {
+	if(!is_function(this.options.validate)) {
 		return;
 	}
 

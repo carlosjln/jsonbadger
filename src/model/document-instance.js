@@ -5,7 +5,7 @@ import {assert_path, quote_identifier} from '#src/utils/assert.js';
 import {deep_clone, has_own} from '#src/utils/object.js';
 import {split_dot_path} from '#src/utils/object-path.js';
 import {is_array} from '#src/utils/array.js';
-import {is_not_object, is_object, is_string} from '#src/utils/value.js';
+import {is_function, is_not_object, is_object, is_string} from '#src/utils/value.js';
 
 const runtime_state_symbol = Symbol('document_runtime_state');
 const base_field_key_list = Object.freeze(['id', 'created_at', 'updated_at']);
@@ -205,7 +205,7 @@ function install_instance_methods(model_constructor, schema_instance, alias_path
 			return path_state.value;
 		}
 
-		if(!field_type || !field_type.options || typeof field_type.options.get !== 'function') {
+		if(!field_type || !field_type.options || !is_function(field_type.options.get)) {
 			return path_state.value;
 		}
 
@@ -250,7 +250,7 @@ function install_instance_methods(model_constructor, schema_instance, alias_path
 					});
 				}
 
-				if(call_options.cast !== false && typeof field_type.cast === 'function') {
+				if(call_options.cast !== false && is_function(field_type.cast)) {
 					assigned_base_field_value = field_type.cast(assigned_base_field_value, {
 						path: resolved_path,
 						mode: 'set'
@@ -276,7 +276,7 @@ function install_instance_methods(model_constructor, schema_instance, alias_path
 				});
 			}
 
-			if(call_options.cast !== false && typeof field_type.cast === 'function') {
+			if(call_options.cast !== false && is_function(field_type.cast)) {
 				assigned_value = field_type.cast(assigned_value, {
 					path: resolved_path,
 					mode: 'set'
@@ -626,7 +626,7 @@ function serialize_document(document_instance, model_constructor, mode_value, se
 
 	const transform_function = resolve_transform_function(call_options, schema_serialization_options);
 
-	if(typeof transform_function !== 'function') {
+	if(!is_function(transform_function)) {
 		return serialized_data;
 	}
 
@@ -682,11 +682,11 @@ function resolve_transform_function(call_options, schema_serialization_options) 
 		return null;
 	}
 
-	if(typeof call_options.transform === 'function') {
+	if(is_function(call_options.transform)) {
 		return call_options.transform;
 	}
 
-	if(schema_serialization_options && typeof schema_serialization_options.transform === 'function') {
+	if(schema_serialization_options && is_function(schema_serialization_options.transform)) {
 		return schema_serialization_options.transform;
 	}
 
@@ -700,7 +700,7 @@ function resolve_transform_function(call_options, schema_serialization_options) 
  * - getter on `name` can transform `'ana' -> 'ANA'`.
  */
 function apply_schema_getters(serialized_value, schema_instance, mode_value) {
-	if(!schema_instance || typeof schema_instance.get_path !== 'function') {
+	if(!schema_instance || !is_function(schema_instance.get_path)) {
 		return serialized_value;
 	}
 
@@ -713,7 +713,7 @@ function apply_schema_getters(serialized_value, schema_instance, mode_value) {
 	for(const path_name of path_names) {
 		const field_type = schema_instance.get_path(path_name);
 
-		if(!field_type || !field_type.options || typeof field_type.options.get !== 'function') {
+		if(!field_type || !field_type.options || !is_function(field_type.options.get)) {
 			continue;
 		}
 
@@ -771,7 +771,7 @@ function sort_paths_by_getter_order(left_path_entry, right_path_entry) {
 function build_alias_path_map(schema_instance) {
 	const alias_path_map = Object.create(null);
 
-	if(is_not_object(schema_instance) || is_not_object(schema_instance.paths) || typeof schema_instance.get_path !== 'function') {
+	if(is_not_object(schema_instance) || is_not_object(schema_instance.paths) || !is_function(schema_instance.get_path)) {
 		return alias_path_map;
 	}
 
@@ -834,7 +834,7 @@ function resolve_alias_path(alias_path_map, path_name) {
  * Resolve schema field type by path.
  */
 function resolve_schema_field_type(schema_instance, path_name) {
-	if(!schema_instance || typeof schema_instance.get_path !== 'function') {
+	if(!schema_instance || !is_function(schema_instance.get_path)) {
 		return null;
 	}
 
@@ -1197,3 +1197,4 @@ function run_path_operation(operation_name, root_object, path_segments, operatio
 }
 
 export default document_instance;
+

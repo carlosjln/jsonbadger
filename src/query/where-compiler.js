@@ -28,7 +28,7 @@ import IdStrategies from '#src/constants/id-strategies.js';
 
 import {quote_identifier} from '#src/utils/assert.js';
 import {build_nested_object, split_dot_path} from '#src/utils/object-path.js';
-import {is_object} from '#src/utils/value.js';
+import {is_function, is_object} from '#src/utils/value.js';
 
 // TODO: might as well split into multiple files within the same directory
 
@@ -421,7 +421,7 @@ function cast_query_value(path_value, comparison_value, compile_context) {
 
 	const field_type = resolve_query_field_type(compile_context, path_value);
 
-	if(!field_type || typeof field_type.cast !== 'function') {
+	if(!field_type || !is_function(field_type.cast)) {
 		return comparison_value;
 	}
 
@@ -434,7 +434,7 @@ function cast_query_value(path_value, comparison_value, compile_context) {
 function cast_array_contains_value(path_value, comparison_value, compile_context) {
 	const field_type = resolve_query_field_type(compile_context, path_value);
 
-	if(!field_type || field_type.instance !== 'Array' || !field_type.of_field_type || typeof field_type.of_field_type.cast !== 'function') {
+	if(!field_type || field_type.instance !== 'Array' || !field_type.of_field_type || !is_function(field_type.of_field_type.cast)) {
 		return comparison_value;
 	}
 
@@ -449,7 +449,7 @@ function cast_array_contains_value(path_value, comparison_value, compile_context
 function resolve_query_field_type(compile_context, path_value) {
 	const schema_instance = compile_context.schema_instance;
 
-	if(!schema_instance || typeof schema_instance.get_path !== 'function') {
+	if(!schema_instance || !is_function(schema_instance.get_path)) {
 		return null;
 	}
 
@@ -459,7 +459,7 @@ function resolve_query_field_type(compile_context, path_value) {
 function should_use_array_contains(path_value, comparison_value, compile_context) {
 	const schema_instance = compile_context.schema_instance;
 
-	if(!schema_instance || typeof schema_instance.is_array_root !== 'function') {
+	if(!schema_instance || !is_function(schema_instance.is_array_root)) {
 		return false;
 	}
 
@@ -473,7 +473,7 @@ function should_use_array_contains(path_value, comparison_value, compile_context
 function is_array_root(compile_context, root_path) {
 	const schema_instance = compile_context.schema_instance;
 
-	if(!schema_instance || typeof schema_instance.is_array_root !== 'function') {
+	if(!schema_instance || !is_function(schema_instance.is_array_root)) {
 		return false;
 	}
 
