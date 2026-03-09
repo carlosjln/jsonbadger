@@ -1,11 +1,6 @@
 import defaults from '#src/constants/defaults.js';
 import IdStrategies, {assert_valid_id_strategy} from '#src/constants/id-strategies.js';
 
-import ensure_index from '#src/migration/ensure-index.js';
-import ensure_schema from '#src/migration/ensure-schema.js';
-import resolve_schema_indexes from '#src/migration/schema-indexes-resolver.js';
-import ensure_table from '#src/migration/ensure-table.js';
-
 import document_instance from '#src/model/document-instance.js';
 import {compile_delete_one} from '#src/model/factory/delete-compiler.js';
 import {
@@ -14,13 +9,17 @@ import {
 	resolve_from_strict_mode,
 	resolve_source_data
 } from '#src/model/factory/from-runtime.js';
+import {install_migration_methods} from '#src/model/factory/migration-methods.js';
 import {
 	assert_model_id_strategy_supported,
 	resolve_model_connection_options
 } from '#src/model/factory/model-support.js';
+import {
+	ensure_model_runtime_state,
+	reset_model_index_cache
+} from '#src/model/factory/model-runtime-state.js';
+import {install_read_methods} from '#src/model/factory/read-methods.js';
 import {compile_update_one} from '#src/model/factory/update-compiler.js';
-
-import QueryBuilder from '#src/query/query-builder.js';
 
 import {assert_condition, assert_identifier} from '#src/utils/assert.js';
 import {is_array} from '#src/utils/array.js';
@@ -47,8 +46,6 @@ function model(schema_instance, model_configuration, connection_context, model_n
 	assert_identifier(model_options.table_name, 'table_name');
 	assert_identifier(model_options.data_column, 'data_column');
 
-	let indexes_ensured = false;
-
 	/**
 	 * Creates a runtime document wrapper for model payload data.
 	 *
@@ -63,6 +60,11 @@ function model(schema_instance, model_configuration, connection_context, model_n
 	Model.schema_instance = schema_instance;
 	Model.model_options = model_options;
 	Model.connection = connection_context || null;
+	ensure_model_runtime_state(Model);
+
+	Model.reset_index_cache = function () {
+		reset_model_index_cache(Model);
+	};
 
 	Model.resolve_id_strategy = function () {
 		const connection_options = resolve_model_connection_options(Model);
@@ -93,52 +95,8 @@ function model(schema_instance, model_configuration, connection_context, model_n
 	};
 
 	document_instance(Model);
-
-	Model.ensure_table = async function () {
-		const final_table_name = model_options.table_name;
-		const final_id_strategy = Model.assert_id_strategy_supported();
-
-		await ensure_table(final_table_name, model_options.data_column, final_id_strategy, Model.connection);
-
-		if(indexes_ensured || !Model.resolve_auto_index()) {
-			return;
-		}
-
-		await ensure_schema_indexes(Model, schema_instance, model_options);
-		indexes_ensured = true;
-	};
-
-	Model.ensure_index = async function () {
-		const final_table_name = model_options.table_name;
-		const final_id_strategy = Model.assert_id_strategy_supported();
-
-		await ensure_table(final_table_name, model_options.data_column, final_id_strategy, Model.connection);
-		await ensure_schema_indexes(Model, schema_instance, model_options);
-
-		indexes_ensured = true;
-	};
-
-	Model.ensure_schema = async function () {
-		const final_id_strategy = Model.assert_id_strategy_supported();
-		await ensure_schema(model_options.table_name, model_options.data_column, schema_instance, final_id_strategy, Model.connection);
-		indexes_ensured = true;
-	};
-
-	Model.find = function (query_filter, projection_value) {
-		return new QueryBuilder(Model, 'find', query_filter || {}, projection_value || null);
-	};
-
-	Model.find_one = function (query_filter) {
-		return new QueryBuilder(Model, 'find_one', query_filter || {}, null);
-	};
-
-	Model.find_by_id = function (id_value) {
-		return new QueryBuilder(Model, 'find_one', {id: id_value}, null);
-	};
-
-	Model.count_documents = function (query_filter) {
-		return new QueryBuilder(Model, 'count_documents', query_filter || {}, null);
-	};
+	install_migration_methods(Model, schema_instance, model_options);
+	install_read_methods(Model);
 
 	Model.create = async function (document_value_or_list) {
 		if(is_array(document_value_or_list)) {
@@ -177,27 +135,6 @@ function model(schema_instance, model_configuration, connection_context, model_n
 		return compile_delete_one(Model, schema_instance, model_options, query_filter);
 	};
 
-	/**
-	 * Ensures all schema-defined indexes exist for this model.
-	 *
-	 * @param {Function} model_constructor Model constructor.
-	 * @param {object} next_schema_instance Schema instance.
-	 * @param {object} next_model_options Model options.
-	 * @returns {Promise<void>}
-	 */
-	async function ensure_schema_indexes(model_constructor, next_schema_instance, next_model_options) {
-		const schema_indexes = resolve_schema_indexes(next_schema_instance);
-
-		for(const index_definition of schema_indexes) {
-			await ensure_index(
-				next_model_options.table_name,
-				index_definition,
-				next_model_options.data_column,
-				model_constructor.connection
-			);
-		}
-	}
-
 	const connection_options = resolve_model_connection_options(Model);
 	const eager_id_strategy = model_options.id_strategy ?? connection_options.id_strategy;
 
@@ -209,4 +146,3 @@ function model(schema_instance, model_configuration, connection_context, model_n
 }
 
 export default model;
-

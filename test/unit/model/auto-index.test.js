@@ -108,5 +108,27 @@ describe('Model auto index behavior', function () {
 		await user_model.ensure_table();
 
 		expect(ensure_index_mock).toHaveBeenCalledTimes(1);
+		expect(user_model.model_runtime_state).toEqual({
+			indexes_ensured: true
+		});
+	});
+
+	test('reset_index_cache allows ensure_table auto indexes to run again', async function () {
+		const schema_instance = build_schema_instance([{using: 'gin', path: 'name'}]);
+		const user_model = model(schema_instance, {table_name: 'users'}, connection, 'User');
+
+		await user_model.ensure_table();
+		user_model.reset_index_cache();
+
+		expect(user_model.model_runtime_state).toEqual({
+			indexes_ensured: false
+		});
+
+		await user_model.ensure_table();
+
+		expect(ensure_index_mock).toHaveBeenCalledTimes(2);
+		expect(user_model.model_runtime_state).toEqual({
+			indexes_ensured: true
+		});
 	});
 });

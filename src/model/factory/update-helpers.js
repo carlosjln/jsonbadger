@@ -8,7 +8,10 @@ import {has_own} from '#src/utils/object.js';
 import {is_function, is_not_object} from '#src/utils/value.js';
 
 import {
+	set_lax_null_treatments,
 	timestamp_fields,
+	update_operator_names,
+	update_operator_order,
 	update_path_nested_segment_pattern,
 	update_path_root_segment_pattern
 } from '#src/model/factory/constants.js';
@@ -38,43 +41,43 @@ function cast_update_value(path_value, next_value, schema_instance) {
 }
 
 /**
- * Validates the supported update operator payloads for update_one().
+ * Validates that an operator definition is an object.
  *
- * @param {*} set_definition $set payload.
- * @param {*} insert_definition $insert payload.
- * @param {*} set_lax_definition $set_lax payload.
+ * @param {string} operator_name Update operator name.
+ * @param {*} definition Raw operator definition.
+ * @param {string[]} allowed_operators Supported operator names.
  * @returns {void}
  * @throws {QueryError}
  */
-function assert_supported_update_definition(set_definition, insert_definition, set_lax_definition) {
-	const has_set_updates = set_definition !== undefined;
-	const has_insert_updates = insert_definition !== undefined;
-	const has_set_lax_updates = set_lax_definition !== undefined;
-	const allowed_operators = ['$set', '$insert', '$set_lax'];
+function assert_update_operator_definition_type(operator_name, definition, allowed_operators) {
+	if(is_not_object(definition)) {
+		throw new QueryError('update_definition.' + operator_name + ' must be an object', {
+			allowed: allowed_operators
+		});
+	}
+}
 
-	if(!has_set_updates && !has_insert_updates && !has_set_lax_updates) {
+/**
+ * Validates the supported update operator entries for update_one().
+ *
+ * @param {Array<{operator_name: string, definition: *, operator_descriptor: object}>} update_operator_entries Operator entries.
+ * @returns {void}
+ * @throws {QueryError}
+ */
+function assert_supported_update_definition(update_operator_entries) {
+	const allowed_operators = update_operator_order.slice();
+
+	if(update_operator_entries.length === 0) {
 		throw new QueryError('update_one requires at least one supported update operator', {
 			allowed: allowed_operators
 		});
 	}
 
-	if(has_set_updates && is_not_object(set_definition)) {
-		throw new QueryError('update_definition.$set must be an object', {allowed: allowed_operators});
+	for(const update_operator_entry of update_operator_entries) {
+		update_operator_entry.operator_descriptor.assert_definition(update_operator_entry.definition, allowed_operators);
 	}
 
-	if(has_insert_updates && is_not_object(insert_definition)) {
-		throw new QueryError('update_definition.$insert must be an object', {allowed: allowed_operators});
-	}
-
-	if(has_set_lax_updates && is_not_object(set_lax_definition)) {
-		throw new QueryError('update_definition.$set_lax must be an object', {allowed: allowed_operators});
-	}
-
-	const update_path_entries = collect_update_path_entries([
-		{operator_name: '$set', definition: set_definition},
-		{operator_name: '$insert', definition: insert_definition},
-		{operator_name: '$set_lax', definition: set_lax_definition}
-	]);
+	const update_path_entries = collect_update_path_entries(update_operator_entries);
 
 	assert_no_conflicting_update_paths(update_path_entries);
 }
@@ -98,7 +101,7 @@ function split_set_updates(set_definition) {
 	for(const [path_value, next_value] of Object.entries(set_definition)) {
 		const root_path = path_value.split('.')[0];
 
-		if(root_path === 'created_at' || root_path === 'updated_at') {
+		if(timestamp_fields.has(root_path)) {
 			assert_condition(path_value === root_path, 'Timestamp updates must use top-level paths only');
 			split_definition.timestamp_set[root_path] = normalize_row_timestamp_update(root_path, next_value);
 			continue;
@@ -263,7 +266,7 @@ function build_update_path_literal(path_value) {
 /**
  * Collects normalized update path entries for conflict validation.
  *
- * @param {Array<{operator_name: string, definition: object|undefined}>} update_operator_entries Operator entries.
+ * @param {Array<{operator_name: string, definition: *, operator_descriptor: object}>} update_operator_entries Operator entries.
  * @returns {Array<{operator_name: string, path: string}>}
  */
 function collect_update_path_entries(update_operator_entries) {
@@ -276,7 +279,9 @@ function collect_update_path_entries(update_operator_entries) {
 			continue;
 		}
 
-		for(const path of Object.keys(definition)) {
+		const path_list = operator_entry.operator_descriptor.collect_paths(definition);
+
+		for(const path of path_list) {
 			parse_update_path(path, operator_entry.operator_name);
 			update_path_entries.push({
 				operator_name: operator_entry.operator_name,
@@ -364,7 +369,7 @@ function parse_update_path(path_value, operator_name) {
 		}
 
 		if(is_root && timestamp_fields.has(segment_value)) {
-			if(operator_name !== '$set') {
+			if(operator_name !== update_operator_names.set) {
 				throw new QueryError('Timestamp fields only support $set updates', {
 					operator: operator_name,
 					path: path_value,
@@ -448,7 +453,7 @@ function normalize_set_lax_update(path_value, set_lax_definition_value) {
 		return {
 			value: set_lax_definition_value,
 			create_if_missing: true,
-			null_value_treatment: 'use_json_null'
+			null_value_treatment: set_lax_null_treatments.use_json_null
 		};
 	}
 
@@ -461,7 +466,7 @@ function normalize_set_lax_update(path_value, set_lax_definition_value) {
 		);
 	}
 
-	const null_value_treatment = set_lax_definition_value.null_value_treatment ?? 'use_json_null';
+	const null_value_treatment = set_lax_definition_value.null_value_treatment ?? set_lax_null_treatments.use_json_null;
 	assert_valid_set_lax_null_treatment(path_value, null_value_treatment);
 
 	return {
@@ -479,7 +484,7 @@ function normalize_set_lax_update(path_value, set_lax_definition_value) {
  * @returns {void}
  */
 function assert_valid_set_lax_null_treatment(path_value, null_value_treatment) {
-	const allowed_null_treatments = ['raise_exception', 'use_json_null', 'delete_key', 'return_target'];
+	const allowed_null_treatments = Object.values(set_lax_null_treatments);
 	assert_condition(
 		allowed_null_treatments.includes(null_value_treatment),
 		'$set_lax.null_value_treatment for path "' + path_value + '" must be one of: ' + allowed_null_treatments.join(', ')
@@ -491,6 +496,7 @@ export {
 	apply_set_lax_updates,
 	apply_set_updates,
 	assert_supported_update_definition,
+	assert_update_operator_definition_type,
 	cast_update_value,
 	is_missing_relation_query_error,
 	split_set_updates
