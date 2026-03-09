@@ -79,7 +79,12 @@ describe('Document save id strategy', function () {
 
 		const saved_value = await event_document.save();
 
-		expect(ensure_table_mock).toHaveBeenCalledWith('events', 'data', 'uuidv7', connection);
+		expect(ensure_table_mock).toHaveBeenCalledWith({
+			table_name: 'events',
+			data_column: 'data',
+			id_strategy: 'uuidv7',
+			connection
+		});
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
 
 		expect(sql_runner_mock.mock.calls[0][0]).toContain(
@@ -115,7 +120,12 @@ describe('Document save id strategy', function () {
 
 		await event_document.save();
 
-		expect(ensure_table_mock).toHaveBeenCalledWith('events', 'data', 'bigserial', connection);
+		expect(ensure_table_mock).toHaveBeenCalledWith({
+			table_name: 'events',
+			data_column: 'data',
+			id_strategy: 'bigserial',
+			connection
+		});
 		expect(sql_runner_mock).toHaveBeenCalledWith(expect.any(String), expect.any(Array), connection);
 	});
 
@@ -190,7 +200,12 @@ describe('Document save id strategy', function () {
 
 		const saved_value = await user_document.save();
 
-		expect(ensure_table_mock).toHaveBeenCalledWith('users', 'data', 'bigserial', connection);
+		expect(ensure_table_mock).toHaveBeenCalledWith({
+			table_name: 'users',
+			data_column: 'data',
+			id_strategy: 'bigserial',
+			connection
+		});
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
 		expect(sql_runner_mock.mock.calls[0][0]).toContain(
 			'INSERT INTO "users" ("data", created_at, updated_at) VALUES ($1::jsonb, $2::timestamptz, $3::timestamptz)'

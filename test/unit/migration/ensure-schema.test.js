@@ -40,7 +40,12 @@ describe('ensure_schema', function () {
 		await ensure_schema('users', 'data', schema_value, 'uuidv7');
 
 		expect(ensure_table_mock).toHaveBeenCalledTimes(1);
-		expect(ensure_table_mock).toHaveBeenCalledWith('users', 'data', 'uuidv7');
+		expect(ensure_table_mock).toHaveBeenCalledWith({
+			table_name: 'users',
+			data_column: 'data',
+			id_strategy: 'uuidv7',
+			connection: undefined
+		});
 		expect(resolve_schema_indexes_mock).toHaveBeenCalledTimes(1);
 		expect(resolve_schema_indexes_mock).toHaveBeenCalledWith(schema_value);
 		expect(ensure_index_mock).not.toHaveBeenCalled();
@@ -61,8 +66,18 @@ describe('ensure_schema', function () {
 		expect(resolve_schema_indexes_mock).toHaveBeenCalledTimes(1);
 		expect(ensure_index_mock).toHaveBeenCalledTimes(2);
 		expect(ensure_index_mock.mock.calls).toEqual([
-			['users', {using: 'btree', path: 'email', order: 1, unique: true}, 'data'],
-			['users', {using: 'gin', path: 'profile.city', name: 'idx_users_city_gin'}, 'data']
+			[{
+				table_name: 'users',
+				index_definition: {using: 'btree', path: 'email', order: 1, unique: true},
+				data_column: 'data',
+				connection: undefined
+			}],
+			[{
+				table_name: 'users',
+				index_definition: {using: 'gin', path: 'profile.city', name: 'idx_users_city_gin'},
+				data_column: 'data',
+				connection: undefined
+			}]
 		]);
 		expect(ensure_table_mock.mock.invocationCallOrder[0]).toBeLessThan(ensure_index_mock.mock.invocationCallOrder[0]);
 		expect(ensure_index_mock.mock.invocationCallOrder[0]).toBeLessThan(ensure_index_mock.mock.invocationCallOrder[1]);
@@ -77,7 +92,18 @@ describe('ensure_schema', function () {
 
 		await ensure_schema('users', 'data', {schema: true}, 'bigserial', connection);
 
-		expect(ensure_table_mock).toHaveBeenCalledWith('users', 'data', 'bigserial', connection);
-		expect(ensure_index_mock).toHaveBeenCalledWith('users', {using: 'gin', path: 'profile.city'}, 'data', connection);
+		expect(ensure_table_mock).toHaveBeenCalledWith({
+			table_name: 'users',
+			data_column: 'data',
+			id_strategy: 'bigserial',
+			connection
+		});
+
+		expect(ensure_index_mock).toHaveBeenCalledWith({
+			table_name: 'users',
+			index_definition: {using: 'gin', path: 'profile.city'},
+			data_column: 'data',
+			connection
+		});
 	});
 });

@@ -71,7 +71,12 @@ describe('ID strategy resolution', function () {
 
 		await account_model.ensure_table();
 
-		expect(ensure_table_mock).toHaveBeenCalledWith('accounts', 'data', 'bigserial', connection);
+		expect(ensure_table_mock).toHaveBeenCalledWith({
+			table_name: 'accounts',
+			data_column: 'data',
+			id_strategy: 'bigserial',
+			connection
+		});
 	});
 
 	test('uses server default when model id_strategy is not set', async function () {
@@ -84,7 +89,12 @@ describe('ID strategy resolution', function () {
 
 		await event_model.ensure_table();
 
-		expect(ensure_table_mock).toHaveBeenCalledWith('events', 'data', 'uuidv7', connection);
+		expect(ensure_table_mock).toHaveBeenCalledWith({
+			table_name: 'events',
+			data_column: 'data',
+			id_strategy: 'uuidv7',
+			connection
+		});
 	});
 
 	test('forwards resolved id_strategy into ensure_schema', async function () {

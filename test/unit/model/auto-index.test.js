@@ -68,8 +68,18 @@ describe('Model auto index behavior', function () {
 
 		await user_model.ensure_table();
 
-		expect(ensure_table_mock).toHaveBeenCalledWith('users', 'data', 'bigserial', connection);
-		expect(ensure_index_mock).toHaveBeenCalledWith('users', {using: 'gin', path: 'name'}, 'data', connection);
+		expect(ensure_table_mock).toHaveBeenCalledWith({
+			table_name: 'users',
+			data_column: 'data',
+			id_strategy: 'bigserial',
+			connection
+		});
+		expect(ensure_index_mock).toHaveBeenCalledWith({
+			table_name: 'users',
+			index_definition: {using: 'gin', path: 'name'},
+			data_column: 'data',
+			connection
+		});
 	});
 
 	test('model auto_index false overrides connection auto_index true', async function () {
@@ -81,7 +91,12 @@ describe('Model auto index behavior', function () {
 
 		await user_model.ensure_table();
 
-		expect(ensure_table_mock).toHaveBeenCalledWith('users', 'data', 'bigserial', connection);
+		expect(ensure_table_mock).toHaveBeenCalledWith({
+			table_name: 'users',
+			data_column: 'data',
+			id_strategy: 'bigserial',
+			connection
+		});
 		expect(ensure_index_mock).not.toHaveBeenCalled();
 	});
 
@@ -96,8 +111,18 @@ describe('Model auto index behavior', function () {
 
 		await user_model.ensure_table();
 
-		expect(ensure_table_mock).toHaveBeenCalledWith('users', 'data', 'bigserial', connection);
-		expect(ensure_index_mock).toHaveBeenCalledWith('users', {using: 'gin', path: 'name'}, 'data', connection);
+		expect(ensure_table_mock).toHaveBeenCalledWith({
+			table_name: 'users',
+			data_column: 'data',
+			id_strategy: 'bigserial',
+			connection
+		});
+		expect(ensure_index_mock).toHaveBeenCalledWith({
+			table_name: 'users',
+			index_definition: {using: 'gin', path: 'name'},
+			data_column: 'data',
+			connection
+		});
 	});
 
 	test('only applies auto_index once per model instance', async function () {

@@ -17,10 +17,14 @@ describe('ensure_index', function () {
 	});
 
 	test('creates a GIN index for single-path index spec', async function () {
-		await ensure_index('users', {
-			using: 'gin',
-			path: 'profile.city'
-		}, 'data');
+		await ensure_index({
+			table_name: 'users',
+			index_definition: {
+				using: 'gin',
+				path: 'profile.city'
+			},
+			data_column: 'data'
+		});
 
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('CREATE INDEX IF NOT EXISTS');
@@ -30,20 +34,28 @@ describe('ensure_index', function () {
 	});
 
 	test('creates a GIN index single-segment expression with -> path extraction', async function () {
-		await ensure_index('users', {
-			using: 'gin',
-			path: 'name'
-		}, 'data');
+		await ensure_index({
+			table_name: 'users',
+			index_definition: {
+				using: 'gin',
+				path: 'name'
+			},
+			data_column: 'data'
+		});
 
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
 		expect(sql_runner_mock.mock.calls[0][0]).toContain("\"data\" -> 'name'");
 	});
 
 	test('creates a compound BTREE index for object index spec', async function () {
-		await ensure_index('users', {
-			using: 'btree',
-			paths: {name: 1, type: -1}
-		}, 'data');
+		await ensure_index({
+			table_name: 'users',
+			index_definition: {
+				using: 'btree',
+				paths: {name: 1, type: -1}
+			},
+			data_column: 'data'
+		});
 
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('CREATE INDEX IF NOT EXISTS');
@@ -53,44 +65,60 @@ describe('ensure_index', function () {
 	});
 
 	test('creates compound BTREE nested-path expressions with #>>', async function () {
-		await ensure_index('users', {
-			using: 'btree',
-			paths: {'profile.city': 1}
-		}, 'data');
+		await ensure_index({
+			table_name: 'users',
+			index_definition: {
+				using: 'btree',
+				paths: {'profile.city': 1}
+			},
+			data_column: 'data'
+		});
 
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('\"data\" #>>');
 	});
 
 	test('supports unique compound indexes', async function () {
-		await ensure_index('users', {
-			using: 'btree',
-			path: 'email',
-			unique: true,
-			name: 'idx_users_email_unique'
-		}, 'data');
+		await ensure_index({
+			table_name: 'users',
+			index_definition: {
+				using: 'btree',
+				path: 'email',
+				unique: true,
+				name: 'idx_users_email_unique'
+			},
+			data_column: 'data'
+		});
 
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('CREATE UNIQUE INDEX IF NOT EXISTS "idx_users_email_unique"');
 	});
 
 	test('defaults unsupported single-path BTREE order values to ASC', async function () {
-		await ensure_index('users', {
-			using: 'btree',
-			path: 'name',
-			order: 0
-		}, 'data');
+		await ensure_index({
+			table_name: 'users',
+			index_definition: {
+				using: 'btree',
+				path: 'name',
+				order: 0
+			},
+			data_column: 'data'
+		});
 
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('("data" ->> \'name\') ASC');
 	});
 
 	test('ignores unique flag for GIN indexes and still creates GIN SQL', async function () {
-		await ensure_index('users', {
-			using: 'gin',
-			path: 'name',
-			unique: true
-		}, 'data');
+		await ensure_index({
+			table_name: 'users',
+			index_definition: {
+				using: 'gin',
+				path: 'name',
+				unique: true
+			},
+			data_column: 'data'
+		});
 
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('CREATE INDEX IF NOT EXISTS');
@@ -101,11 +129,16 @@ describe('ensure_index', function () {
 	test('forwards explicit connection context to sql_runner when provided', async function () {
 		const connection = {pool_instance: {query: jest.fn()}, options: {debug: false}};
 
-		await ensure_index('users', {
-			using: 'btree',
-			path: 'email',
-			order: 1
-		}, 'data', connection);
+		await ensure_index({
+			table_name: 'users',
+			index_definition: {
+				using: 'btree',
+				path: 'email',
+				order: 1
+			},
+			data_column: 'data',
+			connection
+		});
 
 		expect(sql_runner_mock).toHaveBeenCalledWith(expect.any(String), [], connection);
 	});

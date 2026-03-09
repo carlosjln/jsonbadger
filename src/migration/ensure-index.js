@@ -3,8 +3,14 @@ import {build_path_literal, split_dot_path} from '#src/utils/object-path.js';
 import sql_runner from '#src/sql/sql-runner.js';
 import {is_object, is_string} from '#src/utils/value.js';
 
-// TODO: should receive a single object param
-async function ensure_index(table_name, index_definition, data_column, connection) {
+async function ensure_index(context) {
+	const {
+		table_name,
+		index_definition,
+		data_column,
+		connection
+	} = context;
+
 	assert_identifier(table_name, 'table_name');
 	assert_identifier(data_column, 'data_column');
 	assert_sql_safe_index_definition(index_definition);

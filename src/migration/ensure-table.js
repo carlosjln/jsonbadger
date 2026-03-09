@@ -7,8 +7,14 @@ const ID_COLUMN_SQL_BY_STRATEGY = {
 	[IdStrategies.uuidv7]: 'id UUID PRIMARY KEY DEFAULT uuidv7()'
 };
 
-// TODO: should receive a single object param
-async function ensure_table(table_name, data_column, id_strategy, connection) {
+async function ensure_table(context) {
+	const {
+		table_name,
+		data_column,
+		id_strategy,
+		connection
+	} = context;
+
 	assert_identifier(table_name, 'table_name');
 	assert_identifier(data_column, 'data_column');
 	assert_valid_id_strategy(id_strategy);

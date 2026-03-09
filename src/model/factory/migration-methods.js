@@ -18,7 +18,12 @@ function install_migration_methods(Model, schema_instance, model_options) {
 		const final_table_name = model_options.table_name;
 		const final_id_strategy = Model.assert_id_strategy_supported();
 
-		await ensure_table(final_table_name, model_options.data_column, final_id_strategy, Model.connection);
+		await ensure_table({
+			table_name: final_table_name,
+			data_column: model_options.data_column,
+			id_strategy: final_id_strategy,
+			connection: Model.connection
+		});
 
 		if(are_model_indexes_ensured(Model) || !Model.resolve_auto_index()) {
 			return;
@@ -32,7 +37,12 @@ function install_migration_methods(Model, schema_instance, model_options) {
 		const final_table_name = model_options.table_name;
 		const final_id_strategy = Model.assert_id_strategy_supported();
 
-		await ensure_table(final_table_name, model_options.data_column, final_id_strategy, Model.connection);
+		await ensure_table({
+			table_name: final_table_name,
+			data_column: model_options.data_column,
+			id_strategy: final_id_strategy,
+			connection: Model.connection
+		});
 		await ensure_schema_indexes(Model, schema_instance, model_options);
 
 		mark_model_indexes_ensured(Model);
@@ -62,12 +72,12 @@ async function ensure_schema_indexes(model_constructor, next_schema_instance, ne
 	const schema_indexes = resolve_schema_indexes(next_schema_instance);
 
 	for(const index_definition of schema_indexes) {
-		await ensure_index(
-			next_model_options.table_name,
+		await ensure_index({
+			table_name: next_model_options.table_name,
 			index_definition,
-			next_model_options.data_column,
-			model_constructor.connection
-		);
+			data_column: next_model_options.data_column,
+			connection: model_constructor.connection
+		});
 	}
 }
 

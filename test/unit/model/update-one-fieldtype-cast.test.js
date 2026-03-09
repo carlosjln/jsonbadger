@@ -61,7 +61,12 @@ describe('Model.update_one field type casting', function () {
 			}
 		});
 
-		expect(ensure_table_mock).toHaveBeenCalledWith('users', 'data', 'bigserial', connection);
+		expect(ensure_table_mock).toHaveBeenCalledWith({
+			table_name: 'users',
+			data_column: 'data',
+			id_strategy: 'bigserial',
+			connection
+		});
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('jsonb_set');
 		expect(sql_runner_mock.mock.calls[0][1]).toEqual(['true', '41', '"12.5"']);

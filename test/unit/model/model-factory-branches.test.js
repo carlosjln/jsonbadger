@@ -223,8 +223,18 @@ describe('model-factory branch behavior', function () {
 
 			await user_model.ensure_index();
 
-			expect(ensure_table_mock).toHaveBeenCalledWith('users', 'data', 'uuidv7', connection);
-			expect(ensure_index_mock).toHaveBeenCalledWith('users', {using: 'gin', path: 'name'}, 'data', connection);
+			expect(ensure_table_mock).toHaveBeenCalledWith({
+				table_name: 'users',
+				data_column: 'data',
+				id_strategy: 'uuidv7',
+				connection
+			});
+			expect(ensure_index_mock).toHaveBeenCalledWith({
+				table_name: 'users',
+				index_definition: {using: 'gin', path: 'name'},
+				data_column: 'data',
+				connection
+			});
 		});
 
 		test('forwards model-owned connection context through ensure_index and ensure_schema', async function () {
@@ -240,8 +250,18 @@ describe('model-factory branch behavior', function () {
 			await user_model.ensure_index();
 			await user_model.ensure_schema();
 
-			expect(ensure_table_mock).toHaveBeenCalledWith('users', 'data', 'bigserial', connection);
-			expect(ensure_index_mock).toHaveBeenCalledWith('users', {using: 'gin', path: 'name'}, 'data', connection);
+			expect(ensure_table_mock).toHaveBeenCalledWith({
+				table_name: 'users',
+				data_column: 'data',
+				id_strategy: 'bigserial',
+				connection
+			});
+			expect(ensure_index_mock).toHaveBeenCalledWith({
+				table_name: 'users',
+				index_definition: {using: 'gin', path: 'name'},
+				data_column: 'data',
+				connection
+			});
 			expect(ensure_schema_mock).toHaveBeenCalledWith('users', 'data', schema_instance, 'bigserial', connection);
 		});
 	});
@@ -673,8 +693,6 @@ function create_connection(options = {}, server_capabilities = null) {
 	};
 }
 
-
-// TODO: too many params, evaluate changing to single param object
 function create_model(schema_instance, model_options = {}, connection = undefined, model_name = undefined) {
 	return model(
 		schema_instance,

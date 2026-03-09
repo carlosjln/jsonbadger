@@ -17,7 +17,11 @@ describe('ensure_table id strategy', function () {
 	});
 
 	test('creates BIGSERIAL primary key for bigserial strategy', async function () {
-		await ensure_table('users', 'data', 'bigserial');
+		await ensure_table({
+			table_name: 'users',
+			data_column: 'data',
+			id_strategy: 'bigserial'
+		});
 
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('id BIGSERIAL PRIMARY KEY');
@@ -26,7 +30,11 @@ describe('ensure_table id strategy', function () {
 	});
 
 	test('creates UUID primary key with database uuidv7() default for uuidv7 strategy', async function () {
-		await ensure_table('sessions', 'payload', 'uuidv7');
+		await ensure_table({
+			table_name: 'sessions',
+			data_column: 'payload',
+			id_strategy: 'uuidv7'
+		});
 
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('id UUID PRIMARY KEY DEFAULT uuidv7()');
@@ -37,17 +45,29 @@ describe('ensure_table id strategy', function () {
 	test('forwards explicit connection context to sql_runner when provided', async function () {
 		const connection = {pool_instance: {query: jest.fn()}, options: {debug: false}};
 
-		await ensure_table('users', 'data', 'bigserial', connection);
+		await ensure_table({
+			table_name: 'users',
+			data_column: 'data',
+			id_strategy: 'bigserial',
+			connection
+		});
 
 		expect(sql_runner_mock).toHaveBeenCalledWith(expect.any(String), [], connection);
 	});
 
 	test('throws when id_strategy is omitted', async function () {
-		await expect(ensure_table('logs', 'data')).rejects.toThrow('id_strategy must be one of: bigserial, uuidv7');
+		await expect(ensure_table({
+			table_name: 'logs',
+			data_column: 'data'
+		})).rejects.toThrow('id_strategy must be one of: bigserial, uuidv7');
 	});
 
 	test('throws for unsupported id_strategy values', async function () {
-		await expect(ensure_table('audit', 'data', 'uuid')).rejects.toThrow(
+		await expect(ensure_table({
+			table_name: 'audit',
+			data_column: 'data',
+			id_strategy: 'uuid'
+		})).rejects.toThrow(
 			'id_strategy must be one of: bigserial, uuidv7'
 		);
 	});
