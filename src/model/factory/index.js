@@ -1,5 +1,5 @@
 import defaults from '#src/constants/defaults.js';
-import IdStrategies, {assert_valid_id_strategy} from '#src/constants/id-strategies.js';
+import IdStrategies, {assert_id_strategy} from '#src/constants/id-strategies.js';
 
 import document_instance from '#src/model/document-instance.js';
 import {compile_delete_one} from '#src/model/factory/delete-compiler.js';
@@ -72,7 +72,7 @@ function model(schema_instance, model_configuration, connection_context, model_n
 		const server_id_strategy = connection_options.id_strategy;
 		const final_id_strategy = model_id_strategy ?? server_id_strategy;
 
-		assert_valid_id_strategy(final_id_strategy);
+		assert_id_strategy(final_id_strategy);
 
 		return final_id_strategy;
 	};

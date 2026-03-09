@@ -5,7 +5,7 @@ import Connection from '#src/connection/connection.js';
 import debug_logger from '#src/debug/debug-logger.js';
 
 import {assert_condition} from '#src/utils/assert.js';
-import {assert_valid_id_strategy} from '#src/constants/id-strategies.js';
+import {assert_id_strategy} from '#src/constants/id-strategies.js';
 import {scan_server_capabilities, assert_id_strategy_capability} from '#src/connection/server-capabilities.js';
 import {is_function, is_string} from '#src/utils/value.js';
 
@@ -15,7 +15,7 @@ async function connect(uri, options) {
 	const final_options = Object.assign({}, defaults.connection_options, options);
 	const {debug, id_strategy, auto_index, ...pool_options} = final_options;
 
-	assert_valid_id_strategy(id_strategy);
+	assert_id_strategy(id_strategy);
 	assert_condition(typeof auto_index === 'boolean', 'auto_index must be a boolean');
 
 	const pool_instance = new Pool(Object.assign({}, pool_options, {connectionString: uri}));

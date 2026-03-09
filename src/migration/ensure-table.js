@@ -1,5 +1,5 @@
 import {assert_identifier, quote_identifier} from '#src/utils/assert.js';
-import IdStrategies, {assert_valid_id_strategy} from '#src/constants/id-strategies.js';
+import IdStrategies, {assert_id_strategy} from '#src/constants/id-strategies.js';
 import sql_runner from '#src/sql/sql-runner.js';
 
 const ID_COLUMN_SQL_BY_STRATEGY = {
@@ -17,7 +17,7 @@ async function ensure_table(context) {
 
 	assert_identifier(table_name, 'table_name');
 	assert_identifier(data_column, 'data_column');
-	assert_valid_id_strategy(id_strategy);
+	assert_id_strategy(id_strategy);
 
 	const final_id_strategy = id_strategy;
 	const table_identifier = quote_identifier(table_name);
