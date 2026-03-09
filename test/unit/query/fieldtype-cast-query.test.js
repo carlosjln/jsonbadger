@@ -1,6 +1,6 @@
 ﻿import {describe, expect, test} from '@jest/globals';
 
-import where_compiler from '#src/query/where-compiler.js';
+import where_compiler from '#src/query/where-compiler/index.js';
 import Schema from '#src/schema/schema.js';
 
 describe('where_compiler field type casting', function () {

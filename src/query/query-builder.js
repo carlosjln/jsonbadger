@@ -1,6 +1,6 @@
 ﻿import limit_skip_compiler from '#src/query/limit-skip-compiler.js';
 import sort_compiler from '#src/query/sort-compiler.js';
-import where_compiler from '#src/query/where-compiler.js';
+import where_compiler from '#src/query/where-compiler/index.js';
 
 import sql_runner from '#src/sql/sql-runner.js';
 

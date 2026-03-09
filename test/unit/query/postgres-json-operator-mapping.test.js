@@ -1,6 +1,6 @@
 ﻿import {describe, expect, test} from '@jest/globals';
 
-import where_compiler from '#src/query/where-compiler.js';
+import where_compiler from '#src/query/where-compiler/index.js';
 
 describe('PostgreSQL JSON operator mapping', function () {
 	test('maps containment and existence operators to native JSONB operators', function () {
