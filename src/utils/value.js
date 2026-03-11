@@ -1,11 +1,23 @@
-function is_object(value) {
-	return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
 const uuidv7_pattern = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function is_object(value) {
+	return typeof value === 'object'
+		&& !(value == null)
+		&& !(value instanceof Date)
+		&& !(value instanceof Map)
+		&& !(value instanceof Set)
+		&& !Array.isArray(value)
+		&& !ArrayBuffer.isView(value);
+}
+
 function is_not_object(value) {
-	return value === null || Array.isArray(value) || typeof value !== 'object';
+	return typeof value !== 'object'
+		|| value == null
+		|| value instanceof Date
+		|| value instanceof Map
+		|| value instanceof Set
+		|| Array.isArray(value)
+		|| ArrayBuffer.isView(value);
 }
 
 /**

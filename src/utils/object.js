@@ -4,6 +4,14 @@ function has_own(target, key) {
 	return Object.prototype.hasOwnProperty.call(target, key);
 }
 
+function get_callable(target, ...method_names) {
+	for(const name of method_names) {
+		if(typeof name === 'function') return name;
+		if(typeof target[name] === 'function') return target[name];
+	}
+	return null;
+}
+
 /**
  * Performs a deep equality comparison between two values.
  * Handles primitives, objects, arrays, Dates, and circular references.
@@ -94,84 +102,174 @@ function are_equal(target_a, target_b, memo = new WeakMap()) {
  * Deep-clones plain data while preserving built-in value semantics.
  *
  * @param {*} value Source value to clone.
- * @param {WeakMap<object, *>} cache Circular-reference cache.
  * @returns {*}
  */
-function deep_clone(value, cache = new WeakMap()) {
-	if(value === null || typeof value !== 'object') {
-		return value;
-	}
+function deep_clone(value) {
+	const cache = new WeakMap();
 
-	if(cache.has(value)) {
-		return cache.get(value);
-	}
-
-	if(value instanceof Date) {
-		return new Date(value.getTime());
-	}
-
-	if(value instanceof RegExp) {
-		const cloned_regexp = new RegExp(value.source, value.flags);
-		cloned_regexp.lastIndex = value.lastIndex;
-		return cloned_regexp;
-	}
-
-	if(Buffer.isBuffer(value)) {
-		return Buffer.from(value);
-	}
-
-	if(value instanceof Map) {
-		const cloned_map = new Map();
-		cache.set(value, cloned_map);
-
-		for(const [map_key, map_value] of value.entries()) {
-			cloned_map.set(deep_clone(map_key, cache), deep_clone(map_value, cache));
+	const clone = (_value) => {
+		if(_value === null || typeof _value !== 'object') {
+			return _value;
 		}
 
-		return cloned_map;
-	}
-
-	if(value instanceof Set) {
-		const cloned_set = new Set();
-		cache.set(value, cloned_set);
-
-		for(const set_value of value.values()) {
-			cloned_set.add(deep_clone(set_value, cache));
+		if(cache.has(_value)) {
+			return cache.get(_value);
 		}
 
-		return cloned_set;
-	}
+		if(_value instanceof Date) {
+			return new Date(_value.getTime());
+		}
 
-	if(Array.isArray(value)) {
-		const result = [];
-		cache.set(value, result);
+		if(_value instanceof RegExp) {
+			const cloned_regexp = new RegExp(_value.source, _value.flags);
+			cloned_regexp.lastIndex = _value.lastIndex;
+			return cloned_regexp;
+		}
 
-		for(let i = 0; i < value.length; i++) {
-			result[i] = deep_clone(value[i], cache);
+		if(Buffer.isBuffer(_value)) {
+			return Buffer.from(_value);
+		}
+
+		if(_value instanceof Map) {
+			const cloned_map = new Map();
+			cache.set(_value, cloned_map);
+
+			for(const [map_key, map_value] of _value.entries()) {
+				cloned_map.set(clone(map_key), clone(map_value));
+			}
+
+			return cloned_map;
+		}
+
+		if(_value instanceof Set) {
+			const cloned_set = new Set();
+			cache.set(_value, cloned_set);
+
+			for(const set_value of _value.values()) {
+				cloned_set.add(clone(set_value));
+			}
+
+			return cloned_set;
+		}
+
+		if(Array.isArray(_value)) {
+			const result = [];
+			cache.set(_value, result);
+
+			for(let i = 0; i < _value.length; i++) {
+				result[i] = clone(_value[i]);
+			}
+
+			return result;
+		}
+
+		// Bugfix note:
+		// Native structuredClone flattens custom class instances into plain objects, which corrupts
+		// parser-produced FieldType instances stored inside options (`of_field_type`, union candidates).
+		// Keep non-plain objects by reference here so runtime methods stay intact.
+		if(!is_plain_object(_value)) {
+			return _value;
+		}
+
+		const result = {};
+		const keys = Object.keys(_value);
+		cache.set(_value, result);
+
+		for(let i = 0; i < keys.length; i++) {
+			const key = keys[i];
+			result[key] = clone(_value[key]);
 		}
 
 		return result;
-	}
+	};
 
-	// Bugfix note:
-	// Native structuredClone flattens custom class instances into plain objects, which corrupts
-	// parser-produced FieldType instances stored inside options (`of_field_type`, union candidates).
-	// Keep non-plain objects by reference here so runtime methods stay intact.
-	if(!is_plain_object(value)) {
-		return value;
-	}
+	return clone(value);
+};
 
-	const result = {};
-	const keys = Object.keys(value);
-	cache.set(value, result);
+/**
+ * Deeply converts a value to a plain JavaScript object.
+ * Strips reactivity, class instances, and flattens collections (Map/Set/TypedArrays).
+ *
+ * @param {*} value
+ * @returns {*}
+ */
+function to_plain_object(value) {
+	const seen_refs = new WeakMap();
 
-	for(let i = 0; i < keys.length; i++) {
-		const key = keys[i];
-		result[key] = deep_clone(value[key], cache);
-	}
+	const transform = (val) => {
+		// 1. Handle Primitives and null
+		if(val === null || typeof val !== 'object') {
+			return val;
+		}
 
-	return result;
-}
+		// 2. Handle Circular References
+		// Reuse the already-created plain value so the object graph stays coherent.
+		if(seen_refs.has(val)) {
+			return seen_refs.get(val);
+		}
+
+		// 3. Handle Dates
+		if(val instanceof Date) {
+			return new Date(val.getTime());
+		}
+
+		// 4. Handle Custom Value Objects (via toJSON)
+		// If an object defines how it should be serialized, we honor it,
+		// then continue plainifying the returned value.
+		if(typeof val.toJSON === 'function') {
+			return transform(val.toJSON());
+		}
+
+		// 5. Handle Collections (Sets) -> Array
+		if(val instanceof Set) {
+			const plain_set = [];
+			seen_refs.set(val, plain_set);
+			val.forEach(item => {
+				plain_set.push(transform(item));
+			});
+			return plain_set;
+		}
+
+		// 6. Handle Collections (Maps) -> Object
+		// Map keys are materialized as object keys, so non-string keys are stringified intentionally.
+		if(val instanceof Map) {
+			const plain_map = Object.create(null);
+			seen_refs.set(val, plain_map);
+			val.forEach((item_val, key) => {
+				plain_map[String(key)] = transform(item_val);
+			});
+			return plain_map;
+		}
+
+		// 7. Handle TypedArrays / Buffers -> Array
+		if(ArrayBuffer.isView(val) && !(val instanceof DataView)) {
+			return Array.from(val);
+		}
+
+		// 8. Handle Arrays
+		if(Array.isArray(val)) {
+			const plain_array = [];
+			seen_refs.set(val, plain_array);
+			val.forEach((item, index) => {
+				plain_array[index] = transform(item);
+			});
+			return plain_array;
+		}
+
+		// 9. Handle Objects / Class Instances / Proxies
+		const plain_result = Object.create(null);
+		seen_refs.set(val, plain_result);
+
+		// Object.keys ignores non-enumerable properties and prototype methods.
+		Object.keys(val).forEach(key => {
+			plain_result[key] = transform(val[key]);
+		});
+
+		return plain_result;
+	};
+
+	return transform(value);
+};
 
 function conform(schema, value, cache = new WeakMap()) {
 	// 1. Array Handling
@@ -284,7 +382,9 @@ function merge(schema, base, value, cache = new WeakMap()) {
 export {
 	are_equal,
 	has_own,
+	get_callable,
 	deep_clone,
+	to_plain_object,
 	conform,
 	merge
 };
@@ -292,7 +392,9 @@ export {
 export default {
 	are_equal,
 	has_own,
+	get_callable,
 	deep_clone,
+	to_plain_object,
 	conform,
 	merge
 };

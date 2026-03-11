@@ -2,29 +2,19 @@ import defaults from '#src/constants/defaults.js';
 import IdStrategies, {assert_id_strategy} from '#src/constants/id-strategies.js';
 
 import document_instance from '#src/model/document-instance.js';
+import {DocumentInputMode} from '#src/model/factory/constants.js';
 import {compile_delete_one} from '#src/model/factory/delete-compiler.js';
-import {
-	build_document_instance,
-	normalize_payload,
-	resolve_from_strict_mode,
-	resolve_source_data
-} from '#src/model/factory/from-runtime.js';
+import {build_document_instance, normalize_document_input, conform_payload_to_schema, filter_loose_payload} from '#src/model/factory/document-builder.js';
 import {install_migration_methods} from '#src/model/factory/migration-methods.js';
-import {
-	assert_model_id_strategy_supported,
-	resolve_model_connection_options
-} from '#src/model/factory/model-support.js';
-import {
-	ensure_model_runtime_state,
-	reset_model_index_cache
-} from '#src/model/factory/model-runtime-state.js';
+import {resolve_model_connection_options, resolve_supported_model_id_strategy} from '#src/model/factory/model-support.js';
+import {ensure_model_runtime_state, reset_model_index_cache} from '#src/model/factory/model-runtime-state.js';
 import {install_read_methods} from '#src/model/factory/read-methods.js';
 import {compile_update_one} from '#src/model/factory/update-compiler.js';
 
 import {assert_condition, assert_identifier} from '#src/utils/assert.js';
 import {is_array} from '#src/utils/array.js';
 import {has_own} from '#src/utils/object.js';
-import {is_function, is_not_object} from '#src/utils/value.js';
+import {is_boolean, is_function, is_not_object} from '#src/utils/value.js';
 
 /**
  * Creates a model constructor for a schema/table pairing.
@@ -83,47 +73,67 @@ function model(schema_instance, model_configuration, connection_context, model_n
 		const server_auto_index = connection_options.auto_index;
 		const final_auto_index = model_auto_index ?? server_auto_index;
 
-		assert_condition(typeof final_auto_index === 'boolean', 'auto_index must be a boolean');
+		assert_condition(is_boolean(final_auto_index), 'auto_index must be a boolean');
 
 		return final_auto_index;
-	};
-
-	Model.assert_id_strategy_supported = function () {
-		const final_id_strategy = Model.resolve_id_strategy();
-		assert_model_id_strategy_supported(Model, final_id_strategy);
-		return final_id_strategy;
 	};
 
 	document_instance(Model);
 	install_migration_methods(Model, schema_instance, model_options);
 	install_read_methods(Model);
 
-	Model.create = async function (document_value_or_list) {
-		if(is_array(document_value_or_list)) {
+	Model.create = async function (documents) {
+		if(is_array(documents)) {
 			const created_documents = [];
 
-			for(const document_value of document_value_or_list) {
-				const next_document = new Model(document_value || {});
+			for(const document of documents) {
+				const next_document = new Model(document || {});
 				created_documents.push(await next_document.save());
 			}
 
 			return created_documents;
 		}
 
-		const next_document = new Model(document_value_or_list || {});
+		const next_document = new Model(documents || {});
 		return next_document.save();
 	};
 
-	Model.from = function (source_value, runtime_options) {
-		const source_data = resolve_source_data(schema_instance, source_value);
-		const strict_mode = resolve_from_strict_mode(schema_instance, runtime_options);
-		const normalized_payload = normalize_payload(schema_instance, source_data.payload, strict_mode);
+	Model.from = function (input_data, options = {}) {
+		// 1. Inspect the incoming shape, extract root base fields, and fold everything else into payload.
+		// In `from(...)`, a root `data` key is treated like ordinary payload, not as a row envelope.
+		const source_data = normalize_document_input(input_data, DocumentInputMode.From);
+
+		// 2. Resolve strictness for this import. Per-call options override schema strictness here.
+		const strict_mode = options.strict ?? schema_instance.strict;
+
+		// 3. Shape the extracted payload according to the selected strictness rule.
+		const payload_input = strict_mode
+			? conform_payload_to_schema(schema_instance, source_data.payload)
+			: filter_loose_payload(source_data.payload);
+
+		// 4. Validate and cast the resulting payload through the schema.
+		const normalized_payload = schema_instance.validate(payload_input);
+
+		// 5. Build a new document. Base fields may be preserved, but this path keeps `is_new = true`.
 		return build_document_instance(Model, normalized_payload, source_data.base_fields, false);
 	};
 
-	Model.hydrate = function (source_value) {
-		const source_data = resolve_source_data(schema_instance, source_value);
-		const normalized_payload = normalize_payload(schema_instance, source_data.payload, schema_instance.strict);
+	Model.hydrate = function (input_data, options = {}) {
+		// 1. Inspect the incoming shape, extract outer base fields, and use `input_data.data` as payload when present.
+		const source_data = normalize_document_input(input_data, DocumentInputMode.Hydrate);
+
+		// 2. Resolve strictness for this hydrate input. Per-call options override schema strictness here too.
+		const strict_mode = options.strict ?? schema_instance.strict;
+
+		// 3. Shape the extracted payload according to the selected strictness rule.
+		const payload_input = strict_mode
+			? conform_payload_to_schema(schema_instance, source_data.payload)
+			: filter_loose_payload(source_data.payload);
+
+		// 4. Validate and cast the resulting payload through the schema.
+		const normalized_payload = schema_instance.validate(payload_input);
+
+		// 5. Build a persisted document. This path reconstructs row-backed state and sets `is_new = false`.
 		return build_document_instance(Model, normalized_payload, source_data.base_fields, true);
 	};
 
@@ -139,7 +149,7 @@ function model(schema_instance, model_configuration, connection_context, model_n
 	const eager_id_strategy = model_options.id_strategy ?? connection_options.id_strategy;
 
 	if(eager_id_strategy === IdStrategies.uuidv7) {
-		Model.assert_id_strategy_supported();
+		resolve_supported_model_id_strategy(Model);
 	}
 
 	return Model;

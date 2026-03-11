@@ -98,7 +98,7 @@ describe('model-factory branch behavior', function () {
 			expect(user_model.connection.options.auto_index).toBe(true);
 		});
 
-		test('uses connection-owned server capabilities when asserting id strategy support', function () {
+		test('uses connection-owned server capabilities during model setup for uuidv7', function () {
 			const schema_instance = build_schema_stub();
 			const connection = {
 				options: {
@@ -111,7 +111,7 @@ describe('model-factory branch behavior', function () {
 			};
 			const user_model = create_model(schema_instance, {}, connection, 'User');
 
-			expect(user_model.assert_id_strategy_supported()).toBe('uuidv7');
+			expect(user_model.resolve_id_strategy()).toBe('uuidv7');
 			expect(assert_id_strategy_capability_mock).toHaveBeenCalledWith('uuidv7', {
 				supports_uuidv7: true
 			});
@@ -497,6 +497,41 @@ describe('model-factory branch behavior', function () {
 	});
 
 	describe('from', function () {
+		test('clones an existing document instance into a new document while preserving payload and base fields', function () {
+			const user_model = create_model(new Schema({
+				name: {
+					type: String,
+					set: function (value) {
+						return value.trim();
+					}
+				},
+				age: Number
+			}));
+
+			const source_document = user_model.hydrate({
+				id: 7,
+				data: {
+					name: '  maria  ',
+					age: '29'
+				},
+				created_at: '2026-03-03T08:00:00.000Z',
+				updated_at: '2026-03-03T09:00:00.000Z'
+			});
+
+			const cloned_document = user_model.from(source_document);
+
+			expect(cloned_document).toBeInstanceOf(user_model);
+			expect(cloned_document).not.toBe(source_document);
+			expect(cloned_document.data).toEqual({name: 'maria', age: 29});
+
+			expect(cloned_document.is_new).toBe(true);
+			expect(cloned_document.id).toBe('7');
+			expect(cloned_document.created_at).toBeInstanceOf(Date);
+			expect(cloned_document.created_at.toISOString()).toBe('2026-03-03T08:00:00.000Z');
+			expect(cloned_document.updated_at).toBeInstanceOf(Date);
+			expect(cloned_document.updated_at.toISOString()).toBe('2026-03-03T09:00:00.000Z');
+		});
+
 		test('builds a new document from schema-defined payload and top-level base fields', function () {
 			const user_model = create_model(new Schema({
 				name: {type: String, set: function (value) {return value.trim();}},
@@ -519,25 +554,30 @@ describe('model-factory branch behavior', function () {
 			expect(imported_document.created_at.toISOString()).toBe('2026-03-03T08:00:00.000Z');
 		});
 
-		test('uses source.data as payload input and ignores outer non-base payload keys', function () {
+		test('treats a root data key as ordinary payload and still extracts root base fields', function () {
 			const user_model = create_model(new Schema({
-				name: String,
-				age: Number
+				name: String
 			}));
 
 			const imported_document = user_model.from({
 				id: '7',
-				name: 'outer-ignore',
+				name: 'outer-keep',
+				data: {
+					name: 'maria',
+					age: '29'
+				}
+			}, {
+				strict: false
+			});
+
+			expect(imported_document.data).toEqual({
+				name: 'outer-keep',
 				data: {
 					name: 'maria',
 					age: '29'
 				}
 			});
-
-			expect(imported_document.data).toEqual({
-				name: 'maria',
-				age: 29
-			});
+			expect(imported_document.is_new).toBe(true);
 			expect(imported_document.id).toBe('7');
 		});
 
@@ -635,7 +675,7 @@ describe('model-factory branch behavior', function () {
 	});
 
 	describe('hydrate', function () {
-		test('builds a persisted document from row-like data with no modified paths', function () {
+		test('uses input_data.data as persisted payload and ignores outer non-base keys', function () {
 			const user_model = create_model(new Schema({
 				name: {type: String, set: function (value) {return value.trim();}},
 				age: Number
@@ -643,6 +683,7 @@ describe('model-factory branch behavior', function () {
 
 			const hydrated_document = user_model.hydrate({
 				id: 7,
+				name: 'outer-ignore',
 				data: {
 					name: '  maria  ',
 					age: '29'

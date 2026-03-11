@@ -336,6 +336,8 @@ const imported_user = User.from({
 });
 ```
 
+`User.from(...)` extracts root `id`, `created_at`, and `updated_at` into base fields and treats everything else as payload, including a root `data` key.
+
 Hydrate a persisted document from raw row-like data:
 
 ```js
@@ -349,6 +351,8 @@ const hydrated_user = User.hydrate({
 	updated_at: '2026-03-03T09:00:00.000Z'
 });
 ```
+
+`User.hydrate(...)` is the row-like path. When `data` is present on the outer object, it becomes the payload source.
 
 Timestamp helper examples on create:
 

@@ -3,6 +3,7 @@ import ensure_schema from '#src/migration/ensure-schema.js';
 import resolve_schema_indexes from '#src/migration/schema-indexes-resolver.js';
 import ensure_table from '#src/migration/ensure-table.js';
 
+import {resolve_supported_model_id_strategy} from '#src/model/factory/model-support.js';
 import {ensure_model_runtime_state} from '#src/model/factory/model-runtime-state.js';
 
 /**
@@ -16,7 +17,7 @@ import {ensure_model_runtime_state} from '#src/model/factory/model-runtime-state
 function install_migration_methods(Model, schema_instance, model_options) {
 	Model.ensure_table = async function () {
 		const final_table_name = model_options.table_name;
-		const final_id_strategy = Model.assert_id_strategy_supported();
+		const final_id_strategy = resolve_supported_model_id_strategy(Model);
 
 		await ensure_table({
 			table_name: final_table_name,
@@ -35,7 +36,7 @@ function install_migration_methods(Model, schema_instance, model_options) {
 
 	Model.ensure_index = async function () {
 		const final_table_name = model_options.table_name;
-		const final_id_strategy = Model.assert_id_strategy_supported();
+		const final_id_strategy = resolve_supported_model_id_strategy(Model);
 
 		await ensure_table({
 			table_name: final_table_name,
@@ -49,7 +50,7 @@ function install_migration_methods(Model, schema_instance, model_options) {
 	};
 
 	Model.ensure_schema = async function () {
-		const final_id_strategy = Model.assert_id_strategy_supported();
+		const final_id_strategy = resolve_supported_model_id_strategy(Model);
 		await ensure_schema(model_options.table_name, model_options.data_column, schema_instance, final_id_strategy, Model.connection);
 		mark_model_indexes_ensured(Model);
 	};

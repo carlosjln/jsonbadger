@@ -54,8 +54,21 @@ function assert_model_id_strategy_supported(Model, final_id_strategy) {
 	assert_id_strategy_capability(final_id_strategy, server_capabilities);
 }
 
+/**
+ * Resolves the model id strategy and verifies server support when required.
+ *
+ * @param {Function} Model Model constructor.
+ * @returns {string}
+ */
+function resolve_supported_model_id_strategy(Model) {
+	const final_id_strategy = Model.resolve_id_strategy();
+	assert_model_id_strategy_supported(Model, final_id_strategy);
+	return final_id_strategy;
+}
+
 export {
 	assert_model_id_strategy_supported,
+	resolve_supported_model_id_strategy,
 	resolve_model_connection_options,
 	resolve_model_server_capabilities
 };

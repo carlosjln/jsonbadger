@@ -52,9 +52,9 @@ New documents start in the `is_new = true` state until they are persisted.
   - creates declared indexes
 - `Model.ensure_schema()`
   - runs table + index setup together
-- `Model.from(source, options?)`
+- `Model.from(input_data, options?)`
   - builds a new document from external payload or row-like input without marking it persisted
-- `Model.hydrate(source)`
+- `Model.hydrate(input_data)`
   - builds a persisted document from existing raw data with no modified paths
 
 Example:
@@ -84,9 +84,33 @@ Behavior:
 - returns a new document instance
 - keeps `is_new = true`
 - applies schema casting/setters to known payload fields
-- reads top-level base fields (`id`, `created_at`, `updated_at`) from the source object
-- when `source.data` exists, it is treated as the payload source
+- treats `id`, `created_at`, and `updated_at` as reserved root base fields
+- extracts those root base fields into runtime state when present
+- folds everything else into payload, including a root `data` key
 - drops unknown payload keys by default
+
+Input flow:
+1. check whether the input is object-like
+2. extract reserved root base fields (`id`, `created_at`, `updated_at`)
+3. fold everything else into payload
+
+Example:
+
+```js
+const imported_user = User.from({
+	id: '7',
+	created_at: '2026-03-03T08:00:00.000Z',
+	data: {
+		name: 'maria'
+	},
+	username: 'maria'
+});
+```
+
+Result:
+- `base_fields.id = '7'`
+- `base_fields.created_at = '2026-03-03T08:00:00.000Z'`
+- `payload = {data: {name: 'maria'}, username: 'maria'}`
 
 Options:
 - `strict`
@@ -113,7 +137,34 @@ Behavior:
 - returns a new document instance
 - sets `is_new = false`
 - leaves no paths marked as modified initially
-- uses the same payload/base-field normalization rules as `Model.from(...)`
+- treats row-like input as the persisted envelope
+- extracts top-level base fields (`id`, `created_at`, `updated_at`) from the outer object
+- uses `input_data.data` as the payload source when it is present
+
+Input flow:
+1. check whether the input is object-like
+2. extract reserved root base fields (`id`, `created_at`, `updated_at`) from the outer object
+3. use `input_data.data` as payload when present, otherwise use the root object payload
+
+Example:
+
+```js
+const hydrated_user = User.hydrate({
+	id: '7',
+	data: {
+		name: 'maria',
+		age: '29'
+	},
+	created_at: '2026-03-03T08:00:00.000Z',
+	updated_at: '2026-03-03T09:00:00.000Z'
+});
+```
+
+Result:
+- `base_fields.id = '7'`
+- `base_fields.created_at = '2026-03-03T08:00:00.000Z'`
+- `base_fields.updated_at = '2026-03-03T09:00:00.000Z'`
+- `payload = {name: 'maria', age: '29'}`
 
 ## Instance Methods
 
