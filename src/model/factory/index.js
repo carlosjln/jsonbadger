@@ -87,28 +87,6 @@ function model(name, schema, options, connection) {
 		void documents;
 	};
 
-	model.from = function (input_data, options = {}) {
-		void input_data;
-		void options;
-	};
-
-	model.hydrate = function (input_data, options = {}) {
-		// 1. Inspect the incoming shape, extract outer root fields, and use `input_data.data` as data when present.
-		const doc = normalize_document_input(input_data, DocumentInputMode.Hydrate);
-
-		// 2. Resolve strictness for this hydrate input. Per-call options override schema strictness here too.
-		const strict_mode = options.strict ?? schema.strict;
-
-		// 3. Shape the extracted data according to the selected strictness rule.
-		doc.data = strict_mode ? conform_payload_to_schema(schema, doc.data) : filter_loose_payload(doc.data);
-
-		// 4. Validate and cast the resulting data through the schema.
-		doc.data = schema.validate(doc.data);
-
-		// 5. Build a persisted document. This path reconstructs row-backed state and sets `is_new = false`.
-		return new Model().init(doc, options);
-	};
-
 	model.update_one = async function (query_filter, update_definition) {
 		void query_filter;
 		void update_definition;
