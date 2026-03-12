@@ -74,53 +74,7 @@ function model(name, schema, options, connection) {
 	model.id_strategy = $id_strategy;
 	model.auto_index = $auto_index;
 
-	// 6. Declare the static methods this compiled model will expose.
-	model.reset_index_cache = function () {};
-
-	model.apply_document_row = function (target_document, row_value, options = {}) {
-		void row_value;
-		void options;
-		return target_document;
-	};
-
-	model.create = async function (documents) {
-		void documents;
-	};
-
-	model.update_one = async function (query_filter, update_definition) {
-		void query_filter;
-		void update_definition;
-	};
-
-	model.delete_one = async function (query_filter) {
-		void query_filter;
-	};
-
-	model.ensure_table = async function () {};
-
-	model.ensure_index = async function (index_definition) {
-		void index_definition;
-	};
-
-	model.ensure_schema = async function () {};
-
-	model.find = function (query_filter) {
-		void query_filter;
-	};
-
-	model.find_one = function (query_filter) {
-		void query_filter;
-	};
-
-	model.find_by_id = function (id_value) {
-		void id_value;
-	};
-
-	model.count_documents = async function (query_filter) {
-		void query_filter;
-	};
-
-	// 7. Return the compiled Model constructor.
+	// 6. Return the compiled Model constructor.
 	return model;
 }
 

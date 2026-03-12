@@ -69,4 +69,55 @@ Model.hydrate = function (input_data, options = {}) {
 	return new model().init(doc, options);
 };
 
+/*
+ * RUNTIME BOOKKEEPING
+ */
+Model.reset_index_cache = function () {};
+
+/*
+ * PERSISTENCE WRITES
+ */
+Model.create = async function (documents) {
+	void documents;
+};
+
+Model.update_one = async function (query_filter, update_definition) {
+	void query_filter;
+	void update_definition;
+};
+
+Model.delete_one = async function (query_filter) {
+	void query_filter;
+};
+
+/*
+ * SCHEMA / MIGRATION
+ */
+Model.ensure_table = async function () {};
+
+Model.ensure_index = async function (index_definition) {
+	void index_definition;
+};
+
+Model.ensure_schema = async function () {};
+
+/*
+ * QUERY READS
+ */
+Model.find = function (query_filter) {
+	void query_filter;
+};
+
+Model.find_one = function (query_filter) {
+	void query_filter;
+};
+
+Model.find_by_id = function (id_value) {
+	void id_value;
+};
+
+Model.count_documents = async function (query_filter) {
+	void query_filter;
+};
+
 export default Model;
