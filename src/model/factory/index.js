@@ -1,158 +1,149 @@
 import defaults from '#src/constants/defaults.js';
-import IdStrategies, {assert_id_strategy} from '#src/constants/id-strategies.js';
 
-import document_instance from '#src/model/document-instance.js';
-import {DocumentInputMode} from '#src/model/factory/constants.js';
-import {compile_delete_one} from '#src/model/factory/delete-compiler.js';
-import {build_document_instance, normalize_document_input, conform_payload_to_schema, filter_loose_payload} from '#src/model/factory/document-builder.js';
-import {install_migration_methods} from '#src/model/factory/migration-methods.js';
-import {resolve_model_connection_options, resolve_supported_model_id_strategy} from '#src/model/factory/model-support.js';
-import {ensure_model_runtime_state, reset_model_index_cache} from '#src/model/factory/model-runtime-state.js';
-import {install_read_methods} from '#src/model/factory/read-methods.js';
-import {compile_update_one} from '#src/model/factory/update-compiler.js';
+import Model from '#src/model/model.js';
 
 import {assert_condition, assert_identifier} from '#src/utils/assert.js';
-import {is_array} from '#src/utils/array.js';
-import {has_own} from '#src/utils/object.js';
-import {is_boolean, is_function, is_not_object} from '#src/utils/value.js';
+import {is_function, is_not_object, is_plain_object} from '#src/utils/value.js';
 
 /**
- * Creates a model constructor for a schema/table pairing.
+ * Compile one concrete Model constructor for a schema/config/connection definition.
  *
- * @param {object} schema_instance Schema instance.
- * @param {object} model_configuration Model configuration options.
- * @param {object|null} connection_context Owning connection context.
- * @param {string|undefined} model_name Logical model name.
+ * Compile lifecycle:
+ * 1. Validate schema/config input.
+ * 2. Normalize model options and reserve internal columns.
+ * 3. Create the concrete Model constructor for this definition.
+ * 4. Wire Model inheritance against the base Model/Document chain.
+ * 5. Bind schema/model/connection state onto the compiled constructor.
+ * 6. Declare the static methods this compiled model will expose.
+ * 7. Return the compiled Model constructor.
+ *
+ * @param {string|undefined} name
+ * @param {object} schema
+ * @param {object} options
+ * @param {object|null} connection
  * @returns {Function}
  */
-function model(schema_instance, model_configuration, connection_context, model_name) {
-	assert_condition(schema_instance && is_function(schema_instance.validate), 'schema_instance is required');
-	assert_condition(!is_not_object(model_configuration), 'model options are required');
-	assert_condition(has_own(model_configuration, 'data_column') === false, 'model options.data_column is reserved for internal use and cannot be configured');
+function model(name, schema, options, connection) {
+	// 1. Validate schema/config input.
+	assert_condition(schema && is_function(schema.validate), 'schema is required');
+	assert_condition(!is_not_object(options), 'options are required');
 
-	const model_options = Object.assign({}, defaults.model_options, model_configuration);
-	model_options.data_column = defaults.model_options.data_column;
+	// 2. Normalize model options and reserve internal columns.
+	const $options = Object.assign({}, defaults.model_options, options);
+	$options.data_column = defaults.model_options.data_column;
 
-	assert_identifier(model_options.table_name, 'table_name');
-	assert_identifier(model_options.data_column, 'data_column');
+	assert_identifier($options.table_name, 'table_name');
+	assert_identifier($options.data_column, 'data_column');
 
+	// 3. Create the concrete Model constructor for this definition.
 	/**
-	 * Creates a runtime document wrapper for model payload data.
+	 * Concrete model constructor compiled for one schema/config/connection definition.
 	 *
-	 * @param {*} data Initial payload data.
+	 * Instance lifecycle:
+	 * 1. Receive raw input data from user code.
+	 * 2. Initialize instance state through the base Model/Document chain.
+	 *
+	 * @param {*} data
+	 * @param {object} [options]
 	 * @returns {void}
 	 */
-	function Model(data) {
-		this.data = data || {};
+	function model(data, options = {}) {
+		Model.call(this, data, options);
 	}
 
-	Model.model_name = model_name || model_options.table_name;
-	Model.schema_instance = schema_instance;
-	Model.model_options = model_options;
-	Model.connection = connection_context || null;
-	ensure_model_runtime_state(Model);
+	// 4. Wire Model inheritance against the base Model/Document chain.
+	Object.setPrototypeOf(model, Model);
+	Object.setPrototypeOf(model.prototype, Model.prototype);
 
-	Model.reset_index_cache = function () {
-		reset_model_index_cache(Model);
+	// 5. Bind schema/model/connection state onto the compiled constructor.
+	const $connection = connection || null;
+	const $connection_options = $connection?.options || defaults.connection_options;
+	const $id_strategy = $options.id_strategy ?? $connection_options.id_strategy;
+	const $auto_index = $options.auto_index ?? $connection_options.auto_index;
+
+	assert_id_strategy($id_strategy);
+	assert_condition(is_boolean($auto_index), 'auto_index must be a boolean');
+
+	model.name = name || $options.table_name;
+	model.schema = schema;
+	model.$options = $options;
+
+	model.connection = $connection;
+	model.prototype.connection = $connection;
+
+	model.id_strategy = $id_strategy;
+	model.auto_index = $auto_index;
+
+	// 6. Declare the static methods this compiled model will expose.
+	model.reset_index_cache = function () {};
+
+	model.apply_document_row = function (target_document, row_value, options = {}) {
+		void row_value;
+		void options;
+		return target_document;
 	};
 
-	Model.resolve_id_strategy = function () {
-		const connection_options = resolve_model_connection_options(Model);
-		const model_id_strategy = model_options.id_strategy;
-		const server_id_strategy = connection_options.id_strategy;
-		const final_id_strategy = model_id_strategy ?? server_id_strategy;
-
-		assert_id_strategy(final_id_strategy);
-
-		return final_id_strategy;
+	model.create = async function (documents) {
+		void documents;
 	};
 
-	Model.resolve_auto_index = function () {
-		const connection_options = resolve_model_connection_options(Model);
-		const model_auto_index = model_options.auto_index;
-		const server_auto_index = connection_options.auto_index;
-		const final_auto_index = model_auto_index ?? server_auto_index;
-
-		assert_condition(is_boolean(final_auto_index), 'auto_index must be a boolean');
-
-		return final_auto_index;
+	model.from = function (input_data, options = {}) {
+		void input_data;
+		void options;
 	};
 
-	document_instance(Model);
-	install_migration_methods(Model, schema_instance, model_options);
-	install_read_methods(Model);
-
-	Model.create = async function (documents) {
-		if(is_array(documents)) {
-			const created_documents = [];
-
-			for(const document of documents) {
-				const next_document = new Model(document || {});
-				created_documents.push(await next_document.save());
-			}
-
-			return created_documents;
-		}
-
-		const next_document = new Model(documents || {});
-		return next_document.save();
-	};
-
-	Model.from = function (input_data, options = {}) {
-		// 1. Inspect the incoming shape, extract root base fields, and fold everything else into payload.
-		// In `from(...)`, a root `data` key is treated like ordinary payload, not as a row envelope.
-		const source_data = normalize_document_input(input_data, DocumentInputMode.From);
-
-		// 2. Resolve strictness for this import. Per-call options override schema strictness here.
-		const strict_mode = options.strict ?? schema_instance.strict;
-
-		// 3. Shape the extracted payload according to the selected strictness rule.
-		const payload_input = strict_mode
-			? conform_payload_to_schema(schema_instance, source_data.payload)
-			: filter_loose_payload(source_data.payload);
-
-		// 4. Validate and cast the resulting payload through the schema.
-		const normalized_payload = schema_instance.validate(payload_input);
-
-		// 5. Build a new document. Base fields may be preserved, but this path keeps `is_new = true`.
-		return build_document_instance(Model, normalized_payload, source_data.base_fields, false);
-	};
-
-	Model.hydrate = function (input_data, options = {}) {
-		// 1. Inspect the incoming shape, extract outer base fields, and use `input_data.data` as payload when present.
-		const source_data = normalize_document_input(input_data, DocumentInputMode.Hydrate);
+	model.hydrate = function (input_data, options = {}) {
+		// 1. Inspect the incoming shape, extract outer root fields, and use `input_data.data` as data when present.
+		const doc = normalize_document_input(input_data, DocumentInputMode.Hydrate);
 
 		// 2. Resolve strictness for this hydrate input. Per-call options override schema strictness here too.
-		const strict_mode = options.strict ?? schema_instance.strict;
+		const strict_mode = options.strict ?? schema.strict;
 
-		// 3. Shape the extracted payload according to the selected strictness rule.
-		const payload_input = strict_mode
-			? conform_payload_to_schema(schema_instance, source_data.payload)
-			: filter_loose_payload(source_data.payload);
+		// 3. Shape the extracted data according to the selected strictness rule.
+		doc.data = strict_mode ? conform_payload_to_schema(schema, doc.data) : filter_loose_payload(doc.data);
 
-		// 4. Validate and cast the resulting payload through the schema.
-		const normalized_payload = schema_instance.validate(payload_input);
+		// 4. Validate and cast the resulting data through the schema.
+		doc.data = schema.validate(doc.data);
 
 		// 5. Build a persisted document. This path reconstructs row-backed state and sets `is_new = false`.
-		return build_document_instance(Model, normalized_payload, source_data.base_fields, true);
+		return new Model().init(doc, options);
 	};
 
-	Model.update_one = async function (query_filter, update_definition) {
-		return compile_update_one(Model, schema_instance, model_options, query_filter, update_definition);
+	model.update_one = async function (query_filter, update_definition) {
+		void query_filter;
+		void update_definition;
 	};
 
-	Model.delete_one = async function (query_filter) {
-		return compile_delete_one(Model, schema_instance, model_options, query_filter);
+	model.delete_one = async function (query_filter) {
+		void query_filter;
 	};
 
-	const connection_options = resolve_model_connection_options(Model);
-	const eager_id_strategy = model_options.id_strategy ?? connection_options.id_strategy;
+	model.ensure_table = async function () {};
 
-	if(eager_id_strategy === IdStrategies.uuidv7) {
-		resolve_supported_model_id_strategy(Model);
-	}
+	model.ensure_index = async function (index_definition) {
+		void index_definition;
+	};
 
-	return Model;
+	model.ensure_schema = async function () {};
+
+	model.find = function (query_filter) {
+		void query_filter;
+	};
+
+	model.find_one = function (query_filter) {
+		void query_filter;
+	};
+
+	model.find_by_id = function (id_value) {
+		void id_value;
+	};
+
+	model.count_documents = async function (query_filter) {
+		void query_filter;
+	};
+
+	// 7. Return the compiled Model constructor.
+	return model;
 }
 
 export default model;

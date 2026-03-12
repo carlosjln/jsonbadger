@@ -1,23 +1,5 @@
-import defaults from '#src/constants/defaults.js';
 import IdStrategies from '#src/constants/id-strategies.js';
 import {assert_id_strategy_capability} from '#src/connection/server-capabilities.js';
-import {is_plain_object} from '#src/utils/value.js';
-
-/**
- * Resolves effective connection options for a model.
- *
- * @param {Function} Model Model constructor.
- * @returns {object}
- */
-function resolve_model_connection_options(Model) {
-	const connection = Model.connection;
-
-	if(connection && is_plain_object(connection.options)) {
-		return connection.options;
-	}
-
-	return defaults.connection_options;
-}
 
 /**
  * Resolves effective server capabilities for a model.
@@ -69,6 +51,5 @@ function resolve_supported_model_id_strategy(Model) {
 export {
 	assert_model_id_strategy_supported,
 	resolve_supported_model_id_strategy,
-	resolve_model_connection_options,
 	resolve_model_server_capabilities
 };

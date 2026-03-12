@@ -8,17 +8,17 @@ import {base_field_keys, DocumentInputMode, unsafe_from_keys} from '#src/model/f
  * Process:
  * - inspect incoming shape
  * - convert object-like input into a plain object when needed
- * - extract payload/base fields using the selected mode
+ * - extract data/base fields using the selected mode
  * - return a document-ready normalized input object
  *
  * @param {*} input_data External input data.
  * @param {string} mode_value Input normalization mode.
- * @returns {{payload: object, base_fields: object}}
+ * @returns {{data: object, id: *, created_at: *, updated_at: *}}
  */
 function normalize_document_input(input_data, mode_value) {
 	// 1. Guard against primitives, null, and arrays
 	if(is_not_object(input_data)) {
-		return {payload: {}, base_fields: {}};
+		return {data: {}};
 	}
 
 	// 2. Convert class instances, Mongoose models, and custom objects into a plain object
@@ -34,54 +34,54 @@ function normalize_document_input(input_data, mode_value) {
 
 	// Double check plain-object conversion succeeded before proceeding
 	if(!is_plain_object(source)) {
-		return {payload: {}, base_fields: {}};
+		return {data: {}};
 	}
 
 	// Input contract:
-	// - Model.from(...): extract root base fields and fold everything else into payload
+	// - Model.from(...): extract root base fields and fold everything else into data
 	// - Model.hydrate(...): extract root base fields and use `source.data` as payload when present
 	const uses_row_payload = mode_value === DocumentInputMode.Hydrate && is_plain_object(source.data);
-	const raw_payload = uses_row_payload ? source.data : source;
-	const payload = deep_clone(raw_payload);
+	const raw_data = uses_row_payload ? source.data : source;
+	const data = deep_clone(raw_data);
 
 	// Base fields are reserved at the document root for both modes.
-	// In `from`, everything beyond those keys stays in payload, including a root `data` key.
-	// In `hydrate`, the root payload comes from `source.data` when that envelope exists.
+	// In `from`, everything beyond those keys stays in data, including a root `data` key.
+	// In `hydrate`, the root data comes from `source.data` when that envelope exists.
 	if(!uses_row_payload) {
 		for(const base_field_key of base_field_keys) {
-			delete payload[base_field_key];
+			delete data[base_field_key];
 		}
 	}
 
 	for(const unsafe_key of unsafe_from_keys) {
-		delete payload[unsafe_key];
+		delete data[unsafe_key];
 	}
 
-	const base_fields = {};
+	const doc = {data};
 
 	if(has_own(source, 'id')) {
-		base_fields.id = source.id;
+		doc.id = source.id;
 	}
 
 	if(has_own(source, 'created_at')) {
-		base_fields.created_at = source.created_at;
+		doc.created_at = source.created_at;
 	}
 
 	if(has_own(source, 'updated_at')) {
-		base_fields.updated_at = source.updated_at;
+		doc.updated_at = source.updated_at;
 	}
 
-	return {payload, base_fields};
+	return doc;
 }
 
 /**
- * Normalizes imported payload data before document construction.
+ * Normalizes imported data before document construction.
  *
  * @param {object} schema_instance Schema-like object.
- * @param {*} payload_source Source payload value.
+ * @param {*} input_data Source data value.
  * @returns {object}
  */
-function conform_payload_to_schema(schema_instance, payload_source) {
+function conform_payload_to_schema(schema_instance, input_data) {
 	// 1. Turn flat schema paths into a nested lookup tree.
 	// Example: `profile.name` becomes `{ profile: { name: true } }`.
 	// Root base fields are excluded here because they are not payload paths.
@@ -89,7 +89,7 @@ function conform_payload_to_schema(schema_instance, payload_source) {
 	const schema_paths = resolve_schema_path_names(schema_instance);
 
 	const conform_payload_branch_to_schema = (current_payload, current_schema_branch) => {
-		// 2. Walk one payload branch and copy only keys that the schema tree allows.
+		// 2. Walk one data branch and copy only keys that the schema tree allows.
 		// Leaves (`true`) copy the incoming value as-is; nested objects recurse.
 		if(!is_plain_object(current_payload) || !is_plain_object(current_schema_branch)) {
 			return {};
@@ -132,14 +132,14 @@ function conform_payload_to_schema(schema_instance, payload_source) {
 			const segment_value = path_segments[segment_index];
 			const is_leaf = segment_index === path_segments.length - 1;
 
-			// Root base fields do not belong to payload conformance.
+			// Root base fields do not belong to data conformance.
 			// They were already extracted before this step.
 			if(segment_index === 0 && base_field_keys.has(segment_value)) {
 				current_branch = null;
 				break;
 			}
 
-			// Mark the final segment as an allowed payload leaf.
+			// Mark the final segment as an allowed data leaf.
 			if(is_leaf) {
 				current_branch[segment_value] = true;
 				break;
@@ -154,40 +154,40 @@ function conform_payload_to_schema(schema_instance, payload_source) {
 		}
 	}
 
-	// 3. Apply the schema tree to the incoming payload and return only the allowed shape.
-	return conform_payload_branch_to_schema(payload_source, schema_tree);
+	// 3. Apply the schema tree to the incoming data and return only the allowed shape.
+	return conform_payload_branch_to_schema(input_data, schema_tree);
 }
 
 /**
- * Filters payload keys without enforcing schema strictness.
+ * Filters data keys without enforcing schema strictness.
  *
- * @param {object} payload_source Source payload object.
+ * @param {object} input_data Source data object.
  * @returns {object}
  */
-function filter_loose_payload(payload_source) {
-	const sanitized_payload = {};
+function filter_loose_payload(input_data) {
+	const sanitized_data = {};
 
-	for(const [key, value] of Object.entries(payload_source)) {
+	for(const [key, value] of Object.entries(input_data)) {
 		if(base_field_keys.has(key)) {
 			continue;
 		}
 
-		sanitized_payload[key] = deep_clone(value);
+		sanitized_data[key] = deep_clone(value);
 	}
 
-	return sanitized_payload;
+	return sanitized_data;
 }
 
 /**
  * Builds either a new or persisted document instance from normalized inputs.
  *
  * @param {Function} Model Model constructor.
- * @param {object} normalized_payload Normalized payload data.
+ * @param {object} data Normalized data.
  * @param {object} base_fields Normalized base-field values.
  * @param {boolean} is_persisted Whether the document should be marked persisted.
  * @returns {object}
  */
-function build_document_instance(Model, normalized_payload, base_fields, is_persisted) {
+function build_document_instance(Model, data, base_fields, is_persisted) {
 	const schema_instance = Model.schema_instance;
 	const normalized_base_fields = {};
 
@@ -227,7 +227,7 @@ function build_document_instance(Model, normalized_payload, base_fields, is_pers
 
 		Model.apply_document_row(next_document, {
 			id: normalized_base_fields.id,
-			data: normalized_payload,
+			data: data,
 			created_at: normalized_base_fields.created_at,
 			updated_at: normalized_base_fields.updated_at
 		});
@@ -235,7 +235,7 @@ function build_document_instance(Model, normalized_payload, base_fields, is_pers
 		return next_document;
 	}
 
-	const next_document = new Model(Object.assign({}, normalized_payload, normalized_base_fields));
+	const next_document = new Model(Object.assign({}, data, normalized_base_fields));
 
 	next_document.clear_modified();
 	next_document.is_new = true;
