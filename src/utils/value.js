@@ -36,6 +36,10 @@ function is_plain_object(value) {
 }
 
 function is_nan(value) {
+	if(value === null || value === undefined) {
+		return true;
+	}
+
 	const numeric_value = Number(value);
 	return Number.isNaN(numeric_value);
 }
@@ -43,6 +47,10 @@ function is_nan(value) {
 function to_number(value) {
 	const number = Number(value || 0);
 	return Number.isFinite(number) ? number : 0;
+}
+
+function to_int(value) {
+	return Math.floor(Number(value));
 }
 
 function is_uuid_v7(value) {
@@ -65,16 +73,38 @@ function is_boolean(value) {
 	return typeof value === 'boolean';
 }
 
+function to_iso_timestamp(value) {
+	// Treat falsy values as non-normalizable input and return them unchanged
+	// rather than assuming they represent a valid timestamp.
+	if(!value) {
+		return null;
+	}
+
+	if(value instanceof Date) {
+		return value.toISOString();
+	}
+
+	const parsed_timestamp = new Date(value);
+
+	if(Number.isNaN(parsed_timestamp.getTime())) {
+		return String(value);
+	}
+
+	return parsed_timestamp.toISOString();
+}
+
 export {
 	is_object,
 	is_plain_object,
 	is_not_object,
 	is_nan,
 	is_uuid_v7,
+	to_int,
 	to_number,
 	is_string,
 	is_function,
-	is_boolean
+	is_boolean,
+	to_iso_timestamp
 };
 
 export default {
@@ -83,8 +113,10 @@ export default {
 	is_not_object,
 	is_nan,
 	is_uuid_v7,
+	to_int,
 	to_number,
 	is_string,
 	is_function,
-	is_boolean
+	is_boolean,
+	to_iso_timestamp
 };

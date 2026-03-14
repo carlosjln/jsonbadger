@@ -1,6 +1,18 @@
+import {assert_id_strategy_capability} from '#src/connection/server-capabilities.js';
+import IdStrategies from '#src/constants/id-strategies.js';
+
+import ensure_index_sql from '#src/migration/ensure-index.js';
+import resolve_schema_indexes from '#src/migration/schema-indexes-resolver.js';
+import ensure_table_sql from '#src/migration/ensure-table.js';
+
 import Document from '#src/model/document.js';
 import {DocumentInputMode} from '#src/model/factory/constants.js';
 import {conform_payload_to_schema, filter_loose_payload, normalize_document_input} from '#src/model/factory/document-builder.js';
+import {compile_delete_one} from '#src/model/factory/delete-compiler.js';
+import {compile_update_one} from '#src/model/factory/update-compiler.js';
+
+import QueryBuilder from '#src/query/query-builder.js';
+import {is_array} from '#src/utils/array.js';
 
 /**
  * Base model constructor that initializes through Document.
@@ -14,6 +26,9 @@ function Model(data, options = {}) {
 }
 
 Object.setPrototypeOf(Model.prototype, Document.prototype);
+
+Model.$options = null;
+Model.$state = null;
 
 /**
  * Build a new document from external input.
@@ -72,52 +87,115 @@ Model.hydrate = function (input_data, options = {}) {
 /*
  * RUNTIME BOOKKEEPING
  */
-Model.reset_index_cache = function () {};
+Model.reset_index_cache = function () {
+	this.$state.indexes_ensured = false;
+};
 
 /*
  * PERSISTENCE WRITES
  */
 Model.create = async function (documents) {
-	void documents;
+	const model = this;
+
+	if(is_array(documents)) {
+		const created = [];
+
+		for(const document of documents) {
+			const doc = new model(document);
+			created.push(await doc.save());
+		}
+
+		return created;
+	}
+
+	const doc = new model(documents);
+	return await doc.save();
 };
 
 Model.update_one = async function (query_filter, update_definition) {
-	void query_filter;
-	void update_definition;
+	const model = this;
+	return compile_update_one(model, query_filter, update_definition);
 };
 
 Model.delete_one = async function (query_filter) {
-	void query_filter;
+	const model = this;
+	return compile_delete_one(model, query_filter);
 };
 
 /*
  * SCHEMA / MIGRATION
  */
-Model.ensure_table = async function () {};
+Model.ensure_model = async function () {
+	const model = this;
 
-Model.ensure_index = async function (index_definition) {
-	void index_definition;
+	await model.ensure_table();
+
+	if(!model.auto_index) {
+		return;
+	}
+
+	await model.ensure_indexes();
 };
 
-Model.ensure_schema = async function () {};
+Model.ensure_table = async function () {
+	const model = this;
+	const model_options = model.$options;
+	const table_name = model_options.table_name;
+	const data_column = model_options.data_column;
+	const id_strategy = model.id_strategy;
+	const server_capabilities = model.connection?.server_capabilities;
+
+	// Some id strategies depend on server-side support, so verify capability before creating the table.
+	if(id_strategy === IdStrategies.uuidv7 && server_capabilities) {
+		assert_id_strategy_capability(id_strategy, server_capabilities);
+	}
+
+	await ensure_table_sql({
+		table_name,
+		data_column,
+		id_strategy,
+		connection: model.connection
+	});
+};
+
+Model.ensure_indexes = async function () {
+	const model = this;
+	const model_options = model.$options;
+	const schema_indexes = resolve_schema_indexes(model.schema);
+
+	if(model.$state.indexes_ensured) {
+		return;
+	}
+
+	for(const index_definition of schema_indexes) {
+		await ensure_index_sql({
+			table_name: model_options.table_name,
+			index_definition,
+			data_column: model_options.data_column,
+			connection: model.connection
+		});
+	}
+
+	model.$state.indexes_ensured = true;
+};
 
 /*
  * QUERY READS
  */
 Model.find = function (query_filter) {
-	void query_filter;
+	return new QueryBuilder(this, 'find', query_filter || {});
 };
 
 Model.find_one = function (query_filter) {
-	void query_filter;
+	return new QueryBuilder(this, 'find_one', query_filter || {});
 };
 
 Model.find_by_id = function (id_value) {
-	void id_value;
+	return new QueryBuilder(this, 'find_one', {id: id_value});
 };
 
-Model.count_documents = async function (query_filter) {
-	void query_filter;
+Model.count_documents = function (query_filter) {
+	return new QueryBuilder(this, 'count_documents', query_filter || {});
 };
 
 export default Model;

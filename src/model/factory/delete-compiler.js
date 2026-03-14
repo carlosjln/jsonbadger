@@ -1,56 +1,61 @@
-import where_compiler from '#src/query/where-compiler/index.js';
-
 import sql_runner from '#src/sql/sql-runner.js';
-
+import where_compiler from '#src/query/where-compiler/index.js';
 import {quote_identifier} from '#src/utils/assert.js';
-
-import {is_missing_relation_query_error} from '#src/model/factory/update-helpers.js';
 
 /**
  * Compiles and executes Model.delete_one() for a model constructor.
  *
- * @param {Function} Model Model constructor.
- * @param {object} schema_instance Schema instance.
- * @param {object} model_options Model options.
+ * @param {Function} model Model constructor.
  * @param {object|undefined} query_filter Query filter.
  * @returns {Promise<object|null>}
  */
-async function compile_delete_one(Model, schema_instance, model_options, query_filter) {
-	const table_identifier = quote_identifier(model_options.table_name);
-	const data_identifier = quote_identifier(model_options.data_column);
-	const where_result = where_compiler(query_filter || {}, {
-		data_column: model_options.data_column,
-		schema: schema_instance,
-		id_strategy: Model.resolve_id_strategy()
-	});
+async function compile_delete_one(model, query_filter) {
+	const schema = model.schema;
+	const id_strategy = model.id_strategy;
 
+	const model_options = model.$options;
+	const data_column = model_options.data_column;
+	const table_name = model_options.table_name;
+
+	const table_identifier = quote_identifier(table_name);
+	const data_identifier = quote_identifier(data_column);
+	const where_result = where_compiler(query_filter, {schema, data_column, id_strategy});
+
+	const query_context = {
+		model,
+		table_identifier,
+		data_identifier,
+		where_result
+	};
+
+	const row = await exec_delete_query(query_context);
+
+	if(row) {
+		return model.hydrate(row);
+	}
+
+	return null;
+}
+
+async function exec_delete_query(query_context) {
 	const sql_text =
-		'WITH target_row AS (' + 'SELECT id FROM ' + table_identifier + ' WHERE ' + where_result.sql + ' LIMIT 1' + ') ' +
-		'DELETE FROM ' + table_identifier + ' AS target_table ' +
+		'WITH target_row AS (' + 'SELECT id FROM ' + query_context.table_identifier + ' WHERE ' + query_context.where_result.sql + ' LIMIT 1' + ') ' +
+		'DELETE FROM ' + query_context.table_identifier + ' AS target_table ' +
 		'USING target_row ' +
 		'WHERE target_table.id = target_row.id ' +
 		'RETURNING target_table.id::text AS id, ' +
-		'target_table.' + data_identifier + ' AS data, ' +
+		'target_table.' + query_context.data_identifier + ' AS data, ' +
 		'target_table.created_at AS created_at, ' +
 		'target_table.updated_at AS updated_at';
 
-	let query_result;
+	const query_result = await sql_runner(sql_text, query_context.where_result.params, query_context.model.connection);
+	const rows = query_result.rows;
 
-	try {
-		query_result = await sql_runner(sql_text, where_result.params, Model.connection);
-	} catch(error) {
-		if(is_missing_relation_query_error(error)) {
-			return null;
-		}
-
-		throw error;
+	if(rows.length) {
+		return rows[0];
 	}
 
-	if(query_result.rows.length === 0) {
-		return null;
-	}
-
-	return Model.create_document_from_row(query_result.rows[0]);
+	return null;
 }
 
 export {

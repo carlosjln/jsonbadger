@@ -1,26 +1,23 @@
 ﻿import limit_skip_compiler from '#src/query/limit-skip-compiler.js';
-import sort_compiler from '#src/query/sort-compiler.js';
 import where_compiler from '#src/query/where-compiler/index.js';
+import sort_compiler from '#src/query/sort-compiler.js';
 
 import sql_runner from '#src/sql/sql-runner.js';
 
 import {assert_condition, quote_identifier} from '#src/utils/assert.js';
-import {is_function, is_object} from '#src/utils/value.js';
+import {is_object, to_iso_timestamp} from '#src/utils/value.js';
 
-const base_field_keys = new Set(['id', 'created_at', 'updated_at']);
+function QueryBuilder(model, operation, query_filter) {
+	assert_condition(model, 'QueryBuilder requires model');
 
-function QueryBuilder(model_constructor, operation_name, query_filter, projection_value) {
-	assert_condition(model_constructor && is_object(model_constructor.model_options), 'QueryBuilder requires model_constructor.model_options');
-
-	this.execution_context = model_constructor.connection || null;
-	this.model_constructor = model_constructor;
-	this.operation_name = operation_name;
+	this.connection = model.connection || null;
+	this.model = model;
+	this.operation = operation;
 	this.base_filter = query_filter || {};
 	this.where_filter = {};
-	this.sort_definition = null;
+	this.sort = null;
 	this.limit_count = null;
 	this.skip_count = null;
-	this.projection_value = projection_value || null;
 }
 
 QueryBuilder.prototype.where = function (extra_filter) {
@@ -28,8 +25,8 @@ QueryBuilder.prototype.where = function (extra_filter) {
 	return this;
 };
 
-QueryBuilder.prototype.sort = function (sort_definition) {
-	this.sort_definition = sort_definition || null;
+QueryBuilder.prototype.sort = function (sort) {
+	this.sort = sort || null;
 	return this;
 };
 
@@ -45,126 +42,93 @@ QueryBuilder.prototype.skip = function (skip_value) {
 
 QueryBuilder.prototype.exec = async function () {
 	// Query execution is the queried/hydrated lifecycle boundary for read methods:
-	// rows become document instances through `create_document_from_row(...)`.
-	const schema_instance = this.model_constructor.schema_instance;
-	const model_options = this.model_constructor.model_options;
+	// rows become document instances through `model.hydrate(...)`.
+	const schema = this.model.schema;
+	const model_options = this.model.$options;
+
 	const table_name = model_options.table_name;
 	const data_column = model_options.data_column;
+
 	const table_identifier = quote_identifier(table_name);
 	const data_identifier = quote_identifier(data_column);
+	const limit_count = this.operation === 'find_one' ? 1 : this.limit_count;
+
 	const merged_filter = Object.assign({}, this.base_filter, this.where_filter);
-	const where_result = where_compiler(merged_filter, {
-		data_column: data_column,
-		schema: schema_instance,
-		id_strategy: resolve_model_id_strategy(this.model_constructor)
-	});
+	const where_result = where_compiler(merged_filter, {schema, data_column, id_strategy: this.model.id_strategy});
+	const query_context = {
+		connection: this.connection,
+		table_identifier,
+		data_identifier,
+		data_column,
+		where_result,
+		sort: this.sort,
+		limit_count,
+		skip_count: this.skip_count
+	};
 
+	const model = this.model;
 
-	if(this.operation_name === 'count_documents') {
-		const count_sql = 'SELECT COUNT(*)::int AS total_count FROM ' + table_identifier + ' WHERE ' + where_result.sql;
-		const count_result = await sql_runner(count_sql, where_result.params, this.execution_context);
-
-		if(count_result.rows.length === 0) {
-			return 0;
+	switch(this.operation) {
+		case 'count_documents': {
+			return exec_count_documents(query_context);
 		}
 
-		return Number(count_result.rows[0].total_count);
-	}
-
-	let sql_text =
-		'SELECT id::text AS id, ' +
-		data_identifier + ' AS data, ' +
-		'created_at AS created_at, ' +
-		'updated_at AS updated_at ' +
-		'FROM ' + table_identifier + ' WHERE ' + where_result.sql;
-	const sort_sql = sort_compiler(this.sort_definition, {
-		data_column: data_column
-	});
-
-	sql_text += sort_sql;
-
-	if(this.operation_name === 'find_one') {
-		if(this.limit_count === null || this.limit_count === undefined) {
-			this.limit_count = 1;
-		}
-	}
-
-	sql_text += limit_skip_compiler(this.limit_count, this.skip_count);
-
-	const query_result = await sql_runner(sql_text, where_result.params, this.execution_context);
-
-	if(this.operation_name === 'find_one') {
-		if(query_result.rows.length === 0) {
-			return null;
+		case 'find_one': {
+			const rows = await exec_find_query(query_context);
+			return rows.length ? model.hydrate(row_to_document(rows[0])) : null;
 		}
 
-		return map_query_row(this.model_constructor, query_result.rows[0]);
-	}
+		case 'find': {
+			const rows = await exec_find_query(query_context);
+			const documents = [];
 
-	return query_result.rows.map(function map_row(row_value) {
-		return map_query_row(this.model_constructor, row_value);
-	}.bind(this));
+			for(const row of rows) {
+				documents.push(model.hydrate(row_to_document(row)));
+			}
+
+			return documents;
+		}
+
+		default: {
+			throw new Error('Unsupported query operation: ' + this.operation);
+		}
+	}
 };
 
-function map_query_row(model_constructor, row_value) {
-	if(model_constructor && is_function(model_constructor.create_document_from_row)) {
-		return model_constructor.create_document_from_row(row_value);
-	}
-
-	return shape_query_row(row_value);
+function row_to_document(row) {
+	return {
+		id: row.id != null ? String(row.id) : null,
+		data: is_object(row.data) ? row.data : {},
+		created_at: to_iso_timestamp(row.created_at),
+		updated_at: to_iso_timestamp(row.updated_at)
+	};
 }
 
-function shape_query_row(row_value) {
-	const payload_value = is_object(row_value?.data) ? row_value.data : {};
-	const output_value = {};
-	const payload_entries = Object.entries(payload_value);
-	let payload_index = 0;
+async function exec_count_documents(query_context) {
+	const count_sql = 'SELECT COUNT(*)::int AS total_count FROM ' + query_context.table_identifier + ' WHERE ' + query_context.where_result.sql;
+	const count_result = await sql_runner(count_sql, query_context.where_result.params, query_context.connection);
+	const rows = count_result.rows;
 
-	while(payload_index < payload_entries.length) {
-		const payload_entry = payload_entries[payload_index];
-		const key_value = payload_entry[0];
-		const next_value = payload_entry[1];
-
-		if(!base_field_keys.has(key_value)) {
-			output_value[key_value] = next_value;
-		}
-
-		payload_index += 1;
+	if(rows.length === 0) {
+		return 0;
 	}
 
-	output_value.id = row_value?.id === undefined || row_value?.id === null ? row_value?.id : String(row_value.id);
-	output_value.created_at = normalize_timestamp_value(row_value?.created_at);
-	output_value.updated_at = normalize_timestamp_value(row_value?.updated_at);
-
-	return output_value;
+	return Number(rows[0].total_count);
 }
 
-function normalize_timestamp_value(timestamp_value) {
-	if(timestamp_value === undefined || timestamp_value === null) {
-		return timestamp_value;
-	}
+async function exec_find_query(query_context) {
+	let sql_text = 'SELECT id::text AS id, ' + query_context.data_identifier + ' AS data, ' +
+		'created_at AS created_at, ' +
+		'updated_at AS updated_at ' +
+		'FROM ' + query_context.table_identifier +
+		' WHERE ' + query_context.where_result.sql;
+	const sort_sql = sort_compiler(query_context.sort, {data_column: query_context.data_column});
 
-	if(timestamp_value instanceof Date) {
-		return timestamp_value.toISOString();
-	}
+	sql_text += sort_sql;
+	sql_text += limit_skip_compiler(query_context.limit_count, query_context.skip_count);
 
-	const parsed_timestamp = new Date(timestamp_value);
-
-	if(Number.isNaN(parsed_timestamp.getTime())) {
-		return String(timestamp_value);
-	}
-
-	return parsed_timestamp.toISOString();
-}
-
-function resolve_model_id_strategy(model_constructor) {
-	const resolve_id_strategy = model_constructor.resolve_id_strategy;
-
-	if(is_function(resolve_id_strategy)) {
-		return resolve_id_strategy.call(model_constructor);
-	}
-
-	return model_constructor.model_options.id_strategy ?? 'bigserial';
+	const query_result = await sql_runner(sql_text, query_context.where_result.params, query_context.connection);
+	return query_result.rows;
 }
 
 export default QueryBuilder;

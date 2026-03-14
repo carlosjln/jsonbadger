@@ -1,33 +1,17 @@
-import {is_nan} from '#src/utils/value.js';
+import {is_nan, to_int} from '#src/utils/value.js';
 
 function limit_skip_compiler(limit_value, skip_value) {
 	let sql_fragment = '';
 
-	if(is_valid_integer(limit_value)) {
-		sql_fragment += ' LIMIT ' + normalize_integer(limit_value);
+	if(!is_nan(limit_value)) {
+		sql_fragment += ' LIMIT ' + to_int(limit_value);
 	}
 
-	if(is_valid_integer(skip_value)) {
-		sql_fragment += ' OFFSET ' + normalize_integer(skip_value);
+	if(!is_nan(skip_value)) {
+		sql_fragment += ' OFFSET ' + to_int(skip_value);
 	}
 
 	return sql_fragment;
-}
-
-function is_valid_integer(value) {
-	if(value === null || value === undefined) {
-		return false;
-	}
-
-	if(is_nan(value)) {
-		return false;
-	}
-
-	return Number(value) >= 0;
-}
-
-function normalize_integer(value) {
-	return Math.floor(Number(value));
 }
 
 export default limit_skip_compiler;

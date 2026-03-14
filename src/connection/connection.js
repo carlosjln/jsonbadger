@@ -54,7 +54,7 @@ Connection.prototype.model = function (model_definition) {
 		return existing_model;
 	}
 
-	const Model = model_factory(schema_instance, model_options, this, model_name);
+	const Model = model_factory(model_name, schema_instance, model_options, this);
 
 	this.models[model_name] = Model;
 	return Model;
