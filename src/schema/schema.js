@@ -18,14 +18,14 @@ function Schema(schema_definition = {}, options = {}) {
 	inject_base_fields(schema_definition);
 
 	// 2. Compile schema
-	this.$compiled_schema = compile_schema(schema_definition);
+	this.$compiled = compile_schema(schema_definition);
 
 	// 3. Initialize properties
 	this.indexes = [];
 	this.options = Object.assign({}, defaults.schema_options, options);
 
 	this.strict = this.options.strict !== false;
-	this.paths = Object.assign({}, this.$compiled_schema.get_introspection().field_types);
+	this.paths = Object.assign({}, this.$compiled.get_introspection().field_types);
 	this.$field_registry = default_field_type_registry;
 	this.methods = Object.create(null);
 
@@ -36,13 +36,13 @@ function Schema(schema_definition = {}, options = {}) {
 // --- PUBLIC API ---
 
 Schema.prototype.validate = function (payload) {
-	const validation_result = this.$compiled_schema.validate(payload);
+	const validation_result = this.$compiled.validate(payload);
 
-	if(validation_result.error) {
-		throw new ValidationError('Schema validation failed', validation_result.error.details);
+	if(validation_result.valid) {
+		return validation_result;
 	}
 
-	return validation_result.value;
+	throw new ValidationError('Schema validation failed', validation_result.errors);
 };
 
 Schema.prototype.get_path = function (path_name) {
@@ -54,11 +54,11 @@ Schema.prototype.get_path = function (path_name) {
 };
 
 Schema.prototype.get_path_type = function (path_name) {
-	return this.$compiled_schema.get_path_type(path_name);
+	return this.$compiled.get_path_type(path_name);
 };
 
 Schema.prototype.is_array_root = function (path_name) {
-	return this.$compiled_schema.is_array_root(path_name);
+	return this.$compiled.is_array_root(path_name);
 };
 
 Schema.prototype.create_index = function (index_definition) {

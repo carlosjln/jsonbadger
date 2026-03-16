@@ -9,7 +9,7 @@ import {
 
 import {is_array} from '#src/utils/array.js';
 import {has_own} from '#src/utils/object.js';
-import {is_plain_object} from '#src/utils/value.js';
+import {is_not_object} from '#src/utils/value.js';
 
 const schema_validation_error_message = 'Schema validation failed';
 const schema_validation_error_code = 'validation_error';
@@ -44,62 +44,42 @@ function compile_schema(schema_definition = {}) {
 }
 
 function validate_payload(payload, sorted_paths, field_types) {
-	if(payload === null || typeof payload !== 'object' || is_array(payload)) {
+	if(is_not_object(payload) || is_array(payload)) {
 		return {
-			value: payload,
-			error: {
-				details: [{
-					path: '',
-					code: schema_validation_error_code,
-					message: schema_validation_error_message,
-					type: 'object'
-				}]
-			}
+			valid: false,
+			errors: [{
+				path: '',
+				code: schema_validation_error_code,
+				message: schema_validation_error_message,
+				type: 'object'
+			}]
 		};
 	}
 
-	const result_payload = clone_value(payload);
-	const detail_list = [];
+	const error_list = [];
 	let path_index = 0;
 
-	// Normalize only declared schema paths and leave unknown payload keys untouched.
 	while(path_index < sorted_paths.length) {
 		const path_name = sorted_paths[path_index];
 		const field_type = field_types[path_name];
 		const path_segments = path_name.split('.');
-		const current_path_state = read_path(result_payload, path_segments);
+		const current_path_state = read_path(payload, path_segments);
 		const current_value = current_path_state.exists ? current_path_state.value : undefined;
-		let normalized_value = undefined;
 
-		try {
-			normalized_value = field_type.normalize(current_value, {path: path_name});
-		} catch(error) {
-			detail_list.push(format_field_error(path_name, error));
-			path_index += 1;
-			continue;
+		if(is_function(field_type.validate)) {
+			try {
+				field_type.validate(current_value, {path: path_name, exists: current_path_state.exists});
+			} catch(error) {
+				error_list.push(format_field_error(path_name, error));
+			}
 		}
 
-		if(normalized_value === undefined) {
-			path_index += 1;
-			continue;
-		}
-
-		write_path(result_payload, path_segments, normalized_value);
 		path_index += 1;
 	}
 
-	if(detail_list.length > 0) {
-		return {
-			value: result_payload,
-			error: {
-				details: detail_list
-			}
-		};
-	}
-
 	return {
-		value: result_payload,
-		error: null
+		valid: error_list.length === 0,
+		errors: error_list.length > 0 ? error_list : null
 	};
 }
 

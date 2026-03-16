@@ -28,7 +28,7 @@ async function compile_update_one(model, query_filter, update_definition) {
 	const data_identifier = quote_identifier(data_column);
 	const where_result = where_compiler(query_filter, {schema, data_column, id_strategy});
 	const parameter_state = create_parameter_state(where_result.next_index);
-	const update_expression = build_update_expression(update_operator_entries, data_identifier, parameter_state, schema);
+	const update_expression = create_update_expression(update_operator_entries, data_identifier, parameter_state, schema);
 
 	const query_context = {
 		model,
@@ -48,7 +48,7 @@ async function compile_update_one(model, query_filter, update_definition) {
 	return null;
 }
 
-function build_update_expression(update_operator_entries, data_expression, parameter_state, schema) {
+function create_update_expression(update_operator_entries, data_expression, parameter_state, schema) {
 	const update_expression = {data_expression, timestamp_set: {}};
 
 	for(const update_operator_entry of update_operator_entries) {
@@ -69,7 +69,7 @@ function build_update_expression(update_operator_entries, data_expression, param
 	return update_expression;
 }
 
-function build_update_assignments(query_context) {
+function create_update_assignments(query_context) {
 	const update_assignments = [query_context.data_identifier + ' = ' + query_context.update_expression.data_expression];
 	const timestamp_set = query_context.update_expression.timestamp_set;
 	const parameter_state = query_context.parameter_state;
@@ -90,7 +90,7 @@ function build_update_assignments(query_context) {
 }
 
 async function exec_update_query(query_context) {
-	const update_assignments = build_update_assignments(query_context);
+	const update_assignments = create_update_assignments(query_context);
 	const sql_text =
 		'WITH target_row AS (' + 'SELECT id FROM ' + query_context.table_identifier + ' WHERE ' +
 		query_context.where_result.sql + ' LIMIT 1' + ') ' +

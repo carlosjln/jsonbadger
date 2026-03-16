@@ -1,11 +1,7 @@
 /**
- * Document instance constructor.
+ * Create one document instance from normalized state.
  *
- * @param {object} document_state
- * @param {object} document_state.data
- * @param {*} document_state.id
- * @param {*} document_state.created_at
- * @param {*} document_state.updated_at
+ * @param {object} [document_state]
  * @param {object} [options]
  * @returns {void}
  */
@@ -22,7 +18,7 @@ function Document(document_state = {}, options = {}) {
 /**
  * Apply persisted row-like state onto this document.
  *
- * @param {object} persisted_input Persisted row-like input.
+ * @param {object} [persisted_input]
  * @param {object} [options]
  * @returns {Document}
  */
@@ -36,6 +32,33 @@ Document.prototype.init = function (persisted_input = {}, options = {}) {
 	this.is_new = false;
 
 	return this;
+};
+
+/**
+ * Return payload data without row base fields.
+ *
+ * @returns {object}
+ */
+Document.prototype.get_payload = function () {
+	const payload = Object.assign({}, this.data);
+
+	delete payload.id;
+	delete payload.created_at;
+	delete payload.updated_at;
+
+	return payload;
+};
+
+/**
+ * Return document timestamp base fields.
+ *
+ * @returns {object}
+ */
+Document.prototype.get_timestamps = function () {
+	return {
+		created_at: this.created_at,
+		updated_at: this.updated_at
+	};
 };
 
 export default Document;

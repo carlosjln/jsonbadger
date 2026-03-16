@@ -1,5 +1,6 @@
-import {assert_id_strategy_capability} from '#src/connection/server-capabilities.js';
+import QueryError from '#src/errors/query-error.js';
 import IdStrategies from '#src/constants/id-strategies.js';
+import {assert_id_strategy_capability} from '#src/connection/server-capabilities.js';
 
 import ensure_index_sql from '#src/migration/ensure-index.js';
 import resolve_schema_indexes from '#src/migration/schema-indexes-resolver.js';
@@ -12,7 +13,10 @@ import {compile_delete_one} from '#src/model/factory/delete-compiler.js';
 import {compile_update_one} from '#src/model/factory/update-compiler.js';
 
 import QueryBuilder from '#src/query/query-builder.js';
+import sql_runner from '#src/sql/sql-runner.js';
 import {is_array} from '#src/utils/array.js';
+import {quote_identifier} from '#src/utils/assert.js';
+import {jsonb_stringify} from '#src/utils/json.js';
 
 /**
  * Base model constructor that initializes through Document.
@@ -29,6 +33,74 @@ Object.setPrototypeOf(Model.prototype, Document.prototype);
 
 Model.$options = null;
 Model.$state = null;
+
+/*
+ * INSTANCE WRITES
+ */
+
+/**
+ * Validate and persist this document through the compiled model runtime.
+ *
+ * @returns {Promise<object>}
+ * @throws {QueryError}
+ */
+Model.prototype.save = async function () {
+	const model = this.constructor;
+	const model_options = model.$options;
+	const table_name = model_options.table_name;
+	const data_column = model_options.data_column;
+	const table_identifier = quote_identifier(table_name);
+	const data_identifier = quote_identifier(data_column);
+
+	// Make sure data and fields are valid right before saving
+	model.schema.validate(this.data);
+	apply_timestamps(this);
+
+	// Create document path
+	if(this.is_new) {
+		const payload = this.get_payload();
+		const base_fields = Object.assign({}, resolve_insert_id(this), this.get_timestamps());
+		const insert_statement = create_insert_statement({table_identifier, data_identifier, payload, base_fields});
+		const query_result = await sql_runner(insert_statement.sql_text, insert_statement.sql_params, model.connection);
+		const saved_row = query_result.rows[0];
+
+		return this.init(saved_row);
+	}
+
+	// Update document path
+	if(this.id === undefined || this.id === null) {
+		throw new QueryError('Document id is required for save update operations', {
+			operation: 'save',
+			field: 'id'
+		});
+	}
+
+	const update_set_payload = this.get_payload();
+	update_set_payload.updated_at = this.updated_at;
+
+	if(Object.keys(update_set_payload).length === 0) {
+		return this;
+	}
+
+	const updated_document = await model.update_one({id: this.id}, {
+		$set: update_set_payload
+	});
+
+	if(updated_document) {
+		this.init({
+			id: updated_document.id,
+			data: updated_document.data,
+			created_at: updated_document.created_at,
+			updated_at: updated_document.updated_at
+		});
+	}
+
+	return this;
+};
+
+/*
+ * CONSTRUCTION
+ */
 
 /**
  * Build a new document from external input.
@@ -93,6 +165,13 @@ Model.reset_index_cache = function () {
 
 /*
  * PERSISTENCE WRITES
+ */
+
+/**
+ * Build and persist one or many new documents.
+ *
+ * @param {*|Array<*>} documents
+ * @returns {Promise<object|Array<object>>}
  */
 Model.create = async function (documents) {
 	const model = this;
@@ -197,5 +276,86 @@ Model.find_by_id = function (id_value) {
 Model.count_documents = function (query_filter) {
 	return new QueryBuilder(this, 'count_documents', query_filter || {});
 };
+
+/*
+ * MODEL HELPERS
+ */
+/**
+ * Apply write-time timestamp rules onto a document instance.
+ *
+ * @param {object} document
+ * @returns {void}
+ */
+function apply_timestamps(document) {
+	const now = new Date().toISOString();
+
+	if(document.is_new) {
+		if(document.created_at === undefined || document.created_at === null) {
+			document.created_at = now;
+		}
+
+		if(document.updated_at === undefined || document.updated_at === null) {
+			document.updated_at = now;
+		}
+
+		return;
+	}
+
+	document.updated_at = now;
+}
+
+/**
+ * Resolve the id fields that should participate in INSERT.
+ *
+ * @param {object} document
+ * @returns {object}
+ */
+function resolve_insert_id(document) {
+	if(document.constructor.id_strategy === IdStrategies.uuidv7) {
+		return {id: document.id};
+	}
+
+	return {};
+}
+
+/**
+ * Compile an INSERT statement from the provided document write context.
+ *
+ * @param {object} statement_context
+ * @param {string} statement_context.table_identifier
+ * @param {string} statement_context.data_identifier
+ * @param {object} statement_context.payload
+ * @param {object} statement_context.base_fields
+ * @returns {{sql_text: string, sql_params: Array<*>}}
+ */
+function create_insert_statement(statement_context) {
+	const sql_columns = [statement_context.data_identifier];
+	const sql_values = ['$1::jsonb'];
+	const sql_params = [jsonb_stringify(statement_context.payload)];
+	let next_param_index = 2;
+
+	if(statement_context.base_fields.id !== undefined && statement_context.base_fields.id !== null) {
+		sql_columns.push('id');
+		sql_values.push('$' + next_param_index + '::uuid');
+		sql_params.push(String(statement_context.base_fields.id));
+		next_param_index += 1;
+	}
+
+	sql_columns.push('created_at');
+	sql_values.push('$' + next_param_index + '::timestamptz');
+	sql_params.push(statement_context.base_fields.created_at);
+	next_param_index += 1;
+
+	sql_columns.push('updated_at');
+	sql_values.push('$' + next_param_index + '::timestamptz');
+	sql_params.push(statement_context.base_fields.updated_at);
+
+	return {
+		sql_text:
+			'INSERT INTO ' + statement_context.table_identifier + ' (' + sql_columns.join(', ') + ') VALUES (' + sql_values.join(', ') + ') ' +
+			'RETURNING id::text AS id, ' + statement_context.data_identifier + ' AS data, created_at AS created_at, updated_at AS updated_at',
+		sql_params
+	};
+}
 
 export default Model;
