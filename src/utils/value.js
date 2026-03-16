@@ -73,6 +73,10 @@ function is_boolean(value) {
 	return typeof value === 'boolean';
 }
 
+function is_valid_timestamp(value) {
+	return !Number.isNaN(new Date(value).getTime());
+}
+
 function to_iso_timestamp(value) {
 	// Treat falsy values as non-normalizable input and return them unchanged
 	// rather than assuming they represent a valid timestamp.
@@ -104,6 +108,7 @@ export {
 	is_string,
 	is_function,
 	is_boolean,
+	is_valid_timestamp,
 	to_iso_timestamp
 };
 
@@ -118,5 +123,6 @@ export default {
 	is_string,
 	is_function,
 	is_boolean,
+	is_valid_timestamp,
 	to_iso_timestamp
 };

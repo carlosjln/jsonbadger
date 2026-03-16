@@ -1,4 +1,5 @@
 import QueryError from '#src/errors/query-error.js';
+import ValidationError from '#src/errors/validation-error.js';
 import IdStrategies from '#src/constants/id-strategies.js';
 import {assert_id_strategy_capability} from '#src/connection/server-capabilities.js';
 
@@ -17,6 +18,7 @@ import sql_runner from '#src/sql/sql-runner.js';
 import {is_array} from '#src/utils/array.js';
 import {quote_identifier} from '#src/utils/assert.js';
 import {jsonb_stringify} from '#src/utils/json.js';
+import {is_uuid_v7, is_valid_timestamp} from '#src/utils/value.js';
 
 /**
  * Base model constructor that initializes through Document.
@@ -55,6 +57,7 @@ Model.prototype.save = async function () {
 	// Make sure data and fields are valid right before saving
 	model.schema.validate(this.data);
 	apply_timestamps(this);
+	assert_base_fields(this, model);
 
 	// Create document path
 	if(this.is_new) {
@@ -119,13 +122,17 @@ Model.from = function (input_data, options = {}) {
 	// 2. Resolve strictness for this import. Per-call options override schema strictness here too.
 	const strict_mode = options.strict ?? schema.strict;
 
-	// 3. Shape the extracted data according to the selected strictness rule.
-	doc.data = strict_mode ? conform_payload_to_schema(schema, doc.data) : filter_loose_payload(doc.data);
+	// 3. Shape the extracted data into the candidate payload for this create operation.
+	const data = strict_mode ? conform_payload_to_schema(schema, doc.data) : filter_loose_payload(doc.data);
 
-	// 4. Validate and cast the resulting data through the schema.
-	doc.data = schema.validate(doc.data);
+	// 4. Validate the candidate payload before committing it onto the document state.
+	schema.validate(data);
+	assert_base_fields(doc, model);
 
-	// 5. Build a new document. This path keeps create semantics and leaves `is_new = true`.
+	// 5. Commit the validated payload onto the normalized document state.
+	doc.data = data;
+
+	// 6. Build a new document. This path keeps create semantics and leaves `is_new = true`.
 	return new model(doc, options);
 };
 
@@ -146,13 +153,17 @@ Model.hydrate = function (input_data, options = {}) {
 	// 2. Resolve strictness for this hydrate input. Per-call options override schema strictness here too.
 	const strict_mode = options.strict ?? schema.strict;
 
-	// 3. Shape the extracted data according to the selected strictness rule.
-	doc.data = strict_mode ? conform_payload_to_schema(schema, doc.data) : filter_loose_payload(doc.data);
+	// 3. Shape the extracted data into the candidate payload for this hydrate operation.
+	const data = strict_mode ? conform_payload_to_schema(schema, doc.data) : filter_loose_payload(doc.data);
 
-	// 4. Validate and cast the resulting data through the schema.
-	doc.data = schema.validate(doc.data);
+	// 4. Validate the candidate payload before committing it onto the document state.
+	schema.validate(data);
+	assert_base_fields(doc, model);
 
-	// 5. Build a persisted document. This path reconstructs row-backed state and sets `is_new = false`.
+	// 5. Commit the validated payload onto the normalized document state.
+	doc.data = data;
+
+	// 6. Build a persisted document. This path reconstructs row-backed state and sets `is_new = false`.
 	return new model().init(doc, options);
 };
 
@@ -280,6 +291,7 @@ Model.count_documents = function (query_filter) {
 /*
  * MODEL HELPERS
  */
+
 /**
  * Apply write-time timestamp rules onto a document instance.
  *
@@ -302,6 +314,33 @@ function apply_timestamps(document) {
 	}
 
 	document.updated_at = now;
+}
+
+// Validate the model-resolved top-level base fields before construction or persistence.
+function assert_base_fields(document, model) {
+	const error_details = [];
+
+	// Helper to DRY up the error object creation
+	const add_error = (path, msg, val) => error_details.push({
+		path, code: 'validator_error', message: msg, type: 'validator_error', value: val
+	});
+
+	// UUID Check
+	if(model.id_strategy === IdStrategies.uuidv7 && document.id != null && !is_uuid_v7(document.id)) {
+		add_error('id', 'Path "id" must be a valid UUIDv7', document.id);
+	}
+
+	// Timestamp Checks (Single-pass loop)
+	for(const key of ['created_at', 'updated_at']) {
+		const val = document[key];
+		if(val != null && !is_valid_timestamp(val)) {
+			add_error(key, `Path "${key}" must be a valid timestamp`, val);
+		}
+	}
+
+	if(error_details.length) {
+		throw new ValidationError('Schema validation failed', error_details);
+	}
 }
 
 /**
