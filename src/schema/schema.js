@@ -1,48 +1,171 @@
 import defaults from '#src/constants/defaults.js';
+import IdStrategies from '#src/constants/id-strategies.js';
+
 import ValidationError from '#src/errors/validation-error.js';
-import compile_schema from '#src/schema/schema-compiler.js';
+
 import {default_field_type_registry} from '#src/field-types/registry.js';
+
+import compile_schema from '#src/schema/schema-compiler.js';
+
 import {assert_condition, assert_identifier, assert_path} from '#src/utils/assert.js';
 import {has_own} from '#src/utils/object.js';
-import {is_function, is_object, is_string} from '#src/utils/value.js';
+import {is_function, is_object, is_plain_object, is_string, is_uuid_v7, is_valid_timestamp} from '#src/utils/value.js';
 
 const base_fields = Object.freeze({
 	id: Object.freeze({type: 'Mixed'}),
 	created_at: Object.freeze({type: Date}),
 	updated_at: Object.freeze({type: Date})
 });
+
 const base_fields_keys = new Set(Object.keys(base_fields));
 
 function Schema(schema_definition = {}, options = {}) {
-	// 1. Prepare schema definition with missing system fields
+	// Prepare schema definition with missing system fields
 	inject_base_fields(schema_definition);
 
-	// 2. Compile schema
+	// Compile schema
 	this.$compiled = compile_schema(schema_definition);
 
-	// 3. Initialize properties
+	// Initialize properties
 	this.indexes = [];
 	this.options = Object.assign({}, defaults.schema_options, options);
 
 	this.strict = this.options.strict !== false;
 	this.paths = Object.assign({}, this.$compiled.get_introspection().field_types);
-	this.$field_registry = default_field_type_registry;
 	this.methods = Object.create(null);
+	this.$field_registry = default_field_type_registry;
 
-	// 4. Extract and register indexes defined inline on fields
+	// Extract and register indexes defined inline on fields
 	this.register_field_indexes(schema_definition);
 }
 
 // --- PUBLIC API ---
 
-Schema.prototype.validate = function (payload) {
-	const validation_result = this.$compiled.validate(payload);
+Schema.prototype.validate = function (document) {
+	const payload_result = this.validate_payload(document.data);
+	const base_fields_result = this.validate_base_fields(document);
 
-	if(validation_result.valid) {
-		return validation_result;
+	const errors = [];
+
+	if(payload_result.errors) {
+		errors.push(...payload_result.errors);
 	}
 
-	throw new ValidationError('Schema validation failed', validation_result.errors);
+	if(base_fields_result.errors) {
+		errors.push(...base_fields_result.errors);
+	}
+
+	if(errors.length > 0) {
+		throw new ValidationError('Schema validation failed', errors);
+	}
+
+	return {
+		valid: true,
+		errors: null
+	};
+};
+
+
+Schema.prototype.validate_payload = function (payload) {
+	const validation_result = this.$compiled.validate(payload);
+
+	if(!validation_result.valid) {
+		throw new ValidationError('Schema validation failed', validation_result.errors);
+	}
+
+	return validation_result;
+};
+
+Schema.prototype.validate_base_fields = function (document) {
+	const error_details = [];
+	const add_error = (path, message, value) => error_details.push({
+		path,
+		code: 'validator_error',
+		message,
+		type: 'validator_error',
+		value
+	});
+
+	if(this.id_strategy === IdStrategies.uuidv7 && document.id != null && !is_uuid_v7(document.id)) {
+		add_error('id', 'Path "id" must be a valid UUIDv7', document.id);
+	}
+
+	for(const key of ['created_at', 'updated_at']) {
+		const value = document[key];
+
+		if(value != null && !is_valid_timestamp(value)) {
+			add_error(key, 'Path "' + key + '" must be a valid timestamp', value);
+		}
+	}
+
+	if(error_details.length > 0) {
+		throw new ValidationError('Schema validation failed', error_details);
+	}
+};
+
+Schema.prototype.conform = function (payload) {
+	if(!is_plain_object(payload)) {
+		return;
+	}
+
+	const allowed_tree = {};
+
+	// Build a lookup tree of valid schema paths
+	for(const path of Object.keys(this.paths)) {
+		if(!is_string(path) || path.length === 0) {
+			continue;
+		}
+
+		const segments = path.split('.');
+		let node = allowed_tree;
+
+		for(let i = 0; i < segments.length; i++) {
+			const segment = segments[i];
+
+			// Skip internal base fields at root
+			if(i === 0 && base_fields_keys.has(segment)) {
+				node = null;
+				break;
+			}
+
+			// Mark leaf node as valid, otherwise initialize branch
+			if(i === segments.length - 1) {
+				node[segment] = true;
+			} else {
+				if(!is_plain_object(node[segment])) {
+					node[segment] = {};
+				}
+				node = node[segment];
+			}
+		}
+	}
+
+	// Recursive function to strip unknown keys from the payload
+	const walk = (data, branch) => {
+		if(!is_plain_object(data) || !is_plain_object(branch)) {
+			return;
+		}
+
+		for(const key of Object.keys(data)) {
+			// If key is not in schema branch, delete it
+			if(!has_own(branch, key)) {
+				delete data[key];
+				continue;
+			}
+
+			const next_branch = branch[key];
+			const next_data = data[key];
+
+			// If branch continues and data is an object, keep walking
+			if(next_branch !== true && is_plain_object(next_data)) {
+				walk(next_data, next_branch);
+			}
+		}
+	};
+
+	walk(payload, allowed_tree);
+
+	return payload;
 };
 
 Schema.prototype.get_path = function (path_name) {
@@ -159,7 +282,7 @@ function normalize_index_definition(index_input, path_name) {
 		return null;
 	}
 
-	// 1. Handle Shorthand Primitives (when path_name is provided)
+	// Handle shorthand primitives when path_name is provided
 	if(path_name !== undefined) {
 		if(index_input === true) {
 			return {using: 'gin', path: path_name};
@@ -170,7 +293,7 @@ function normalize_index_definition(index_input, path_name) {
 		}
 	}
 
-	// 2. Ensure input is an object for further processing
+	// Ensure input is an object for further processing
 	if(!is_object(index_input)) {
 		return null;
 	}
@@ -182,7 +305,7 @@ function normalize_index_definition(index_input, path_name) {
 		raw_definition.path = path_name;
 	}
 
-	// 3. Determine index type (using)
+	// Determine index type
 	let index_type = raw_definition.using;
 
 	if(index_type !== 'gin' && index_type !== 'btree') {
@@ -197,7 +320,7 @@ function normalize_index_definition(index_input, path_name) {
 		}
 	}
 
-	// 4. Build normalized definition based on type
+	// Build normalized definition based on type
 	const normalized_definition = {using: index_type};
 
 	if(is_string(raw_definition.name)) {

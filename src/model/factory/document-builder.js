@@ -3,7 +3,7 @@ import {is_function, is_not_object, is_plain_object} from '#src/utils/value.js';
 import {base_field_keys, DocumentInputMode, unsafe_from_keys} from '#src/model/factory/constants.js';
 
 /**
- * Normalizes incoming document input into a document-ready shape.
+ * Normalizes incoming document data into a document-ready shape.
  *
  * Process:
  * - inspect incoming shape
@@ -15,7 +15,7 @@ import {base_field_keys, DocumentInputMode, unsafe_from_keys} from '#src/model/f
  * @param {string} mode_value Input normalization mode.
  * @returns {{data: object, id: *, created_at: *, updated_at: *}}
  */
-function normalize_document_input(input_data, mode_value) {
+function normalize_document_fields(input_data, mode_value) {
 	// 1. Guard against primitives, null, and arrays
 	if(is_not_object(input_data)) {
 		return {data: {}};
@@ -72,90 +72,6 @@ function normalize_document_input(input_data, mode_value) {
 	}
 
 	return doc;
-}
-
-/**
- * Normalizes imported data before document construction.
- *
- * @param {object} schema_instance Schema-like object.
- * @param {*} input_data Source data value.
- * @returns {object}
- */
-function conform_payload_to_schema(schema_instance, input_data) {
-	// 1. Turn flat schema paths into a nested lookup tree.
-	// Example: `profile.name` becomes `{ profile: { name: true } }`.
-	// Root base fields are excluded here because they are not payload paths.
-	const schema_tree = {};
-	const schema_paths = resolve_schema_path_names(schema_instance);
-
-	const conform_payload_branch_to_schema = (current_payload, current_schema_branch) => {
-		// 2. Walk one data branch and copy only keys that the schema tree allows.
-		// Leaves (`true`) copy the incoming value as-is; nested objects recurse.
-		if(!is_plain_object(current_payload) || !is_plain_object(current_schema_branch)) {
-			return {};
-		}
-
-		const filtered_payload = {};
-
-		for(const [key, value] of Object.entries(current_payload)) {
-			if(!has_own(current_schema_branch, key)) {
-				continue;
-			}
-
-			const schema_branch = current_schema_branch[key];
-
-			// A leaf path means the schema allows this value at this exact key.
-			// Non-plain values also stop recursion here and are copied directly.
-			if(schema_branch === true || !is_plain_object(value)) {
-				filtered_payload[key] = deep_clone(value);
-				continue;
-			}
-
-			filtered_payload[key] = conform_payload_branch_to_schema(value, schema_branch);
-		}
-
-		return filtered_payload;
-	};
-
-	for(const path_name of schema_paths) {
-		// Ignore empty or invalid path entries from schema introspection.
-		if(typeof path_name !== 'string' || path_name.length === 0) {
-			continue;
-		}
-
-		// Split a flat schema path like `profile.name` into segments so we can
-		// build the nested lookup tree branch by branch.
-		const path_segments = path_name.split('.');
-		let current_branch = schema_tree;
-
-		for(let segment_index = 0; segment_index < path_segments.length; segment_index++) {
-			const segment_value = path_segments[segment_index];
-			const is_leaf = segment_index === path_segments.length - 1;
-
-			// Root base fields do not belong to data conformance.
-			// They were already extracted before this step.
-			if(segment_index === 0 && base_field_keys.has(segment_value)) {
-				current_branch = null;
-				break;
-			}
-
-			// Mark the final segment as an allowed data leaf.
-			if(is_leaf) {
-				current_branch[segment_value] = true;
-				break;
-			}
-
-			// Create the next nested branch when the path continues deeper.
-			if(!is_plain_object(current_branch[segment_value])) {
-				current_branch[segment_value] = {};
-			}
-
-			current_branch = current_branch[segment_value];
-		}
-	}
-
-	// 3. Apply the schema tree to the incoming data and return only the allowed shape.
-	return conform_payload_branch_to_schema(input_data, schema_tree);
 }
 
 /**
@@ -258,8 +174,7 @@ function resolve_schema_path_names(schema_instance) {
 
 export {
 	build_document_instance,
-	normalize_document_input,
+	normalize_document_fields,
 	filter_loose_payload,
-	conform_payload_to_schema,
 	resolve_schema_path_names
 };

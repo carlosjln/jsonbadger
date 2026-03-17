@@ -16,8 +16,8 @@ import {assert_supported_update_definition, normalize_update_operator_entries} f
  */
 async function compile_update_one(model, query_filter, update_definition) {
 	const schema = model.schema;
-	const id_strategy = model.id_strategy;
-	const model_options = model.$options;
+	const id_strategy = schema.id_strategy;
+	const model_options = model.options;
 	const data_column = model_options.data_column;
 	const table_name = model_options.table_name;
 	const update_operator_entries = normalize_update_operator_entries(update_definition);

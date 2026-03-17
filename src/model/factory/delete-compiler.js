@@ -11,9 +11,9 @@ import {quote_identifier} from '#src/utils/assert.js';
  */
 async function compile_delete_one(model, query_filter) {
 	const schema = model.schema;
-	const id_strategy = model.id_strategy;
+	const id_strategy = schema.id_strategy;
 
-	const model_options = model.$options;
+	const model_options = model.options;
 	const data_column = model_options.data_column;
 	const table_name = model_options.table_name;
 
