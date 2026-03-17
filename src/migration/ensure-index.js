@@ -23,8 +23,8 @@ async function ensure_index(context) {
 	if(index_definition.using === 'gin') {
 		const expression = build_json_path_expression(data_identifier, index_definition.path);
 		const sql_text =
-			'CREATE INDEX IF NOT EXISTS ' + index_identifier +
-			' ON ' + table_identifier + ' USING GIN ((' + expression + '));';
+			`CREATE INDEX IF NOT EXISTS ${index_identifier} ` +
+			`ON ${table_identifier} USING GIN ((${expression}));`;
 
 		await sql_run(sql_text, [], connection);
 		return;
@@ -48,8 +48,8 @@ async function ensure_index(context) {
 
 	const unique_prefix = index_definition.unique ? 'UNIQUE ' : '';
 	const sql_text =
-		'CREATE ' + unique_prefix + 'INDEX IF NOT EXISTS ' + index_identifier +
-		' ON ' + table_identifier + ' (' + expression_list.join(', ') + ');';
+		`CREATE ${unique_prefix}INDEX IF NOT EXISTS ${index_identifier} ` +
+		`ON ${table_identifier} (${expression_list.join(', ')});`;
 
 	await sql_run(sql_text, [], connection);
 }
@@ -129,24 +129,24 @@ function build_json_path_expression(data_identifier, path_value) {
 	const path_segments = split_dot_path(path_value);
 
 	if(path_segments.length === 1) {
-		return data_identifier + " -> '" + path_segments[0] + "'";
+		return `${data_identifier} -> '${path_segments[0]}'`;
 	}
 
-	return data_identifier + " #> '" + build_path_literal(path_segments) + "'";
+	return `${data_identifier} #> '${build_path_literal(path_segments)}'`;
 }
 
 function build_text_path_expression(data_identifier, path_value) {
 	const path_segments = split_dot_path(path_value);
 
 	if(path_segments.length === 1) {
-		return data_identifier + " ->> '" + path_segments[0] + "'";
+		return `${data_identifier} ->> '${path_segments[0]}'`;
 	}
 
-	return data_identifier + " #>> '" + build_path_literal(path_segments) + "'";
+	return `${data_identifier} #>> '${build_path_literal(path_segments)}'`;
 }
 
 function build_index_name(table_name, data_column, path_suffix) {
-	const raw_name = 'idx_' + table_name + '_' + data_column + '_' + path_suffix;
+	const raw_name = `idx_${table_name}_${data_column}_${path_suffix}`;
 	const normalized_name = raw_name.toLowerCase().replace(/[^a-z0-9_]/g, '_');
 	return normalized_name.slice(0, 63);
 }
