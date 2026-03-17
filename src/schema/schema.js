@@ -1,5 +1,6 @@
 import defaults from '#src/constants/defaults.js';
 import IdStrategies from '#src/constants/id-strategies.js';
+import {assert_id_strategy} from '#src/constants/id-strategies.js';
 
 import ValidationError from '#src/errors/validation-error.js';
 
@@ -31,9 +32,15 @@ function Schema(schema_definition = {}, options = {}) {
 	this.options = Object.assign({}, defaults.schema_options, options);
 
 	this.strict = this.options.strict !== false;
+	this.id_strategy = this.options.id_strategy;
+	this.auto_index = this.options.auto_index;
 	this.paths = Object.assign({}, this.$compiled.get_introspection().field_types);
 	this.methods = Object.create(null);
+	this.aliases = collect_aliases(this.paths);
 	this.$field_registry = default_field_type_registry;
+
+	assert_id_strategy(this.id_strategy);
+	assert_condition(typeof this.auto_index === 'boolean', 'auto_index must be a boolean');
 
 	// Extract and register indexes defined inline on fields
 	this.register_field_indexes(schema_definition);
@@ -266,6 +273,47 @@ function inject_base_fields(schema_def) {
 			schema_def[field_name] = Object.assign({}, field_config);
 		}
 	}
+}
+
+/**
+ * Build a normalized alias registry from compiled schema paths.
+ *
+ * @param {object} paths
+ * @returns {object}
+ * @throws {Error}
+ */
+function collect_aliases(paths) {
+	const aliases = Object.create(null);
+
+	for(const [path_name, field_type] of Object.entries(paths)) {
+		const alias_value = field_type?.options?.alias;
+
+		if(!is_string(alias_value) || alias_value.length === 0) {
+			continue;
+		}
+
+		assert_identifier(alias_value, 'alias');
+
+		if(alias_value === path_name) {
+			continue;
+		}
+
+		if(base_fields_keys.has(alias_value)) {
+			throw new Error('Alias "' + alias_value + '" conflicts with reserved base field "' + alias_value + '"');
+		}
+
+		if(has_own(paths, alias_value) && alias_value !== path_name) {
+			throw new Error('Alias "' + alias_value + '" conflicts with existing schema path "' + alias_value + '"');
+		}
+
+		if(has_own(aliases, alias_value) && aliases[alias_value].path !== path_name) {
+			throw new Error('Duplicate alias "' + alias_value + '" for paths "' + aliases[alias_value].path + '" and "' + path_name + '"');
+		}
+
+		aliases[alias_value] = {path: path_name};
+	}
+
+	return aliases;
 }
 
 function is_explicit_field(field_definition, registry) {

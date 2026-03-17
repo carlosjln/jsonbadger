@@ -1,6 +1,6 @@
 import {assert_identifier, quote_identifier} from '#src/utils/assert.js';
 import IdStrategies, {assert_id_strategy} from '#src/constants/id-strategies.js';
-import sql_runner from '#src/sql/sql-runner.js';
+import sql_run from '#src/sql/sql-run.js';
 
 const ID_COLUMN_SQL_BY_STRATEGY = {
 	[IdStrategies.bigserial]: 'id BIGSERIAL PRIMARY KEY',
@@ -24,13 +24,13 @@ async function ensure_table(context) {
 	const data_identifier = quote_identifier(data_column);
 	const id_column_sql = resolve_id_column_sql(final_id_strategy);
 	const sql_text =
-		'CREATE TABLE IF NOT EXISTS ' + table_identifier + ' (' +
-		id_column_sql + ', ' + data_identifier + ' JSONB NOT NULL, ' +
-		'created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), ' +
-		'updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()' +
-		');';
+		`CREATE TABLE IF NOT EXISTS ` +
+		`${table_identifier} (${id_column_sql}, ${data_identifier} JSONB NOT NULL, ` +
+		`created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), ` +
+		`updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()` +
+		`);`;
 
-	await sql_runner(sql_text, [], connection);
+	await sql_run(sql_text, [], connection);
 }
 
 function resolve_id_column_sql(id_strategy) {

@@ -3,7 +3,7 @@ import QueryError from '#src/errors/query-error.js';
 import {assert_condition} from '#src/utils/assert.js';
 import {is_function} from '#src/utils/value.js';
 
-async function sql_runner(sql_text, sql_params, connection) {
+async function sql_run(sql_text, sql_params, connection) {
 	const params = sql_params || [];
 	const debug_mode = resolve_debug_mode(connection);
 	const pool_instance = resolve_pool_instance(connection);
@@ -31,7 +31,7 @@ async function sql_runner(sql_text, sql_params, connection) {
 }
 
 function resolve_pool_instance(connection) {
-	assert_condition(connection && is_function(connection.pool_instance?.query), 'sql_runner requires connection.pool_instance');
+	assert_condition(connection && is_function(connection.pool_instance?.query), 'sql_run requires connection.pool_instance');
 	return connection.pool_instance;
 }
 
@@ -39,4 +39,4 @@ function resolve_debug_mode(connection) {
 	return connection?.options?.debug === true;
 }
 
-export default sql_runner;
+export default sql_run;

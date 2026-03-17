@@ -7,30 +7,27 @@ import resolve_schema_indexes from '#src/migration/schema-indexes-resolver.js';
 import ensure_table_sql from '#src/migration/ensure-table.js';
 
 import Document from '#src/model/document.js';
-import {DocumentInputMode} from '#src/model/factory/constants.js';
+import {base_field_keys, DocumentInputMode, timestamp_fields} from '#src/model/factory/constants.js';
 import {filter_loose_payload, normalize_document_fields} from '#src/model/factory/document-builder.js';
-import {compile_delete_one} from '#src/model/factory/delete-compiler.js';
-import {compile_update_one} from '#src/model/factory/update-compiler.js';
-import {base_field_keys, timestamp_fields} from '#src/model/factory/constants.js';
+import {exec_delete_one} from '#src/model/factory/exec-delete-one.js';
+import {exec_insert_one} from '#src/model/factory/exec-insert-one.js';
+import {exec_update_one} from '#src/model/factory/exec-update-one.js';
 
 import QueryBuilder from '#src/query/query-builder.js';
-import sql_runner from '#src/sql/sql-runner.js';
+
 import {is_array} from '#src/utils/array.js';
-import {quote_identifier} from '#src/utils/assert.js';
-import {jsonb_stringify} from '#src/utils/json.js';
 import {has_own} from '#src/utils/object.js';
 import {split_dot_path} from '#src/utils/object-path.js';
-import {is_function, is_not_object, is_object, is_string} from '#src/utils/value.js';
+import {is_function, is_not_object, is_object} from '#src/utils/value.js';
 
 /**
  * Base model constructor that initializes the internal reactive document.
  *
  * @param {*} data
- * @param {object} [options]
  * @returns {void}
  */
-function Model(data, options = {}) {
-	this.document = new Document(data, options);
+function Model(data) {
+	this.document = new Document(data);
 	this.is_new = true;
 }
 
@@ -73,12 +70,14 @@ Model.prototype.is_new = null;
  */
 Model.prototype.get = function (path_name, runtime_options) {
 	const options = is_object(runtime_options) ? runtime_options : {};
+	const aliases = this.constructor.schema.aliases;
+	const alias_entry = aliases[path_name] || {};
+	const resolved_path = alias_entry.path ?? path_name;
 
 	if(base_field_keys.has(path_name)) {
 		return this[path_name];
 	}
 
-	const resolved_path = resolve_alias_path(this, path_name);
 	const path_segments = split_dot_path(resolved_path);
 	const path_state = read_document_path(this.document.data, path_segments);
 
@@ -110,7 +109,9 @@ Model.prototype.get = function (path_name, runtime_options) {
  */
 Model.prototype.set = function (path_name, next_value, runtime_options) {
 	const options = is_object(runtime_options) ? runtime_options : {};
-	const resolved_path = resolve_alias_path(this, path_name);
+	const aliases = this.constructor.schema.aliases;
+	const alias_entry = aliases[path_name] || {};
+	const resolved_path = alias_entry.path ?? path_name;
 	const base_field_root_key = resolved_path.split('.')[0];
 
 	if(base_field_root_key === 'id') {
@@ -196,47 +197,43 @@ Model.prototype.get_timestamps = function () {
  */
 
 /**
- * Validate and persist this document through the compiled model runtime.
+ * Validate and persist this document through the compiled model.
  *
  * @returns {Promise<object>}
  * @throws {QueryError}
  */
 Model.prototype.save = async function () {
-	const model = this.constructor;
-	const model_options = model.options;
-	const table_name = model_options.table_name;
-	const data_column = model_options.data_column;
-	const table_identifier = quote_identifier(table_name);
-	const data_identifier = quote_identifier(data_column);
-
-	const document = this.document;
-
-	// Make sure data and fields are valid right before saving
-	model.schema.validate(document);
-
-	apply_timestamps(document, this.is_new);
-
-	// Create document path
 	if(this.is_new) {
-		const payload = this.payload;
-		const base_fields = Object.assign({}, this.timestamps);
-
-		if(model.schema.id_strategy === IdStrategies.uuidv7) {
-			base_fields.id = this.id;
-		}
-
-		const insert_statement = create_insert_statement({table_identifier, data_identifier, payload, base_fields});
-		const query_result = await sql_runner(insert_statement.sql_text, insert_statement.sql_params, model.connection);
-		const saved_row = query_result.rows[0];
-
-		document.init(saved_row);
-		this.is_new = false;
-		document.rebase_dirty_fields();
-
-		return this;
+		return await this.insert();
 	}
 
-	// Update document path
+	return await this.update();
+};
+
+/**
+ * Insert this model as a new persisted row.
+ *
+ * @returns {Promise<object>}
+ * @throws {QueryError}
+ */
+Model.prototype.insert = async function () {
+	const model = this.constructor;
+	return await model.insert_one(this);
+};
+
+/**
+ * Update this model through the persisted row path.
+ *
+ * @returns {Promise<object>}
+ * @throws {QueryError}
+ */
+Model.prototype.update = async function () {
+	const model = this.constructor;
+	const document = this.document;
+
+	model.schema.validate(document);
+	apply_timestamps(document, false);
+
 	if(this.id === undefined || this.id === null) {
 		throw new QueryError('Document id is required for save update operations', {
 			operation: 'save',
@@ -244,10 +241,10 @@ Model.prototype.save = async function () {
 		});
 	}
 
-	const update_set_payload = this.get_payload();
+	const update_set_payload = this.payload;
 
 	if(document.has_dirty_fields()) {
-		const updated_document = await model.update_one({id: this.id}, {$set: update_set_payload});
+		const updated_document = await exec_update_one(model, {id: this.id}, {$set: update_set_payload});
 
 		if(updated_document) {
 			document.init(updated_document);
@@ -277,7 +274,7 @@ Model.from = function (data, options = {}) {
 	model.schema.validate(document);
 
 	// Build a new document. This path keeps create semantics and leaves `is_new = true`.
-	return new model(document, options);
+	return new model(document);
 };
 
 /**
@@ -295,9 +292,9 @@ Model.hydrate = function (data, options = {}) {
 	model.schema.validate(doc);
 
 	// Build a persisted document. This path reconstructs row-backed state and sets `is_new = false`.
-	const instance = new model(doc, options);
-	instance.document.init(doc, options);
+	const instance = new model(doc);
 	instance.is_new = false;
+	instance.document.init(doc);
 	instance.document.rebase_dirty_fields();
 
 	return instance;
@@ -321,25 +318,42 @@ Model.create = async function (documents) {
 		const created = [];
 
 		for(const document of documents) {
-			const doc = new model(document);
-			created.push(await doc.save());
+			created.push(await model.insert_one(document));
 		}
 
 		return created;
 	}
 
-	const doc = new model(documents);
-	return await doc.save();
+	return await model.insert_one(documents);
 };
 
+/**
+ * Insert one model instance or plain document input.
+ *
+ * @param {*|object} document_value
+ * @returns {Promise<object>}
+ * @throws {QueryError}
+ */
+Model.insert_one = async function (document_value) {
+	const model = this;
+	return await exec_insert_one(model, document_value);
+};
+
+/**
+ * Update one persisted document through the compiled model convenience API.
+ *
+ * @param {object|undefined} query_filter
+ * @param {object|undefined} update_definition
+ * @returns {Promise<object|null>}
+ */
 Model.update_one = async function (query_filter, update_definition) {
 	const model = this;
-	return compile_update_one(model, query_filter, update_definition);
+	return await exec_update_one(model, query_filter, update_definition);
 };
 
 Model.delete_one = async function (query_filter) {
 	const model = this;
-	return compile_delete_one(model, query_filter);
+	return exec_delete_one(model, query_filter);
 };
 
 /*
@@ -350,7 +364,7 @@ Model.ensure_model = async function () {
 
 	await model.ensure_table();
 
-	if(!model.auto_index) {
+	if(!model.schema.auto_index) {
 		return;
 	}
 
@@ -461,50 +475,6 @@ function apply_timestamps(document, is_new) {
 	}
 
 	document.updated_at = now;
-}
-
-function create_insert_statement(statement_context) {
-	const sql_columns = [statement_context.data_identifier];
-	const sql_params = [jsonb_stringify(statement_context.payload)];
-	const sql_values = ['$1::jsonb'];
-
-	if(statement_context.base_fields.id !== undefined && statement_context.base_fields.id !== null) {
-		sql_columns.push('id');
-		sql_params.push(String(statement_context.base_fields.id));
-		sql_values.push('$' + sql_params.length + '::uuid');
-	}
-
-	for(const key of ['created_at', 'updated_at']) {
-		sql_columns.push(key);
-		sql_params.push(statement_context.base_fields[key]);
-		sql_values.push('$' + sql_params.length + '::timestamptz');
-	}
-
-	return {
-		sql_text:
-			'INSERT INTO ' + statement_context.table_identifier + ' (' + sql_columns.join(', ') + ') VALUES (' + sql_values.join(', ') + ') ' +
-			'RETURNING id::text AS id, ' + statement_context.data_identifier + ' AS data, created_at AS created_at, updated_at AS updated_at',
-		sql_params
-	};
-}
-
-// Resolve one alias to its concrete schema path when the schema defines it.
-function resolve_alias_path(model, path_name) {
-	const schema = model.constructor.schema;
-
-	if(!schema || is_not_object(schema.paths) || !is_function(schema.get_path)) {
-		return path_name;
-	}
-
-	for(const [path, field_type] of Object.entries(schema.paths)) {
-		const alias = field_type?.options?.alias;
-
-		if(is_string(alias) && alias === path_name) {
-			return path;
-		}
-	}
-
-	return path_name;
 }
 
 // Resolve one schema field type for the provided path when available.

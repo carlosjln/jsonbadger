@@ -2,7 +2,7 @@
 import where_compiler from '#src/query/where-compiler/index.js';
 import sort_compiler from '#src/query/sort-compiler.js';
 
-import sql_runner from '#src/sql/sql-runner.js';
+import sql_run from '#src/sql/sql-run.js';
 
 import {assert_condition, quote_identifier} from '#src/utils/assert.js';
 import {is_object, to_iso_timestamp} from '#src/utils/value.js';
@@ -107,7 +107,7 @@ function row_to_document(row) {
 
 async function exec_count_documents(query_context) {
 	const count_sql = 'SELECT COUNT(*)::int AS total_count FROM ' + query_context.table_identifier + ' WHERE ' + query_context.where_result.sql;
-	const count_result = await sql_runner(count_sql, query_context.where_result.params, query_context.connection);
+	const count_result = await sql_run(count_sql, query_context.where_result.params, query_context.connection);
 	const rows = count_result.rows;
 
 	if(rows.length === 0) {
@@ -128,7 +128,7 @@ async function exec_find_query(query_context) {
 	sql_text += sort_sql;
 	sql_text += limit_skip_compiler(query_context.limit_count, query_context.skip_count);
 
-	const query_result = await sql_runner(sql_text, query_context.where_result.params, query_context.connection);
+	const query_result = await sql_run(sql_text, query_context.where_result.params, query_context.connection);
 	return query_result.rows;
 }
 
