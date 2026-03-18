@@ -49,11 +49,20 @@ Object.defineProperty(Model.prototype, 'updated_at', {
 });
 
 Object.defineProperty(Model.prototype, 'payload', {
-	get: function () {return this.get_payload();}
+	get: function () {
+		// Return the lazily-proxied data object directly,
+		// so that any mutations here trigger the DirtyTracker.
+		return this.document.data;
+	}
 });
 
 Object.defineProperty(Model.prototype, 'timestamps', {
-	get: function () {return this.get_timestamps();}
+	get: function () {
+		return {
+			created_at: this.created_at,
+			updated_at: this.updated_at
+		};
+	}
 });
 
 Model.options = null;
@@ -162,28 +171,6 @@ Model.prototype.set = function (path_name, next_value, runtime_options) {
 	write_document_path(this.document.data, path_segments, assigned_value);
 
 	return this;
-};
-
-/**
- * Return payload data without row base fields.
- *
- * @returns {object}
- */
-Model.prototype.get_payload = function () {
-	const {id, created_at, updated_at, ...payload} = this.document.data;
-	return payload;
-};
-
-/**
- * Return document timestamp base fields.
- *
- * @returns {object}
- */
-Model.prototype.get_timestamps = function () {
-	return {
-		created_at: this.created_at,
-		updated_at: this.updated_at
-	};
 };
 
 /*

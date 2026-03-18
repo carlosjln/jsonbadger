@@ -113,7 +113,7 @@ DirtyTracker.prototype.rebase_dirty_fields = function () {
 	store.dirty_keys.clear();
 };
 
-DirtyTracker.prototype.$watch = function (watch_path, watch_config) {
+DirtyTracker.prototype.watch = function (watch_path, watch_config) {
 	const store = this[dt_store];
 
 	if(!store) {
