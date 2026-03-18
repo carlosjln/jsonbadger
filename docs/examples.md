@@ -834,7 +834,7 @@ alias_doc.set('city', 'Orlando');
 alias_doc.get('profile.city'); // 'Orlando'
 ```
 
-Aliases are path aliases for `doc.get(...)`, `doc.set(...)`, and `doc.mark_modified(...)`. Non-dotted alias names also get runtime property proxies (for example, `alias_doc.city`).
+Aliases are schema-defined alternate path names for `doc.get(...)` and `doc.set(...)`. They are collected when the schema is created, while canonical schema paths remain the persisted keys.
 
 Serialization helpers (`$serialize`, `to_json`) apply getters by default:
 

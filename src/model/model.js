@@ -7,8 +7,7 @@ import resolve_schema_indexes from '#src/migration/schema-indexes-resolver.js';
 import ensure_table_sql from '#src/migration/ensure-table.js';
 
 import Document from '#src/model/document.js';
-import {base_field_keys, DocumentInputMode, timestamp_fields} from '#src/model/factory/constants.js';
-import {filter_loose_payload, normalize_document_fields} from '#src/model/factory/document-builder.js';
+import {base_field_keys, DocumentInputMode, timestamp_fields, unsafe_from_keys} from '#src/model/factory/constants.js';
 import {exec_delete_one} from '#src/model/factory/exec-delete-one.js';
 import {exec_insert_one} from '#src/model/factory/exec-insert-one.js';
 import {exec_update_one} from '#src/model/factory/exec-update-one.js';
@@ -16,9 +15,9 @@ import {exec_update_one} from '#src/model/factory/exec-update-one.js';
 import QueryBuilder from '#src/query/query-builder.js';
 
 import {is_array} from '#src/utils/array.js';
-import {has_own} from '#src/utils/object.js';
+import {deep_clone, get_callable, has_own, to_plain_object} from '#src/utils/object.js';
 import {split_dot_path} from '#src/utils/object-path.js';
-import {is_function, is_not_object, is_object} from '#src/utils/value.js';
+import {is_function, is_not_object, is_object, is_plain_object} from '#src/utils/value.js';
 
 /**
  * Base model constructor that initializes the internal reactive document.
@@ -171,12 +170,7 @@ Model.prototype.set = function (path_name, next_value, runtime_options) {
  * @returns {object}
  */
 Model.prototype.get_payload = function () {
-	const payload = Object.assign({}, this.document.data);
-
-	delete payload.id;
-	delete payload.created_at;
-	delete payload.updated_at;
-
+	const {id, created_at, updated_at, ...payload} = this.document.data;
 	return payload;
 };
 
@@ -204,10 +198,10 @@ Model.prototype.get_timestamps = function () {
  */
 Model.prototype.save = async function () {
 	if(this.is_new) {
-		return await this.insert();
+		return this.insert();
 	}
 
-	return await this.update();
+	return this.update();
 };
 
 /**
@@ -218,7 +212,7 @@ Model.prototype.save = async function () {
  */
 Model.prototype.insert = async function () {
 	const model = this.constructor;
-	return await model.insert_one(this);
+	return model.insert_one(this);
 };
 
 /**
@@ -315,16 +309,13 @@ Model.create = async function (documents) {
 	const model = this;
 
 	if(is_array(documents)) {
-		const created = [];
-
-		for(const document of documents) {
-			created.push(await model.insert_one(document));
-		}
-
-		return created;
+		// Replace this fan-out with insert_many once a bulk insert path exists.
+		return await Promise.all(documents.map((document) => {
+			return model.insert_one(document);
+		}));
 	}
 
-	return await model.insert_one(documents);
+	return model.insert_one(documents);
 };
 
 /**
@@ -336,7 +327,7 @@ Model.create = async function (documents) {
  */
 Model.insert_one = async function (document_value) {
 	const model = this;
-	return await exec_insert_one(model, document_value);
+	return exec_insert_one(model, document_value);
 };
 
 /**
@@ -348,7 +339,7 @@ Model.insert_one = async function (document_value) {
  */
 Model.update_one = async function (query_filter, update_definition) {
 	const model = this;
-	return await exec_update_one(model, query_filter, update_definition);
+	return exec_update_one(model, query_filter, update_definition);
 };
 
 Model.delete_one = async function (query_filter) {
@@ -447,7 +438,7 @@ function normalize_document_data(model, input_data, options, input_mode) {
 	const strict_mode = options.strict ?? schema.strict;
 
 	// Shape the extracted data into the candidate payload for this lifecycle operation.
-	const data = strict_mode ? document.data : filter_loose_payload(document.data);
+	const data = strict_mode ? document.data : strip_base_fields(document.data);
 
 	if(strict_mode) {
 		schema.conform(data);
@@ -457,6 +448,89 @@ function normalize_document_data(model, input_data, options, input_mode) {
 	document.data = data;
 
 	return document;
+}
+
+/**
+ * Normalizes incoming data into a document-ready shape.
+ *
+ * Process:
+ * - inspect incoming shape
+ * - convert object-like input into a plain object when needed
+ * - extract data/base fields using the selected mode
+ * - return a document-ready normalized input object
+ *
+ * @param {*} input_data External input data.
+ * @param {string} mode_value Input normalization mode.
+ * @returns {{data: object, id: *, created_at: *, updated_at: *}}
+ */
+function normalize_document_fields(input_data, mode_value) {
+	// 1. Guard against primitives, null, and arrays
+	if(is_not_object(input_data)) {
+		return {data: {}};
+	}
+
+	// 2. Convert class instances, Mongoose models, and custom objects into a plain object
+	let source = input_data;
+
+	// Its a class or constructor instance of some sort
+	if(!is_plain_object(source)) {
+		const serialize = get_callable(source, 'to_json', 'toJSON', to_plain_object);
+
+		// Execute using .call() to pass 'this' for class methods, and 'source' as the first arg for utilities.
+		source = serialize.call(source, source);
+	}
+
+	// Double check plain-object conversion succeeded before proceeding
+	if(!is_plain_object(source)) {
+		return {data: {}};
+	}
+
+	// Input contract:
+	// - Model.from(...): extract root base fields and fold everything else into data
+	// - Model.hydrate(...): extract root base fields and use `source.data` as payload when present
+	const uses_row_payload = mode_value === DocumentInputMode.Hydrate && is_plain_object(source.data);
+	const raw_data = uses_row_payload ? source.data : source;
+	const data = deep_clone(raw_data);
+
+	// Base fields are reserved at the document root for both modes.
+	// In `from`, everything beyond those keys stays in data, including a root `data` key.
+	// In `hydrate`, the root data comes from `source.data` when that envelope exists.
+	if(!uses_row_payload) {
+		for(const base_field_key of base_field_keys) {
+			delete data[base_field_key];
+		}
+	}
+
+	for(const unsafe_key of unsafe_from_keys) {
+		delete data[unsafe_key];
+	}
+
+	const doc = {data};
+
+	if(has_own(source, 'id')) {
+		doc.id = source.id;
+	}
+
+	if(has_own(source, 'created_at')) {
+		doc.created_at = source.created_at;
+	}
+
+	if(has_own(source, 'updated_at')) {
+		doc.updated_at = source.updated_at;
+	}
+
+	return doc;
+}
+
+/**
+ * Filters data keys without enforcing schema strictness.
+ *
+ * @param {object} data Source data object.
+ * @returns {object}
+ */
+function strip_base_fields(data) {
+	const {id, created_at, updated_at, ...sanitized_data} = data;
+	return sanitized_data;
 }
 
 function apply_timestamps(document, is_new) {
