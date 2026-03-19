@@ -9,6 +9,8 @@ import {is_not_object} from '#src/utils/value.js';
  *
  * @param {object} [data]
  * @param {object} [options]
+ * @param {object} [options.watch]
+ * @param {function} [options.intercept_set]
  * @returns {Document}
  */
 function Document(data = {}, options = {}) {
@@ -21,7 +23,8 @@ function Document(data = {}, options = {}) {
 	}
 
 	return this.track_changes({
-		watch: merged_watch
+		watch: merged_watch,
+		intercept_set: options.intercept_set
 	});
 }
 

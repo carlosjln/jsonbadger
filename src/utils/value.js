@@ -97,6 +97,17 @@ function to_iso_timestamp(value) {
 	return parsed_timestamp.toISOString();
 }
 
+/**
+ * Returns the value if the evaluator passes, otherwise returns the default.
+ * @param {function} evaluator - The condition to check against.
+ * @param {any} value - The primary value to test.
+ * @param {any} default_value - The fallback value.
+ * @returns {any}
+ */
+const get_if = (evaluator, value, default_value) => {
+	return evaluator(value) ? value : default_value;
+};
+
 export {
 	is_object,
 	is_plain_object,
@@ -109,7 +120,8 @@ export {
 	is_function,
 	is_boolean,
 	is_valid_timestamp,
-	to_iso_timestamp
+	to_iso_timestamp,
+	get_if
 };
 
 export default {
@@ -124,5 +136,6 @@ export default {
 	is_function,
 	is_boolean,
 	is_valid_timestamp,
-	to_iso_timestamp
+	to_iso_timestamp,
+	get_if
 };
