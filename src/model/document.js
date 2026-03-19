@@ -1,5 +1,3 @@
-import DirtyTracker from '#src/model/dirty-tracker.js';
-
 import {has_own} from '#src/utils/object.js';
 import {split_dot_path} from '#src/utils/object-path.js';
 import {is_not_object} from '#src/utils/value.js';
@@ -8,27 +6,16 @@ import {is_not_object} from '#src/utils/value.js';
  * Create one document instance from normalized state.
  *
  * @param {object} [data]
- * @param {object} [options]
- * @param {object} [options.watch]
- * @param {function} [options.intercept_set]
  * @returns {Document}
  */
-function Document(data = {}, options = {}) {
+function Document(data = {}) {
 	Object.assign(this, data);
-
-	// Merge prototype-level watches (this.watch) with instance-level overrides (options.watch)
-	let merged_watch = null;
-	if(this.watch || options.watch) {
-		merged_watch = Object.assign({}, this.watch, options.watch);
-	}
-
-	return this.track_changes({
-		watch: merged_watch,
-		intercept_set: options.intercept_set
-	});
 }
 
-Object.setPrototypeOf(Document.prototype, DirtyTracker.prototype);
+Document.prototype.id = null;
+Document.prototype.data = null;
+Document.prototype.created_at = null;
+Document.prototype.updated_at = null;
 
 /**
  * Apply one state object onto this document.
@@ -65,7 +52,6 @@ Document.prototype.get = function (path_name) {
 
 /**
  * Set one document value by path.
- * The proxy wrapper will automatically track these mutations.
  *
  * @param {string} path
  * @param {*} value
@@ -87,9 +73,6 @@ Document.prototype.set = function (path, value) {
 		current_value = current_value[segment];
 	}
 
-	// Because `this` is a Proxy, this native assignment automatically 
-	// triggers the DirtyTracker's `set` trap, updating `dirty_keys` 
-	// with the full dot notation path and evaluating watchers.
 	const leaf_segment = path_segments[depth];
 	current_value[leaf_segment] = value;
 
