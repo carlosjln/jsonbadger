@@ -1,8 +1,17 @@
 import {assert_path} from '#src/utils/assert.js';
 
+/**
+ * Normalizes a dot-path by collapsing multiple consecutive dots and splitting into segments.
+ *
+ * @param {string} path_value
+ * @returns {string[]}
+ */
 function split_dot_path(path_value) {
-	assert_path(path_value, 'path');
-	const segments = path_value.split('.');
+	// Clean state: collapse multiple dots into one to prevent empty segment errors.
+	const clean_path = String(path_value).replace(/\.+/g, '.');
+
+	assert_path(clean_path, 'path');
+	const segments = clean_path.split('.');
 
 	let segment_index = 0;
 
@@ -20,13 +29,16 @@ function split_dot_path(path_value) {
 	return segments;
 }
 
+/**
+ * Encodes an array of path segments into a PostgreSQL text array literal {a,b,c}.
+ *
+ * @param {string[]} path_segments
+ * @returns {string}
+ */
 function build_path_literal(path_segments) {
 	const escaped_segments = [];
 	let segment_index = 0;
 
-	// PostgreSQL text array literals require items to be safely quoted 
-	// if they contain spaces, commas, or special characters. 
-	// The safest approach is to double-quote all elements and escape internal quotes/backslashes.
 	while(segment_index < path_segments.length) {
 		const segment = String(path_segments[segment_index]);
 
@@ -40,6 +52,14 @@ function build_path_literal(path_segments) {
 	return '{' + escaped_segments.join(',') + '}';
 }
 
+/**
+ * Recursively builds a nested object structure from a dot-path and a leaf value.
+ * Used for generating JSONB containment payloads.
+ *
+ * @param {string} path_value
+ * @param {*} leaf_value
+ * @returns {object}
+ */
 function build_nested_object(path_value, leaf_value) {
 	const path_segments = split_dot_path(path_value);
 	const root_object = {};
