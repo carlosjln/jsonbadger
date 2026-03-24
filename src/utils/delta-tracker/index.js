@@ -1,5 +1,6 @@
 import {to_array} from '#src/utils/array.js';
-import {deep_clone, is_function, is_not_object, is_object} from '#src/utils/value.js';
+import {deep_clone, has_own} from '#src/utils/object.js';
+import {is_function, is_not_object, is_object} from '#src/utils/value.js';
 
 // DELTA-TRACKER v1
 
@@ -53,19 +54,47 @@ function DeltaTracker(target, options = {}) {
 	return root_proxy;
 }
 
+/**
+ * Performs a one-shot delta generation from a plain object.
+ * Assumes an empty baseline state.
+ *
+ * @param {object} object - Input data (can be nested or flat paths).
+ * @returns {object} The generated delta { replace_roots, set, unset }.
+ */
+DeltaTracker.from = function (object) {
+	if(is_not_object(object)) {
+		return get_delta(null);
+	}
+
+	// Create a tracker with an empty baseline
+	const tracker = new DeltaTracker({});
+	const keys = Object.keys(object);
+	let i = 0;
+
+	// Apply all keys to the tracker. 
+	// The proxy's internal set/delete logic handles the path collapsing.
+	while(i < keys.length) {
+		const key = keys[i];
+		const value = object[key];
+
+		if(value === undefined) {
+			delete tracker[key];
+		} else {
+			tracker[key] = value;
+		}
+
+		i += 1;
+	}
+
+	return tracker.$get_delta();
+};
+
 /*
  * LAZY PROXY BUILDER
  */
 
 /**
  * Build one lazy proxy for the provided object branch.
- *
- * @param {object} target_object
- * @param {object} root_object
- * @param {object} store
- * @param {function(): Proxy} get_root
- * @param {object} [options]
- * @returns {Proxy}
  */
 function build_proxy(target_object, root_object, store, get_root, options = {}) {
 	const track_list = get_track_list(options);
@@ -80,15 +109,19 @@ function build_proxy(target_object, root_object, store, get_root, options = {}) 
 		$has_changes: () => {
 			return has_changes(store);
 		},
+
 		$get_delta: () => {
 			return get_delta(store);
 		},
+
 		$reset_changes: () => {
 			return reset_changes(store, get_root());
 		},
+
 		$rebase_changes: () => {
 			return rebase_changes(store, root_object, options);
 		},
+
 		$watch: (path, watch_options) => {
 			return add_watcher(store, root_object, get_root(), path, watch_options);
 		}
@@ -151,6 +184,12 @@ function build_proxy(target_object, root_object, store, get_root, options = {}) 
 				return true;
 			}
 
+			// Do not track array length mutations (Postgres JSONB doesn't use them)
+			if(Array.isArray(target) && prop === 'length') {
+				target[prop] = value;
+				return true;
+			}
+
 			// Do not track mutations to functions/methods
 			if(base_path === '' && is_function(target[prop])) {
 				target[prop] = value;
@@ -165,6 +204,11 @@ function build_proxy(target_object, root_object, store, get_root, options = {}) 
 
 			const full_path = base_path === '' ? prop : `${base_path}.${prop}`;
 			const next_value = intercept_set(full_path, value);
+
+			if(next_value === undefined) {
+				return apply_delete_property(target, prop, full_path, base_path, track_list, store, root_object, get_root);
+			}
+
 			const old_value = target[prop];
 
 			// Delta state is snapshot-based where possible to naturally eliminate redundant writes
@@ -176,6 +220,7 @@ function build_proxy(target_object, root_object, store, get_root, options = {}) 
 			// Is this an assignment replacing a tracked root completely? (e.g. `document.data = {...}`)
 			if(base_path === '' && track_list && track_list.includes(prop)) {
 				store.replace_roots.set(prop, next_value);
+				store.delta_unset.delete(full_path);
 				clear_nested_deltas(store, full_path);
 
 			} else {
@@ -211,30 +256,9 @@ function build_proxy(target_object, root_object, store, get_root, options = {}) 
 			}
 
 			const full_path = base_path === '' ? prop : `${base_path}.${prop}`;
-			const old_value = target[prop];
 
-			// Apply the mutation
-			const deleted = Reflect.deleteProperty(target, prop);
-
-			if(deleted) {
-				// Are we deleting a full tracked root? (e.g. `delete document.data`)
-				if(base_path === '' && track_list && track_list.includes(prop)) {
-					store.replace_roots.delete(prop);
-					store.delta_unset.add(full_path);
-					clear_nested_deltas(store, full_path);
-
-				} else {
-					// Cross-cancellation: deleting a key nullifies any pending sets for it
-					store.delta_unset.add(full_path);
-					store.delta_set.delete(full_path);
-					clear_nested_deltas(store, full_path);
-				}
-
-				// Trigger Watchers (old_value will be the removed object, new value will be undefined)
-				check_watchers(store, full_path, old_value, root_object, get_root());
-			}
-
-			return deleted;
+			// Route native deletions through the same shared helper used by the 'set' trap
+			return apply_delete_property(target, prop, full_path, base_path, track_list, store, root_object, get_root);
 		}
 	});
 }
@@ -246,10 +270,6 @@ function build_proxy(target_object, root_object, store, get_root, options = {}) 
 /**
  * Wipes out any pending set/unset instructions for children of a path.
  * Used when a parent object is overwritten or deleted natively collapsing state.
- *
- * @param {object} store
- * @param {string} parent_path
- * @returns {void}
  */
 function clear_nested_deltas(store, parent_path) {
 	const prefix = `${parent_path}.`;
@@ -268,11 +288,33 @@ function clear_nested_deltas(store, parent_path) {
 }
 
 /**
+ * Apply one tracked deletion and synchronize delta state.
+ */
+function apply_delete_property(target, prop, full_path, base_path, track_list, store, root_object, get_root) {
+	const old_value = target[prop];
+	const deleted = Reflect.deleteProperty(target, prop);
+
+	if(!deleted) {
+		return false;
+	}
+
+	if(base_path === '' && track_list && track_list.includes(prop)) {
+		store.replace_roots.delete(prop);
+		store.delta_unset.add(full_path);
+		clear_nested_deltas(store, full_path);
+	} else {
+		store.delta_unset.add(full_path);
+		store.delta_set.delete(full_path);
+		clear_nested_deltas(store, full_path);
+	}
+
+	check_watchers(store, full_path, old_value, root_object, get_root());
+
+	return true;
+}
+
+/**
  * Normalize tracker options into a stable tracked-root list.
- *
- * @param {object} options
- * @param {string|string[]} [options.track]
- * @returns {string[]|null}
  */
 function get_track_list(options) {
 	return options.track === undefined ? null : to_array(options.track);
@@ -280,10 +322,6 @@ function get_track_list(options) {
 
 /**
  * Clone either the full source object or only the tracked root keys.
- *
- * @param {object} source_object
- * @param {string[]|null} track_list
- * @returns {object}
  */
 function clone_tracked_state(source_object, track_list) {
 	if(!track_list) {
@@ -309,9 +347,6 @@ function clone_tracked_state(source_object, track_list) {
 
 /**
  * Check whether the tracker currently holds any pending changes.
- *
- * @param {object} store
- * @returns {boolean}
  */
 function has_changes(store) {
 	if(!store) {
@@ -323,9 +358,6 @@ function has_changes(store) {
 
 /**
  * Return the current delta snapshot for the tracked roots.
- *
- * @param {object} store
- * @returns {{replace_roots: object, set: object, unset: string[]}}
  */
 function get_delta(store) {
 	if(!store) {
@@ -341,10 +373,6 @@ function get_delta(store) {
 
 /**
  * Reset tracked roots back to the current rebased snapshot.
- *
- * @param {object} store
- * @param {Proxy} proxy
- * @returns {void}
  */
 function reset_changes(store, proxy) {
 	const original = store.base_state;
@@ -398,13 +426,6 @@ function rebase_changes(store, root_object, options) {
 
 /**
  * Register one watcher against the tracked root proxy.
- *
- * @param {object} store
- * @param {object} root_object
- * @param {Proxy} proxy
- * @param {string} path
- * @param {object|function} options
- * @returns {function}
  */
 function add_watcher(store, root_object, proxy, path, options) {
 	const handler = is_function(options) ? options : () => {};
@@ -445,13 +466,6 @@ let is_flushing = false;
 
 /**
  * Evaluate which watchers should react to one mutated path.
- *
- * @param {object} store
- * @param {string} mutated_path
- * @param {*} old_value
- * @param {object} root_object
- * @param {Proxy} root_proxy
- * @returns {void}
  */
 function check_watchers(store, mutated_path, old_value, root_object, root_proxy) {
 	const watchers = store.watchers;
@@ -501,18 +515,13 @@ function check_watchers(store, mutated_path, old_value, root_object, root_proxy)
 
 /**
  * Queue one watcher callback into the current microtask batch.
- *
- * @param {object} watcher
- * @param {*} new_value
- * @param {*} old_value
- * @param {*} context
- * @returns {void}
  */
 function queue_watcher(watcher, new_value, old_value, context) {
 	// Deduplicate watchers in the same tick.
 	// If it exists, we update to the latest new_value, but keep the initial old_value of this tick.
-	if(pending_watchers.has(watcher)) {
-		pending_watchers.get(watcher).new_value = new_value;
+	let job = pending_watchers.get(watcher);
+	if(job) {
+		job.new_value = new_value;
 	} else {
 		pending_watchers.set(watcher, {new_value, old_value, context});
 	}
@@ -558,10 +567,6 @@ function queue_watcher(watcher, new_value, old_value, context) {
 
 /**
  * Read one nested value by dot-notation path.
- *
- * @param {object} root_object
- * @param {string} dot_path
- * @returns {*}
  */
 function read_path(root_object, dot_path) {
 	if(!dot_path) {
