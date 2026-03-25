@@ -14,14 +14,14 @@ src/sql/jsonb-ops.js
 src/model/factory/exec-update-one.js
 - [x] line 5: Import `JsonbOps` from `#src/sql/jsonb-ops.js` so `src/model/factory/exec-update-one.js` matches the current module location. align module contracts
 - [x] line 45: `update_expression` still uses `{ jsonb_fragment, timestamp_set }`, but the new `JsonbOps` contract is an instance with `.compile(parameter_state)`. Replace the fragment shape with a `jsonb_ops`-based contract. align module contracts
-- [ ] line 61: Uses object spread (`{...update_definition}`) which conflicts with repo JS standards. Replace with `Object.assign({}, update_definition)` (and same for `$set`). reuse shared utility from src/utils / align repo standards
-- [ ] line 70: `split_update_definition(...)` only extracts timestamps from top-level and `payload.$set`, but tracked updates currently emit `set` (no `$`). Either normalize upstream or extend the split to cover the tracked delta shape. move rule to module boundary
-- [ ] line 26: Pass a `jsonb_ops` instance through `update_expression` (not a plain fragment) so `build_update_query(...)` can call `jsonb_ops.compile(parameter_state)` at the SQL boundary. align module contracts
+- [stale] line 61: The earlier `Object.assign(...)` preference is no longer the active repo rule. Simple object spread cloning in `split_update_definition(...)` is now acceptable under the updated JS standards. stale review item
+- [x] line 74: `split_update_definition(...)` only extracts timestamps from top-level and `payload.$set`, but tracked updates currently emit `set` (no `$`). Either normalize upstream or extend the split to cover the tracked delta shape. move rule to module boundary
+- [x] line 45: Pass a `jsonb_ops` instance through `update_expression` (not a plain fragment) so `build_update_query(...)` can call `jsonb_ops.compile(parameter_state)` at the SQL boundary. align module contracts
 
 src/sql/build-update-query.js
-- [ ] line 25: Comment references `JsonbQuery.from`, but the current direction is `JsonbOps` + `compile_jsonb_fragment`. Update the comment to reflect the new pipeline terminology. update module contract comments
-- [ ] line 26: `update_expression.data_expression` can be `undefined` with the current `exec_update_one` implementation. Add a hard failure (assert/typed error) or accept `jsonb_fragment` and compile it here. move rule to module boundary
-- [ ] line 21: Accept `update_expression.jsonb_ops` and call `jsonb_ops.compile(parameter_state)` to produce the RHS while binding JSON params in the correct global order. align module contracts
+- [x] line 25: Update the comment to reflect the new `JsonbOps` contract. The SQL builder should compile via `jsonb_ops.compile(parameter_state)`, not `JsonbQuery.from(...)`. update module contract comments
+- [x] line 27: `build_update_query(...)` still reads `update_expression.data_expression`, but `exec_update_one(...)` now passes `update_expression.jsonb_ops`. Accept the `jsonb_ops` contract here, or fail explicitly until that migration lands. move rule to module boundary
+- [x] line 21: Accept `update_expression.jsonb_ops` and call `jsonb_ops.compile(parameter_state)` to produce the RHS while binding JSON params in the correct global order. align module contracts
 
 src/model/model.js
 - [ ] line 30: `DeltaTracker(..., {track: ['data']})` prefixes delta paths with `data.`. The JSONB update compiler must strip this prefix before generating JSONB paths. move rule to module boundary

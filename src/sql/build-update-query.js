@@ -8,7 +8,7 @@ import {has_own} from '#src/utils/object.js';
  * @param {string} query_context.table_identifier
  * @param {string} query_context.data_identifier
  * @param {object} query_context.update_expression
- * @param {string} query_context.update_expression.data_expression
+ * @param {object} query_context.update_expression.jsonb_ops
  * @param {object} query_context.update_expression.timestamp_set
  * @param {object} query_context.parameter_state
  * @param {Array<*>} query_context.parameter_state.params
@@ -19,7 +19,13 @@ import {has_own} from '#src/utils/object.js';
  */
 function build_update_query(query_context) {
 	const {data_identifier, update_expression, parameter_state, table_identifier, where_result} = query_context;
-	const assignments = [`${data_identifier} = ${update_expression.data_expression}`];
+
+	// Finalize the JSONB mutation expression.
+	// The SQL boundary owns JSONB compilation and should compile via
+	// `jsonb_ops.compile(parameter_state)` as the new contract lands.
+	const compiled_data_expression = update_expression.jsonb_ops.compile(parameter_state);
+
+	const assignments = [`${data_identifier} = ${compiled_data_expression}`];
 	const timestamps = update_expression.timestamp_set;
 	const params = parameter_state;
 
