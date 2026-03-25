@@ -30,13 +30,5 @@ src/model/model.js
 src/utils/delta-tracker/index.js
 - [x] line 61: `DeltaTracker.from(...)` no longer claims it supports "flat paths". The docstring now reflects nested objects or direct top-level keys only. update module contract comments
 
-src/model/factory/update-helpers.js
-- [ ] line 5: Imports `normalize_update_operator_entries` and `assert_supported_update_definition`, but `src/model/factory/jsonb-operator.js` does not export them. Export the missing functions or stop re-exporting them here. align module contracts
-
-src/model/factory/jsonb-operator.js
-- [ ] line 68: `build_path_literal(...)` already returns a `{...}` literal, but callers wrap it again (`" #- '{" + path_literal + "}'"`). Remove the extra `{}` wrapping so the SQL path literal is valid. fix SQL literal construction
-- [ ] line 26: `parse_update_path(...)` bypasses `split_dot_path(...)` validation/prototype-pollution checks. Reuse `split_dot_path(...)` so update paths are validated consistently. reuse shared utility from src/utils
-- [ ] line 3: This module binds SQL parameters inside the operator apply functions, which breaks the "syntax firewall" goal. Either deprecate this compiler in favor of `JsonbOps + compile_jsonb_fragment` or refactor it to emit an IR and let the SQL domain bind params. align module contracts
-
 src/model/factory/exec-update-one.1.js
 - [ ] line 1: This appears to be an archived implementation but lives next to the active factory module. Move it under an archive folder or remove from the runtime surface to avoid accidental imports. move rule to module boundary
