@@ -3,30 +3,31 @@ import IdStrategies from '#src/constants/id-strategies.js';
 import {assert_id_strategy_capability} from '#src/connection/server-capabilities.js';
 
 import ensure_index_sql from '#src/migration/ensure-index.js';
-import resolve_schema_indexes from '#src/migration/schema-indexes-resolver.js';
 import ensure_table_sql from '#src/migration/ensure-table.js';
+import resolve_schema_indexes from '#src/migration/schema-indexes-resolver.js';
 
 import Document from '#src/model/document.js';
-import {base_field_keys, DocumentInputMode, timestamp_fields, unsafe_from_keys} from '#src/model/factory/constants.js';
+import QueryBuilder from '#src/query/query-builder.js';
+import DeltaTracker from '#src/utils/delta-tracker/index.js';
+
 import {exec_delete_one} from '#src/model/factory/exec-delete-one.js';
 import {exec_insert_one} from '#src/model/factory/exec-insert-one.js';
 import {exec_update_one} from '#src/model/factory/exec-update-one.js';
-
-import QueryBuilder from '#src/query/query-builder.js';
+import {base_field_keys, DocumentInputMode, timestamp_fields, unsafe_from_keys} from '#src/model/factory/constants.js';
 
 import {is_array} from '#src/utils/array.js';
-import {deep_clone, get_callable, has_own, to_plain_object} from '#src/utils/object.js';
 import {split_dot_path} from '#src/utils/object-path.js';
+import {deep_clone, get_callable, has_own, to_plain_object} from '#src/utils/object.js';
 import {is_function, is_not_object, is_object, is_plain_object} from '#src/utils/value.js';
 
 /**
- * Base model constructor that initializes the internal reactive document.
+ * Base model constructor that initializes the internal tracked document.
  *
  * @param {*} data
  * @returns {void}
  */
 function Model(data) {
-	this.document = new Document(data);
+	this.document = DeltaTracker(new Document(data), {track: ['data']});
 	this.is_new = true;
 }
 
@@ -51,7 +52,7 @@ Object.defineProperty(Model.prototype, 'updated_at', {
 Object.defineProperty(Model.prototype, 'payload', {
 	get: function () {
 		// Return the lazily-proxied data object directly,
-		// so that any mutations here trigger the DirtyTracker.
+		// so that any mutations here trigger the DeltaTracker.
 		return this.document.data;
 	}
 });
@@ -222,14 +223,17 @@ Model.prototype.update = async function () {
 		});
 	}
 
-	const update_set_payload = this.payload;
+	if(document.$has_changes()) {
+		// The tracker provides the delta shape, and row-level timestamps stay at the root.
+		const update_payload = document.$get_delta();
+		update_payload.updated_at = document.updated_at;
 
-	if(document.has_dirty_fields()) {
-		const updated_document = await exec_update_one(model, {id: this.id}, {$set: update_set_payload});
+		const filter = {id: this.id};
+		const updated_document = await exec_update_one(model, filter, update_payload);
 
 		if(updated_document) {
 			document.init(updated_document);
-			document.rebase_dirty_fields();
+			document.$rebase_changes();
 		}
 	}
 
@@ -276,7 +280,7 @@ Model.hydrate = function (data, options = {}) {
 	const instance = new model(doc);
 	instance.is_new = false;
 	instance.document.init(doc);
-	instance.document.rebase_dirty_fields();
+	instance.document.$rebase_changes();
 
 	return instance;
 };

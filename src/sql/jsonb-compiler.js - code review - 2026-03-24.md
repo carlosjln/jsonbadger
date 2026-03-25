@@ -24,8 +24,8 @@ src/sql/build-update-query.js
 - [x] line 21: Accept `update_expression.jsonb_ops` and call `jsonb_ops.compile(parameter_state)` to produce the RHS while binding JSON params in the correct global order. align module contracts
 
 src/model/model.js
-- [ ] line 30: `DeltaTracker(..., {track: ['data']})` prefixes delta paths with `data.`. The JSONB update compiler must strip this prefix before generating JSONB paths. move rule to module boundary
-- [ ] line 235: `update_payload.set.updated_at = document.updated_at` pushes `updated_at` into the JSON payload delta, but timestamps are row-level base fields. Route `updated_at` through `timestamp_set` instead of JSONB `$set`. move rule to module boundary
+- [x] line 30: `DeltaTracker(..., {track: ['data']})` emits tracked delta keys as `data.*` because nested writes are stored by full path under the tracked root. The JSONB update boundary now strips/maps that tracked-root prefix before compiling JSONB paths. move rule to module boundary
+- [x] line 233: `update_payload.updated_at = document.updated_at` now keeps `updated_at` at the row boundary instead of pushing it into the JSON payload delta. move rule to module boundary
 
 src/utils/delta-tracker/index.js
 - [ ] line 61: `DeltaTracker.from(...)` claims it supports "flat paths", but it assigns `tracker[key]` directly and does not interpret dot paths. Either implement dot-path writes or update the docstring to avoid misleading callers. update module contract comments

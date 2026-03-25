@@ -3,6 +3,7 @@ import where_compiler from '#src/query/where-compiler/index.js';
 import {create_parameter_state} from '#src/sql/parameter-binder.js';
 
 import {JsonbOps} from '#src/sql/jsonb-ops.js';
+import {is_array} from '#src/utils/array.js';
 import {quote_identifier} from '#src/utils/assert.js';
 import {timestamp_fields} from '#src/model/factory/constants.js';
 import {is_not_object, is_object} from '#src/utils/value.js';
@@ -19,7 +20,7 @@ async function exec_update_one(model, query_filter, update_definition) {
 	const data_column = model_options.data_column;
 
 	// 1. Domain Split: Separate row columns from JSON payload
-	const {timestamp_set, payload} = split_update_definition(update_definition);
+	const {timestamp_set, payload} = normalize_update_definition(update_definition, data_column);
 
 	// 2. Syntax Pass: Build the JsonbOps instance
 	const data_identifier = quote_identifier(data_column);
@@ -60,41 +61,111 @@ async function exec_update_one(model, query_filter, update_definition) {
 	return null;
 }
 
-// TODO: review who calls this, it might be deprecated depending on what payload actually gets here
-function split_update_definition(update_definition) {
+// TODO: refactor this into an explicit payload router once one document instance can target several JSONB slugs.
+/**
+ * Normalize one update definition into row timestamps plus operator-style JSONB payload.
+ *
+ * @param {object} update_definition
+ * @param {string} data_column
+ * @returns {{timestamp_set: object, payload: object}}
+ */
+function normalize_update_definition(update_definition, data_column) {
 	const timestamp_set = {};
-	const payload = {...update_definition};
-
-	for(const key of timestamp_fields) {
-		if(Object.prototype.hasOwnProperty.call(payload, key)) {
-			timestamp_set[key] = payload[key];
-			delete payload[key];
-		}
-	}
+	const payload = pull_timestamp_fields(update_definition, timestamp_set);
 
 	if(is_object(payload.$set)) {
-		const set_payload = {...payload.$set};
-		for(const key of timestamp_fields) {
-			if(Object.prototype.hasOwnProperty.call(set_payload, key)) {
-				timestamp_set[key] = set_payload[key];
-				delete set_payload[key];
-			}
-		}
-		payload.$set = set_payload;
+		payload.$set = pull_timestamp_fields(payload.$set, timestamp_set);
 	}
 
 	if(is_object(payload.set)) {
-		const set_payload = {...payload.set};
-		for(const key of timestamp_fields) {
-			if(Object.prototype.hasOwnProperty.call(set_payload, key)) {
-				timestamp_set[key] = set_payload[key];
-				delete set_payload[key];
+		const tracked_set = pull_timestamp_fields(payload.set, timestamp_set);
+		const set_payload = is_object(payload.$set) ? payload.$set : {};
+
+		delete payload.set;
+		payload.$set = set_payload;
+
+		for(const [path_name, value] of Object.entries(tracked_set)) {
+			const next_path = strip_tracked_root(path_name, data_column);
+
+			if(next_path === '') {
+				continue;
 			}
+
+			set_payload[next_path] = value;
 		}
-		payload.set = set_payload;
+	}
+
+	if(is_array(payload.unset)) {
+		const tracked_unset = payload.unset;
+		const unset_payload = is_array(payload.$unset) ? payload.$unset : [];
+
+		delete payload.unset;
+		payload.$unset = unset_payload;
+
+		for(const path_name of tracked_unset) {
+			const next_path = strip_tracked_root(path_name, data_column);
+
+			if(next_path === '') {
+				payload.$replace_roots = {};
+				continue;
+			}
+
+			unset_payload.push(next_path);
+		}
+	}
+
+	if(is_object(payload.replace_roots)) {
+		const next_root_payload = payload.replace_roots[data_column];
+
+		delete payload.replace_roots;
+
+		if(next_root_payload !== undefined) {
+			payload.$replace_roots = next_root_payload;
+		}
 	}
 
 	return {timestamp_set, payload};
+}
+
+/**
+ * Extract supported row timestamp fields from one payload object.
+ *
+ * @param {object} source_object
+ * @param {object} timestamp_set
+ * @returns {object}
+ */
+function pull_timestamp_fields(source_object, timestamp_set) {
+	const next_object = {...source_object};
+
+	for(const key of timestamp_fields) {
+		if(Object.prototype.hasOwnProperty.call(next_object, key)) {
+			timestamp_set[key] = next_object[key];
+			delete next_object[key];
+		}
+	}
+
+	return next_object;
+}
+
+/**
+ * Strip the tracked root segment from one tracker-emitted path.
+ *
+ * @param {string} path_name
+ * @param {string} data_column
+ * @returns {string}
+ */
+function strip_tracked_root(path_name, data_column) {
+	if(path_name === data_column) {
+		return '';
+	}
+
+	const path_prefix = `${data_column}.`;
+
+	if(path_name.startsWith(path_prefix)) {
+		return path_name.substring(path_prefix.length);
+	}
+
+	return path_name;
 }
 
 export {
