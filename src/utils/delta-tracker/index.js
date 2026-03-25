@@ -58,7 +58,7 @@ function DeltaTracker(target, options = {}) {
  * Performs a one-shot delta generation from a plain object.
  * Assumes an empty baseline state.
  *
- * @param {object} object - Input data (can be nested or flat paths).
+ * @param {object} object - Input data using nested objects or direct top-level keys.
  * @returns {object} The generated delta { replace_roots, set, unset }.
  */
 DeltaTracker.from = function (object) {
@@ -71,8 +71,8 @@ DeltaTracker.from = function (object) {
 	const keys = Object.keys(object);
 	let i = 0;
 
-	// Apply all keys to the tracker. 
-	// The proxy's internal set/delete logic handles the path collapsing.
+	// Apply all keys to the tracker.
+	// Nested object input is handled by normal proxy traversal after assignment.
 	while(i < keys.length) {
 		const key = keys[i];
 		const value = object[key];

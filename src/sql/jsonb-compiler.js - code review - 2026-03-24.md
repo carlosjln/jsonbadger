@@ -28,7 +28,7 @@ src/model/model.js
 - [x] line 233: `update_payload.updated_at = document.updated_at` now keeps `updated_at` at the row boundary instead of pushing it into the JSON payload delta. move rule to module boundary
 
 src/utils/delta-tracker/index.js
-- [ ] line 61: `DeltaTracker.from(...)` claims it supports "flat paths", but it assigns `tracker[key]` directly and does not interpret dot paths. Either implement dot-path writes or update the docstring to avoid misleading callers. update module contract comments
+- [x] line 61: `DeltaTracker.from(...)` no longer claims it supports "flat paths". The docstring now reflects nested objects or direct top-level keys only. update module contract comments
 
 src/model/factory/update-helpers.js
 - [ ] line 5: Imports `normalize_update_operator_entries` and `assert_supported_update_definition`, but `src/model/factory/jsonb-operator.js` does not export them. Export the missing functions or stop re-exporting them here. align module contracts
