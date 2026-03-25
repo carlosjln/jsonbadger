@@ -1,5 +1,7 @@
 import IdStrategies from '#src/constants/id-strategies.js';
 
+// TODO: add `model_options.timestamps` as a real config flag and wire its behavior
+// through model lifecycle defaults, docs, and update/insert timestamp handling.
 const defaults = {
 	connection_options: {
 		max: 10,
@@ -14,7 +16,10 @@ const defaults = {
 
 	model_options: {
 		table_name: null,
-		data_column: 'data'
+		data_column: 'data',
+		/*
+		timestamps: true,
+		*/
 	}
 };
 

@@ -64,15 +64,15 @@ function compile_standard_operator(context) {
 	const text_expression = build_text_expression(data_column_reference, path_value);
 	const json_expression = build_json_expression(data_column_reference, path_value);
 	const casted_value = cast_operator_value(path_value, name, value, compile_context);
-	const text_operator_clause = compile_text_operator(
+	const text_operator_clause = compile_text_operator({
 		name,
 		value,
 		casted_value,
 		regex_options,
 		text_expression,
 		parameter_state,
-		'Unsupported operator'
-	);
+		error_message: 'Unsupported operator'
+	});
 
 	if(text_operator_clause) {
 		return text_operator_clause;

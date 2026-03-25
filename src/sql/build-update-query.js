@@ -37,8 +37,6 @@ function build_update_query(query_context) {
 	if(has_own(timestamps, 'updated_at')) {
 		const updated_at_param = bind_parameter(params, timestamps.updated_at);
 		assignments.push(`updated_at = ${updated_at_param}::timestamptz`);
-	} else {
-		assignments.push('updated_at = NOW()');
 	}
 
 	const sql_text =

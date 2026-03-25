@@ -12,15 +12,31 @@ import {
 	regex_operator
 } from '#src/query/operators/index.js';
 
-function compile_text_operator(
-	name,
-	value,
-	casted_value,
-	regex_options,
-	text_expression,
-	parameter_state,
-	error_message
-) {
+/**
+ * Compile one scalar comparison operator into a SQL predicate.
+ *
+ * @param {object} operator_context
+ * @param {string} operator_context.name
+ * @param {*} operator_context.value
+ * @param {*} [operator_context.casted_value]
+ * @param {*} operator_context.regex_options
+ * @param {string} operator_context.text_expression
+ * @param {object} operator_context.parameter_state
+ * @param {string} operator_context.error_message
+ * @returns {string}
+ * @throws {QueryError}
+ */
+function compile_text_operator(operator_context) {
+	const {
+		name,
+		value,
+		casted_value = value,
+		regex_options,
+		text_expression,
+		parameter_state,
+		error_message
+	} = operator_context;
+
 	if(name === '$eq') {
 		return eq_operator(text_expression, casted_value, parameter_state);
 	}
@@ -57,45 +73,11 @@ function compile_text_operator(
 		return regex_operator(text_expression, value, regex_options, parameter_state);
 	}
 
-	if(
-		name === '$contains' ||
-		name === '$has_key' ||
-		name === '$has_any_keys' ||
-		name === '$has_all_keys' ||
-		name === '$json_path_exists' ||
-		name === '$json_path_match' ||
-		name === '$all' ||
-		name === '$size'
-	) {
-		return null;
-	}
-
 	throw new QueryError(error_message + ': ' + name, {
 		operator: name
 	});
 }
 
-function compile_scalar_operator(name, value, regex_options, elem_expression, parameter_state) {
-	const predicate = compile_text_operator(
-		name,
-		value,
-		value,
-		regex_options,
-		elem_expression,
-		parameter_state,
-		'Unsupported operator inside $elem_match'
-	);
-
-	if(predicate !== null) {
-		return predicate;
-	}
-
-	throw new QueryError('Unsupported operator inside $elem_match: ' + name, {
-		operator: name
-	});
-}
-
 export {
-	compile_scalar_operator,
 	compile_text_operator
 };
