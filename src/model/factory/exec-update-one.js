@@ -2,46 +2,56 @@ import sql from '#src/sql/index.js';
 import where_compiler from '#src/query/where-compiler/index.js';
 import {create_parameter_state} from '#src/sql/parameter-binder.js';
 
+import {JsonbOps} from '#src/sql/jsonb-ops.js';
 import {quote_identifier} from '#src/utils/assert.js';
-import {assert_supported_update_definition, normalize_update_operator_entries} from '#src/model/factory/update-helpers.js';
+import {timestamp_fields} from '#src/model/factory/constants.js';
+import {is_not_object, is_object} from '#src/utils/value.js';
 
 /**
- * Execute Model.update_one() for a model constructor.
- *
- * @param {Function} model Model constructor.
- * @param {object|undefined} query_filter Query filter.
- * @param {object|undefined} update_definition Update definition.
- * @returns {Promise<object|null>}
+ * Execute Model.update_one() by coordinating syntax parsing and SQL generation.
  */
 async function exec_update_one(model, query_filter, update_definition) {
-	const schema = model.schema;
-	const id_strategy = schema.id_strategy;
+	if(is_not_object(update_definition) || Object.keys(update_definition).length === 0) {
+		return null;
+	}
+
 	const model_options = model.options;
 	const data_column = model_options.data_column;
-	const table_name = model_options.table_name;
-	const update_operator_entries = normalize_update_operator_entries(update_definition);
 
-	assert_supported_update_definition(update_definition, update_operator_entries);
+	// 1. Domain Split: Separate row columns from JSON payload
+	const {timestamp_set, payload} = split_update_definition(update_definition);
 
-	const table_identifier = quote_identifier(table_name);
+	// 2. Syntax Pass: Build the JsonbOps instance
 	const data_identifier = quote_identifier(data_column);
-	const where_result = where_compiler(query_filter, {schema, data_column, id_strategy});
+	const jsonb_ops = JsonbOps.from(payload, {
+		column_name: data_identifier,
+		coalesce: true
+	});
+
+	// 3. State Pass: Setup binders and filters
+	const where_result = where_compiler(query_filter, {
+		schema: model.schema,
+		data_column,
+		id_strategy: model.schema.id_strategy
+	});
 	const parameter_state = create_parameter_state(where_result.next_index);
-	const update_expression = build_update_expression(update_operator_entries, data_identifier, parameter_state, schema);
 
 	const query_context = {
 		model,
-		table_identifier,
+		table_identifier: quote_identifier(model_options.table_name),
 		data_identifier,
 		where_result,
 		parameter_state,
-		update_expression
+		update_expression: {
+			jsonb_ops,
+			timestamp_set
+		}
 	};
 
+	// 4. Execution
 	const update_query = sql.build_update_query(query_context);
 	const query_result = await sql.run(update_query.sql_text, update_query.sql_params, model.connection);
-	const rows = query_result.rows;
-	const row = rows.length ? rows[0] : null;
+	const row = query_result.rows.length ? query_result.rows[0] : null;
 
 	if(row) {
 		return model.hydrate(row);
@@ -50,25 +60,41 @@ async function exec_update_one(model, query_filter, update_definition) {
 	return null;
 }
 
-function build_update_expression(update_operator_entries, data_expression, parameter_state, schema) {
-	const update_expression = {data_expression, timestamp_set: {}};
+// TODO: review who calls this, it might be deprecated depending on what payload actually gets here
+function split_update_definition(update_definition) {
+	const timestamp_set = {};
+	const payload = {...update_definition};
 
-	for(const update_operator_entry of update_operator_entries) {
-		const operator_result = update_operator_entry.operator_descriptor.apply({
-			definition: update_operator_entry.definition,
-			data_expression: update_expression.data_expression,
-			parameter_state,
-			schema
-		});
-
-		update_expression.data_expression = operator_result.data_expression;
-
-		if(operator_result.timestamp_set) {
-			Object.assign(update_expression.timestamp_set, operator_result.timestamp_set);
+	for(const key of timestamp_fields) {
+		if(Object.prototype.hasOwnProperty.call(payload, key)) {
+			timestamp_set[key] = payload[key];
+			delete payload[key];
 		}
 	}
 
-	return update_expression;
+	if(is_object(payload.$set)) {
+		const set_payload = {...payload.$set};
+		for(const key of timestamp_fields) {
+			if(Object.prototype.hasOwnProperty.call(set_payload, key)) {
+				timestamp_set[key] = set_payload[key];
+				delete set_payload[key];
+			}
+		}
+		payload.$set = set_payload;
+	}
+
+	if(is_object(payload.set)) {
+		const set_payload = {...payload.set};
+		for(const key of timestamp_fields) {
+			if(Object.prototype.hasOwnProperty.call(set_payload, key)) {
+				timestamp_set[key] = set_payload[key];
+				delete set_payload[key];
+			}
+		}
+		payload.set = set_payload;
+	}
+
+	return {timestamp_set, payload};
 }
 
 export {
