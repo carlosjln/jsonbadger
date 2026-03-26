@@ -1,3 +1,7 @@
+/*
+ * MODULE BOUNDARY
+ * Responsibility: own document lifecycle, schema validation, timestamp policy, and persistence delegation.
+ */
 import QueryError from '#src/errors/query-error.js';
 import IdStrategies from '#src/constants/id-strategies.js';
 import {assert_id_strategy_capability} from '#src/connection/server-capabilities.js';

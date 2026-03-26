@@ -1,3 +1,7 @@
+/*
+ * MODULE BOUNDARY
+ * Responsibility: track object changes and export generic delta snapshots.
+ */
 import {to_array} from '#src/utils/array.js';
 import {deep_clone, has_own} from '#src/utils/object.js';
 import {is_function, is_not_object, is_object} from '#src/utils/value.js';

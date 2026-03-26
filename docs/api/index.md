@@ -26,6 +26,7 @@ Default export (`JsonBadger`) includes the same plus:
 ## Module Docs
 
 - [`connection.md`](connection.md)
+- [`delta-tracker.md`](delta-tracker.md)
 - [`schema.md`](schema.md)
 - [`model.md`](model.md)
 - [`query-builder.md`](query-builder.md)

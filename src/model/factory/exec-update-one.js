@@ -1,3 +1,7 @@
+/*
+ * MODULE BOUNDARY
+ * Responsibility: bridge model-layer update input into the SQL update context.
+ */
 import sql from '#src/sql/index.js';
 import where_compiler from '#src/query/where-compiler/index.js';
 import {create_parameter_state} from '#src/sql/parameter-binder.js';

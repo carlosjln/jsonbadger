@@ -1,3 +1,7 @@
+/*
+ * MODULE BOUNDARY
+ * Responsibility: serialize the prepared update context into SQL and bind the row-level values it receives.
+ */
 import {bind_parameter} from '#src/sql/parameter-binder.js';
 import {has_own} from '#src/utils/object.js';
 
