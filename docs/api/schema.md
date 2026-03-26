@@ -4,6 +4,7 @@
 
 - [Schema API](#schema-api)
 - [Constructor](#constructor)
+- [Ownership Boundary](#ownership-boundary)
 - [Core Methods](#core-methods)
 - [create_index](#create_index)
 - [method](#method)
@@ -15,10 +16,26 @@
 const user_schema = new JsonBadger.Schema(definition, options);
 ```
 
-`Schema` owns:
-- document structure
-- path introspection
-- index declarations
+## Ownership Boundary
+
+`Schema` defines what a document looks like.
+
+It is the right place for:
+
+1. Field definitions
+2. Validation and path introspection
+3. Schema-declared indexes
+4. Schema-level document methods
+
+It is not the place where table/storage configuration is chosen. That belongs to the owning model registration.
+
+Use `Schema` to describe the document contract, then use `connection.model(...)` to decide how that schema is persisted.
+
+In practice, `Schema` owns:
+
+1. Document structure
+2. Path introspection
+3. Index declarations
 
 `definition` must be a plain JSON-like object:
 - use object literals for nested schema branches

@@ -11,6 +11,7 @@ const User = connection.model({name: 'User', schema: user_schema, table_name: 'u
 
 - [Model API](#model-api)
 - [Construction](#construction)
+- [Ownership Boundary](#ownership-boundary)
 - [Static Methods](#static-methods)
 - [Model.from](#modelfrom)
 - [Model.hydrate](#modelhydrate)
@@ -29,6 +30,19 @@ const user_document = new User({
 ```
 
 New documents start in the `is_new = true` state until they are persisted.
+
+## Ownership Boundary
+
+`Model` owns how a schema is persisted and used at runtime.
+
+It is the right place for:
+
+1. `table_name`, `data_column`, and related storage options
+2. Table and index execution helpers such as `ensure_table()` and `ensure_index()`
+3. Query/update entry points
+4. Document construction and hydration
+
+`Model` consumes a `Schema`; it does not replace it. The schema defines the document contract, and the model defines how that contract is stored and operated on.
 
 ## Static Methods
 

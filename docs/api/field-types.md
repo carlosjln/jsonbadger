@@ -290,7 +290,9 @@ Returns the canonical registered name, or `null` when the alias is unknown.
 
 ## Custom Field Types
 
-Custom field types are registered through the same namespace and then used in schema definitions by name.
+Custom field types are registry-based.
+
+Register the type first, then use the registered name or alias in schema definitions.
 
 ```js
 class MoneyFieldType {
@@ -310,6 +312,18 @@ JsonBadger.field_type.register('Money', MoneyFieldType, ['money']);
 
 ```js
 const schema = new Schema({
-	price: {type: 'Money'}
+	price: {type: 'Money'},
+	discount_price: {type: 'money'}
 });
 ```
+
+Custom field types should follow the same runtime shape as built-in field types. In practice, the constructor is expected to expose field-type behavior such as:
+
+1. `path`
+2. `options`
+3. `instance`
+4. `validate(value, context)` when custom validation is needed
+
+Use registration names or aliases in schema definitions. Raw constructor references are not the documented custom-type entry path.
+
+> **Note:** There is no separate required base class for custom types. The important part is matching the field-type instance contract the schema/runtime expects.
