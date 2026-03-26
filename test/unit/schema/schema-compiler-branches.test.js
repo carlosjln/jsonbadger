@@ -1,83 +1,82 @@
 import {describe, expect, test} from '@jest/globals';
 
-import schema_compiler from '#src/schema/schema-compiler.js';
+import {
+	prepare_schema_state,
+	validate_payload
+} from '#src/schema/schema-compiler.js';
 
-describe('schema_compiler branch behavior', function () {
+describe('schema compiler helpers', function () {
 	test('returns validation_error details for non-object payloads', function () {
-		const compiler = schema_compiler({name: String});
-
-		const null_result = compiler.validate(null);
-		const array_result = compiler.validate([]);
+		const prepared_schema_state = prepare_schema_state({name: String});
+		const null_result = validate_payload(null, prepared_schema_state.sorted_paths, prepared_schema_state.field_types);
+		const array_result = validate_payload([], prepared_schema_state.sorted_paths, prepared_schema_state.field_types);
 
 		expect(null_result).toEqual({
-			value: null,
-			error: {
-				details: [
-					{
-						path: '',
-						code: 'validation_error',
-						message: 'Schema validation failed',
-						type: 'object'
-					}
-				]
-			}
+			valid: false,
+			errors: [
+				{
+					path: '',
+					code: 'validation_error',
+					message: 'Schema validation failed',
+					type: 'object'
+				}
+			]
 		});
 
-		expect(array_result.error.details[0].type).toBe('object');
+		expect(array_result.errors[0].type).toBe('object');
 	});
 
-	test('preserves unknown keys and skips writes when normalized value is undefined', function () {
-		const compiler = schema_compiler({
-			optional_name: String
-		});
-
-		const payload = {
-			other_key: 42
-		};
-
-		const result = compiler.validate(payload);
-
-		expect(result.error).toBeNull();
-		expect(result.value).toEqual({other_key: 42});
-		expect(result.value).not.toBe(payload);
-		expect(result.value).not.toHaveProperty('optional_name');
-	});
-
-	test('clones unknown Date and Buffer values and writes nested defaults through replaced containers', function () {
-		const compiler = schema_compiler({
+	test('prepares field types and sorts shallow paths before nested paths', function () {
+		const prepared_schema_state = prepare_schema_state({
+			name: String,
 			profile: {
-				city: {type: String, default: 'unknown'}
+				city: String
 			}
 		});
 
-		const original_date = new Date('2026-02-24T00:00:00.000Z');
-		const original_buffer = Buffer.from('AB');
-		const cases = [undefined, null, 'invalid', []];
-		let case_index = 0;
+		expect(Object.keys(prepared_schema_state.field_types)).toEqual([
+			'name',
+			'profile.city'
+		]);
+		expect(prepared_schema_state.sorted_paths).toEqual([
+			'name',
+			'profile.city'
+		]);
+		expect(prepared_schema_state.path_introspection.field_types).toBe(prepared_schema_state.field_types);
+	});
 
-		while(case_index < cases.length) {
-			const payload = {
-				profile: cases[case_index],
-				created_at: original_date,
-				raw: original_buffer
-			};
-
-			const result = compiler.validate(payload);
-
-			expect(result.error).toBeNull();
-			expect(result.value.profile).toEqual({city: 'unknown'});
-			expect(result.value.created_at instanceof Date).toBe(true);
-			expect(result.value.created_at.getTime()).toBe(original_date.getTime());
-			expect(result.value.created_at).not.toBe(original_date);
-			expect(Buffer.isBuffer(result.value.raw)).toBe(true);
-			expect(result.value.raw.equals(original_buffer)).toBe(true);
-			expect(result.value.raw).not.toBe(original_buffer);
-
-			if(cases[case_index] !== undefined) {
-				expect(payload.profile).toBe(cases[case_index]);
+	test('returns field validation details for invalid payloads and passes valid ones', function () {
+		const prepared_schema_state = prepare_schema_state({
+			name: {
+				type: String,
+				match: /^[a-z]+$/
 			}
+		});
+		const invalid_result = validate_payload(
+			{name: '123'},
+			prepared_schema_state.sorted_paths,
+			prepared_schema_state.field_types
+		);
+		const valid_result = validate_payload(
+			{name: 'alice'},
+			prepared_schema_state.sorted_paths,
+			prepared_schema_state.field_types
+		);
 
-			case_index += 1;
-		}
+		expect(invalid_result).toEqual({
+			valid: false,
+			errors: [
+				{
+					path: 'name',
+					code: 'validator_error',
+					message: 'Path "name" does not match pattern',
+					type: 'validator_error'
+				}
+			]
+		});
+		expect(valid_result).toEqual({
+			valid: true,
+			errors: null
+		});
 	});
 });

@@ -6,7 +6,8 @@ import ValidationError from '#src/errors/validation-error.js';
 
 import {default_field_type_registry} from '#src/field-types/registry.js';
 
-import compile_schema from '#src/schema/schema-compiler.js';
+import {prepare_schema_state, validate_payload as validate_schema_payload} from '#src/schema/schema-compiler.js';
+import {get_path_type as resolve_path_type, is_array_root as resolve_is_array_root} from '#src/schema/path-introspection.js';
 
 import {assert_condition, assert_identifier, assert_path} from '#src/utils/assert.js';
 import {has_own} from '#src/utils/object.js';
@@ -24,8 +25,12 @@ function Schema(schema_definition = {}, options = {}) {
 	// Prepare schema definition with missing system fields
 	inject_base_fields(schema_definition);
 
-	// Compile schema
-	this.$compiled = compile_schema(schema_definition);
+	// Prepare schema runtime state once and keep it on the schema instance.
+	const {path_introspection, field_types, sorted_paths} = prepare_schema_state(schema_definition);
+
+	this.$path_introspection = path_introspection;
+	this.$field_types = field_types;
+	this.$sorted_paths = sorted_paths;
 
 	// Initialize properties
 	this.indexes = [];
@@ -34,10 +39,11 @@ function Schema(schema_definition = {}, options = {}) {
 	this.strict = this.options.strict !== false;
 	this.id_strategy = this.options.id_strategy;
 	this.auto_index = this.options.auto_index;
-	this.paths = Object.assign({}, this.$compiled.get_introspection().field_types);
+	this.paths = this.$field_types;
 	this.methods = Object.create(null);
-	this.aliases = collect_aliases(this.paths);
+	this.aliases = collect_aliases(this.$field_types);
 	this.$field_registry = default_field_type_registry;
+	this.$conform_tree = build_allowed_tree(this.$field_types);
 
 	assert_id_strategy(this.id_strategy);
 	assert_condition(typeof this.auto_index === 'boolean', 'auto_index must be a boolean');
@@ -49,22 +55,8 @@ function Schema(schema_definition = {}, options = {}) {
 // --- PUBLIC API ---
 
 Schema.prototype.validate = function (document) {
-	const payload_result = this.validate_payload(document.data);
-	const base_fields_result = this.validate_base_fields(document);
-
-	const errors = [];
-
-	if(payload_result.errors) {
-		errors.push(...payload_result.errors);
-	}
-
-	if(base_fields_result.errors) {
-		errors.push(...base_fields_result.errors);
-	}
-
-	if(errors.length > 0) {
-		throw new ValidationError('Schema validation failed', errors);
-	}
+	this.validate_payload(document.data);
+	this.validate_base_fields(document);
 
 	return {
 		valid: true,
@@ -74,7 +66,7 @@ Schema.prototype.validate = function (document) {
 
 
 Schema.prototype.validate_payload = function (payload) {
-	const validation_result = this.$compiled.validate(payload);
+	const validation_result = validate_schema_payload(payload, this.$sorted_paths, this.$field_types);
 
 	if(!validation_result.valid) {
 		throw new ValidationError('Schema validation failed', validation_result.errors);
@@ -115,38 +107,6 @@ Schema.prototype.conform = function (payload) {
 		return;
 	}
 
-	const allowed_tree = {};
-
-	// Build a lookup tree of valid schema paths
-	for(const path of Object.keys(this.paths)) {
-		if(!is_string(path) || path.length === 0) {
-			continue;
-		}
-
-		const segments = path.split('.');
-		let node = allowed_tree;
-
-		for(let i = 0; i < segments.length; i++) {
-			const segment = segments[i];
-
-			// Skip internal base fields at root
-			if(i === 0 && base_fields_keys.has(segment)) {
-				node = null;
-				break;
-			}
-
-			// Mark leaf node as valid, otherwise initialize branch
-			if(i === segments.length - 1) {
-				node[segment] = true;
-			} else {
-				if(!is_plain_object(node[segment])) {
-					node[segment] = {};
-				}
-				node = node[segment];
-			}
-		}
-	}
-
 	// Recursive function to strip unknown keys from the payload
 	const walk = (data, branch) => {
 		if(!is_plain_object(data) || !is_plain_object(branch)) {
@@ -170,25 +130,25 @@ Schema.prototype.conform = function (payload) {
 		}
 	};
 
-	walk(payload, allowed_tree);
+	walk(payload, this.$conform_tree);
 
 	return payload;
 };
 
 Schema.prototype.get_path = function (path_name) {
-	if(has_own(this.paths, path_name)) {
-		return this.paths[path_name];
+	if(has_own(this.$field_types, path_name)) {
+		return this.$field_types[path_name];
 	}
 
 	return null;
 };
 
 Schema.prototype.get_path_type = function (path_name) {
-	return this.$compiled.get_path_type(path_name);
+	return resolve_path_type(this.$path_introspection, path_name);
 };
 
 Schema.prototype.is_array_root = function (path_name) {
-	return this.$compiled.is_array_root(path_name);
+	return resolve_is_array_root(this.$path_introspection, path_name);
 };
 
 Schema.prototype.create_index = function (index_definition) {
@@ -228,7 +188,7 @@ Schema.prototype.method = function (method_name, method_implementation) {
 
 Schema.prototype.collect_field_defined_indexes = function (schema_definition) {
 	const index_definitions = [];
-	const schema_instance = this;
+	const field_registry = this.$field_registry;
 
 	collect_paths(schema_definition, '');
 
@@ -242,7 +202,7 @@ Schema.prototype.collect_field_defined_indexes = function (schema_definition) {
 				continue;
 			}
 
-			if(is_explicit_field(field_definition, schema_instance.$field_registry)) {
+			if(is_explicit_field(field_definition, field_registry)) {
 				const inline_index_definition = normalize_index_definition(field_definition.index, full_path);
 
 				if(inline_index_definition) {
@@ -273,6 +233,43 @@ function inject_base_fields(schema_def) {
 			schema_def[field_name] = Object.assign({}, field_config);
 		}
 	}
+}
+
+function build_allowed_tree(paths) {
+	const allowed_tree = {};
+
+	for(const path_name of Object.keys(paths)) {
+		if(!is_string(path_name) || path_name.length === 0) {
+			continue;
+		}
+
+		const path_segments = path_name.split('.');
+		let current_branch = allowed_tree;
+		let segment_index = 0;
+
+		while(segment_index < path_segments.length) {
+			const segment_value = path_segments[segment_index];
+
+			if(segment_index === 0 && base_fields_keys.has(segment_value)) {
+				current_branch = null;
+				break;
+			}
+
+			if(segment_index === path_segments.length - 1) {
+				current_branch[segment_value] = true;
+			} else {
+				if(!is_plain_object(current_branch[segment_value])) {
+					current_branch[segment_value] = {};
+				}
+
+				current_branch = current_branch[segment_value];
+			}
+
+			segment_index += 1;
+		}
+	}
+
+	return allowed_tree;
 }
 
 /**

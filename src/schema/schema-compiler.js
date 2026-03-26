@@ -1,45 +1,26 @@
 import field_definition_parser from '#src/schema/field-definition-parser.js';
 
 import {
-	create_path_introspection,
-	get_path_field_type,
-	get_path_type as resolve_path_type,
-	is_array_root as resolve_is_array_root
+	create_path_introspection
 } from '#src/schema/path-introspection.js';
 
 import {is_array} from '#src/utils/array.js';
 import {has_own} from '#src/utils/object.js';
-import {is_not_object} from '#src/utils/value.js';
+import {is_function, is_not_object} from '#src/utils/value.js';
 
 const schema_validation_error_message = 'Schema validation failed';
 const schema_validation_error_code = 'validation_error';
 
-function compile_schema(schema_definition = {}) {
+function prepare_schema_state(schema_definition = {}) {
 	const parsed_schema = field_definition_parser(schema_definition);
 	const path_introspection = create_path_introspection(parsed_schema);
 	const field_types = path_introspection.field_types;
 	const sorted_paths = Object.keys(field_types).sort(sort_paths_by_depth);
 
 	return {
-		validate: function (payload) {
-			return validate_payload(payload, sorted_paths, field_types);
-		},
-
-		get_path: function (path_name) {
-			return get_path_field_type(path_introspection, path_name);
-		},
-
-		get_path_type: function (path_name) {
-			return resolve_path_type(path_introspection, path_name);
-		},
-
-		is_array_root: function (path_name) {
-			return resolve_is_array_root(path_introspection, path_name);
-		},
-
-		get_introspection: function () {
-			return path_introspection;
-		}
+		path_introspection,
+		field_types,
+		sorted_paths
 	};
 }
 
@@ -130,4 +111,8 @@ function read_path(root_object, path_segments) {
 	};
 }
 
-export default compile_schema;
+export {
+	prepare_schema_state,
+	validate_payload,
+	sort_paths_by_depth
+};

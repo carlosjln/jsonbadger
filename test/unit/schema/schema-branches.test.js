@@ -63,4 +63,29 @@ describe('Schema guard and explicit-array index behavior', function () {
 			}
 		]);
 	});
+
+	test('conform strips unknown keys using the prepared schema tree', function () {
+		const schema_instance = new Schema({
+			name: String,
+			profile: {
+				city: String
+			}
+		});
+		const payload = {
+			name: 'alice',
+			profile: {
+				city: 'Madrid',
+				age: 32
+			},
+			role: 'admin'
+		};
+
+		expect(schema_instance.conform(payload)).toBe(payload);
+		expect(payload).toEqual({
+			name: 'alice',
+			profile: {
+				city: 'Madrid'
+			}
+		});
+	});
 });
