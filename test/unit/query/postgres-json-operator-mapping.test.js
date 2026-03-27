@@ -1,6 +1,6 @@
-﻿import {describe, expect, test} from '@jest/globals';
+import {describe, expect, test} from '@jest/globals';
 
-import where_compiler from '#src/query/where-compiler/index.js';
+import where_compiler from '#src/sql/read/where/index.js';
 
 describe('PostgreSQL JSON operator mapping', function () {
 	test('maps containment and existence operators to native JSONB operators', function () {
@@ -71,4 +71,3 @@ describe('PostgreSQL JSON operator mapping', function () {
 		}).toThrow('Invalid value for $json_path_match operator');
 	});
 });
-

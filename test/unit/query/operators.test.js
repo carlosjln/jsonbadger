@@ -1,19 +1,19 @@
 import {describe, expect, test} from '@jest/globals';
 
-import all_operator from '#src/query/operators/all.js';
-import contains_operator from '#src/query/operators/contains.js';
-import gt_operator from '#src/query/operators/gt.js';
-import gte_operator from '#src/query/operators/gte.js';
-import lt_operator from '#src/query/operators/lt.js';
-import lte_operator from '#src/query/operators/lte.js';
-import has_all_keys_operator from '#src/query/operators/has-all-keys.js';
-import has_any_keys_operator from '#src/query/operators/has-any-keys.js';
-import has_key_operator from '#src/query/operators/has-key.js';
-import in_operator from '#src/query/operators/in.js';
-import jsonpath_exists_operator from '#src/query/operators/jsonpath-exists.js';
-import jsonpath_match_operator from '#src/query/operators/jsonpath-match.js';
-import nin_operator from '#src/query/operators/nin.js';
-import size_operator from '#src/query/operators/size.js';
+import all_operator from '#src/sql/read/where/operators/all.js';
+import contains_operator from '#src/sql/read/where/operators/contains.js';
+import gt_operator from '#src/sql/read/where/operators/gt.js';
+import gte_operator from '#src/sql/read/where/operators/gte.js';
+import lt_operator from '#src/sql/read/where/operators/lt.js';
+import lte_operator from '#src/sql/read/where/operators/lte.js';
+import has_all_keys_operator from '#src/sql/read/where/operators/has-all-keys.js';
+import has_any_keys_operator from '#src/sql/read/where/operators/has-any-keys.js';
+import has_key_operator from '#src/sql/read/where/operators/has-key.js';
+import in_operator from '#src/sql/read/where/operators/in.js';
+import jsonpath_exists_operator from '#src/sql/read/where/operators/jsonpath-exists.js';
+import jsonpath_match_operator from '#src/sql/read/where/operators/jsonpath-match.js';
+import nin_operator from '#src/sql/read/where/operators/nin.js';
+import size_operator from '#src/sql/read/where/operators/size.js';
 import {create_parameter_state} from '#src/sql/parameter-binder.js';
 
 describe('Query operators', function () {

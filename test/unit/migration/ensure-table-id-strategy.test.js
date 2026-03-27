@@ -2,7 +2,7 @@ import {beforeEach, describe, expect, jest, test} from '@jest/globals';
 
 const sql_runner_mock = jest.fn();
 
-jest.unstable_mockModule('#src/sql/sql-runner.js', function build_sql_runner_mock() {
+jest.unstable_mockModule('#src/sql/run.js', function build_sql_runner_mock() {
 	return {
 		default: sql_runner_mock
 	};

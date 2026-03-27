@@ -9,7 +9,7 @@ jest.unstable_mockModule('#src/migration/ensure-table.js', function () {
 	};
 });
 
-jest.unstable_mockModule('#src/sql/sql-runner.js', function () {
+jest.unstable_mockModule('#src/sql/run.js', function () {
 	return {
 		default: sql_runner_mock
 	};
@@ -211,4 +211,3 @@ describe('Model.update_one field type casting', function () {
 		})).rejects.toThrow('Cast to Int32 failed');
 	});
 });
-

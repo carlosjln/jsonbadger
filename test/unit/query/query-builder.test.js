@@ -2,13 +2,13 @@ import {beforeEach, describe, expect, jest, test} from '@jest/globals';
 
 const sql_runner_mock = jest.fn();
 
-jest.unstable_mockModule('#src/sql/sql-runner.js', function () {
+jest.unstable_mockModule('#src/sql/run.js', function () {
 	return {
 		default: sql_runner_mock
 	};
 });
 
-const {default: QueryBuilder} = await import('#src/query/query-builder.js');
+const {default: QueryBuilder} = await import('#src/model/operations/query-builder.js');
 
 describe('QueryBuilder.exec read behavior', function () {
 	beforeEach(function () {

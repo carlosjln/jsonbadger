@@ -1,8 +1,8 @@
 import {describe, expect, test} from '@jest/globals';
 
-import limit_skip_compiler from '#src/query/limit-skip-compiler.js';
-import {build_elem_text_expression, build_json_expression, build_text_expression, parse_path} from '#src/query/path-parser.js';
-import sort_compiler from '#src/query/sort-compiler.js';
+import limit_skip_compiler from '#src/sql/read/limit-skip.js';
+import {build_elem_text_expression, build_json_expression, build_text_expression, parse_path} from '#src/sql/read/path-parser.js';
+import sort_compiler from '#src/sql/read/sort.js';
 
 describe('query compilers', function () {
 	test('limit_skip_compiler builds limit and offset clauses and normalizes integers', function () {

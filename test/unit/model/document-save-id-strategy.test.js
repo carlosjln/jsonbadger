@@ -17,7 +17,7 @@ jest.unstable_mockModule('#src/migration/ensure-table.js', function build_ensure
 	};
 });
 
-jest.unstable_mockModule('#src/sql/sql-runner.js', function build_sql_runner_mock() {
+jest.unstable_mockModule('#src/sql/run.js', function build_sql_runner_mock() {
 	return {
 		default: sql_runner_mock
 	};

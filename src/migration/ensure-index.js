@@ -1,7 +1,11 @@
+/*
+ * MODULE RESPONSIBILITY
+ * Ensure the declared model indexes exist in the backing database.
+ */
 import {assert_condition, assert_identifier, assert_path, quote_identifier} from '#src/utils/assert.js';
 import {build_path_literal, split_dot_path} from '#src/utils/object-path.js';
 import {is_object, is_string} from '#src/utils/value.js';
-import sql_run from '#src/sql/sql-run.js';
+import run from '#src/sql/run.js';
 
 async function ensure_index(context) {
 	const {
@@ -26,7 +30,7 @@ async function ensure_index(context) {
 			`CREATE INDEX IF NOT EXISTS ${index_identifier} ` +
 			`ON ${table_identifier} USING GIN ((${expression}));`;
 
-		await sql_run(sql_text, [], connection);
+		await run(sql_text, [], connection);
 		return;
 	}
 
@@ -51,7 +55,7 @@ async function ensure_index(context) {
 		`CREATE ${unique_prefix}INDEX IF NOT EXISTS ${index_identifier} ` +
 		`ON ${table_identifier} (${expression_list.join(', ')});`;
 
-	await sql_run(sql_text, [], connection);
+	await run(sql_text, [], connection);
 }
 
 function assert_sql_safe_index_definition(index_definition) {

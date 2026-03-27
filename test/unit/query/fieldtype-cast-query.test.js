@@ -1,6 +1,6 @@
-﻿import {describe, expect, test} from '@jest/globals';
+import {describe, expect, test} from '@jest/globals';
 
-import where_compiler from '#src/query/where-compiler/index.js';
+import where_compiler from '#src/sql/read/where/index.js';
 import Schema from '#src/schema/schema.js';
 
 describe('where_compiler field type casting', function () {
@@ -61,4 +61,3 @@ describe('where_compiler field type casting', function () {
 		expect(jsonpath_match_result.params).toEqual(['$.age > 18']);
 	});
 });
-

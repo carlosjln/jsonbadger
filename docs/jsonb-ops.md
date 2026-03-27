@@ -64,7 +64,7 @@ Tracked document updates come from `DeltaTracker` as:
 {replace_roots: {...}, set: {...}, unset: [...]}
 ```
 
-When `track: ['data']` is used, tracked paths are prefixed like `data.profile.city`. The orchestrator boundary in `src/model/factory/exec-update-one.js` strips that tracked root and maps the delta into operator-style input before calling `JsonbOps.from(...)`.
+When `track: ['data']` is used, tracked paths are prefixed like `data.profile.city`. The orchestrator boundary in `src/model/operations/update-one.js` strips that tracked root and maps the delta into operator-style input before calling `JsonbOps.from(...)`.
 
 ## Interaction Model
 
@@ -147,10 +147,10 @@ That compile step folds the ordered operations into one RHS expression and pushe
 ## Module Responsibilities
 
 1. `src/sql/jsonb-ops.js`: parse operator-style JSONB updates and compile them into the RHS SQL expression.
-2. `src/model/factory/exec-update-one.js`: split row timestamps, adapt tracked deltas when needed, and build the query context.
-3. `src/sql/build-update-query.js`: compile `jsonb_ops`, then bind row-level timestamps and assemble the final `UPDATE`.
+2. `src/model/operations/update-one.js`: split row timestamps, adapt tracked deltas when needed, and build the query context.
+3. `src/sql/write/build-update-query.js`: compile `jsonb_ops`, then bind row-level timestamps and assemble the final `UPDATE`.
 4. `src/model/model.js`: keep `updated_at` and `created_at` at the row boundary instead of pushing them into JSONB `$set`.
 
 ## Pending Note
 
-The current boundary adapter assumes one JSONB slug per document update path. Multi-slug document routing is a follow-up and is called out by the TODO in `src/model/factory/exec-update-one.js`.
+The current boundary adapter assumes one JSONB slug per document update path. Multi-slug document routing is a follow-up and is called out by the TODO in `src/model/operations/update-one.js`.

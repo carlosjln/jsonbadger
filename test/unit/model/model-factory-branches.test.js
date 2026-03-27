@@ -24,7 +24,7 @@ jest.unstable_mockModule('#src/migration/ensure-schema.js', function () {
 	};
 });
 
-jest.unstable_mockModule('#src/sql/sql-runner.js', function () {
+jest.unstable_mockModule('#src/sql/run.js', function () {
 	return {
 		default: sql_runner_mock
 	};
@@ -36,7 +36,7 @@ jest.unstable_mockModule('#src/connection/server-capabilities.js', function () {
 	};
 });
 
-const {default: QueryBuilder} = await import('#src/query/query-builder.js');
+const {default: QueryBuilder} = await import('#src/model/operations/query-builder.js');
 const {default: QueryError} = await import('#src/errors/query-error.js');
 const {default: Schema} = await import('#src/schema/schema.js');
 const {default: model} = await import('#src/model/factory/index.js');
@@ -763,4 +763,3 @@ function build_schema_stub(overrides = {}) {
 		path
 	};
 }
-

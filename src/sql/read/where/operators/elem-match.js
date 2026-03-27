@@ -1,0 +1,9 @@
+/*
+ * MODULE RESPONSIBILITY
+ * Compile the SQL fragment for the $elem-match read-query operator.
+ */
+function elem_match_operator(array_expression, predicate_expression) {
+	return 'EXISTS (SELECT 1 FROM jsonb_array_elements(' + array_expression + ') AS elem WHERE ' + predicate_expression + ')';
+}
+
+export default elem_match_operator;

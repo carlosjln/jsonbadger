@@ -9,9 +9,9 @@ jest.unstable_mockModule('#src/debug/debug-logger.js', function () {
 });
 
 const {default: QueryError} = await import('#src/errors/query-error.js');
-const {default: sql_runner} = await import('#src/sql/sql-runner.js');
+const {default: run} = await import('#src/sql/run.js');
 
-describe('sql_runner', function () {
+describe('run', function () {
 	beforeEach(function () {
 		debug_logger_mock.mockReset();
 	});
@@ -23,7 +23,7 @@ describe('sql_runner', function () {
 			options: {debug: true}
 		};
 
-		const result = await sql_runner('SELECT 1', ['x'], connection);
+		const result = await run('SELECT 1', ['x'], connection);
 
 		expect(result).toEqual({rows: [{id: 1}]});
 		expect(query_mock).toHaveBeenCalledWith('SELECT 1', ['x']);
@@ -41,7 +41,7 @@ describe('sql_runner', function () {
 			options: {debug: false}
 		};
 
-		await sql_runner('SELECT 1', undefined, connection);
+		await run('SELECT 1', undefined, connection);
 
 		expect(query_mock).toHaveBeenCalledWith('SELECT 1', []);
 		expect(debug_logger_mock).toHaveBeenCalledWith(false, 'sql_query', {
@@ -57,7 +57,7 @@ describe('sql_runner', function () {
 			options: {debug: true}
 		};
 
-		const result = await sql_runner('SELECT 2', ['y'], connection);
+		const result = await run('SELECT 2', ['y'], connection);
 
 		expect(result).toEqual({rows: [{id: 2}]});
 		expect(query_mock).toHaveBeenCalledWith('SELECT 2', ['y']);
@@ -68,9 +68,9 @@ describe('sql_runner', function () {
 	});
 
 	test('rejects missing connection pool instances', async function () {
-		await expect(sql_runner('SELECT 3', ['z'], {
+		await expect(run('SELECT 3', ['z'], {
 			options: {debug: false}
-		})).rejects.toThrow('sql_runner requires connection.pool_instance');
+		})).rejects.toThrow('run requires connection.pool_instance');
 	});
 
 	test('logs sql_error and throws QueryError when connection pool query fails', async function () {
@@ -84,7 +84,7 @@ describe('sql_runner', function () {
 		let thrown_error = null;
 
 		try {
-			await sql_runner('SELECT * FROM users WHERE id = $1', [7], connection);
+			await run('SELECT * FROM users WHERE id = $1', [7], connection);
 		} catch(error) {
 			thrown_error = error;
 		}

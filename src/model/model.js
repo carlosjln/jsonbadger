@@ -1,6 +1,6 @@
 /*
- * MODULE BOUNDARY
- * Responsibility: own document lifecycle, schema validation, timestamp policy, and persistence delegation.
+ * MODULE RESPONSIBILITY
+ * Own document lifecycle, schema validation, timestamp policy, and persistence delegation.
  */
 import QueryError from '#src/errors/query-error.js';
 import IdStrategies from '#src/constants/id-strategies.js';
@@ -11,12 +11,12 @@ import ensure_table_sql from '#src/migration/ensure-table.js';
 import resolve_schema_indexes from '#src/migration/schema-indexes-resolver.js';
 
 import Document from '#src/model/document.js';
-import QueryBuilder from '#src/query/query-builder.js';
+import QueryBuilder from '#src/model/operations/query-builder.js';
 import DeltaTracker from '#src/utils/delta-tracker/index.js';
 
-import {exec_delete_one} from '#src/model/factory/exec-delete-one.js';
-import {exec_insert_one} from '#src/model/factory/exec-insert-one.js';
-import {exec_update_one} from '#src/model/factory/exec-update-one.js';
+import {exec_delete_one} from '#src/model/operations/delete-one.js';
+import {exec_insert_one} from '#src/model/operations/insert-one.js';
+import {exec_update_one} from '#src/model/operations/update-one.js';
 import {base_field_keys, DocumentInputMode, timestamp_fields, unsafe_from_keys} from '#src/model/factory/constants.js';
 
 import {is_array} from '#src/utils/array.js';

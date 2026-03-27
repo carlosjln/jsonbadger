@@ -1,6 +1,10 @@
+/*
+ * MODULE RESPONSIBILITY
+ * Ensure the model backing table exists with the expected base columns.
+ */
 import {assert_identifier, quote_identifier} from '#src/utils/assert.js';
 import IdStrategies, {assert_id_strategy} from '#src/constants/id-strategies.js';
-import sql_run from '#src/sql/sql-run.js';
+import run from '#src/sql/run.js';
 
 const ID_COLUMN_SQL_BY_STRATEGY = {
 	[IdStrategies.bigserial]: 'id BIGSERIAL PRIMARY KEY',
@@ -30,7 +34,7 @@ async function ensure_table(context) {
 		`updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()` +
 		`);`;
 
-	await sql_run(sql_text, [], connection);
+	await run(sql_text, [], connection);
 }
 
 function resolve_id_column_sql(id_strategy) {
