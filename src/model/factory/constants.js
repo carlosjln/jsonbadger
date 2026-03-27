@@ -1,11 +1,6 @@
 const update_path_root_segment_pattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const update_path_nested_segment_pattern = /^(?:[a-zA-Z_][a-zA-Z0-9_]*|[0-9]+)$/;
 
-const DocumentInputMode = Object.freeze({
-	From: 'from',
-	Hydrate: 'hydrate'
-});
-
 const base_field_keys = new Set(['id', 'created_at', 'updated_at']);
 const timestamp_fields = new Set(['created_at', 'updated_at']);
 const unsafe_from_keys = new Set(['__proto__', 'constructor', 'prototype']);
@@ -30,7 +25,6 @@ const set_lax_null_treatments = Object.freeze({
 });
 
 export {
-	DocumentInputMode,
 	base_field_keys,
 	set_lax_null_treatments,
 	timestamp_fields,

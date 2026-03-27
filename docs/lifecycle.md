@@ -136,7 +136,7 @@ Returned values:
 doc.set('profile.city', 'Miami');
 doc.is_modified('profile.city'); // true
 
-doc.data.payload.flags.push('vip');
+doc.document.data.payload.flags.push('vip');
 doc.mark_modified('payload.flags');
 ```
 

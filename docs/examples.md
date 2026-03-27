@@ -313,7 +313,7 @@ const saved_user = await user_doc.save();
 
 Returns: `saved_user` is a `User` document instance.  
 Snapshot shape: `saved_user.to_json()` -> `{ id, name, age, status, tags, profile, orders, payload, created_at, updated_at }`.  
-Runtime note: `user_doc.data` remains payload-only data.
+Runtime note: `user_doc.document.data` remains the raw tracked payload object.
 
 Static create and id lookup:
 
@@ -336,7 +336,19 @@ const imported_user = User.from({
 });
 ```
 
-`User.from(...)` extracts root `id`, `created_at`, and `updated_at` into base fields and treats everything else as payload, including a root `data` key.
+`User.from(...)` extracts root `id`, `created_at`, and `updated_at` into base fields and treats everything else as payload, including a root `data` key. It does not interpret payload input as a persisted row envelope.
+
+Set base fields after construction when needed:
+
+```js
+const imported_user = User.from({
+	name: 'maria'
+});
+
+imported_user.id = '7';
+imported_user.created_at = '2026-03-03T08:00:00.000Z';
+imported_user.updated_at = '2026-03-03T09:00:00.000Z';
+```
 
 Hydrate a persisted document from raw row-like data:
 
@@ -801,7 +813,7 @@ const city = doc.get('profile.city');
 
 // dirty tracking
 const before_dirty = doc.is_modified('payload');
-doc.data.payload.count += 1;
+doc.document.data.payload.count += 1;
 if(!doc.is_modified('payload')) {
 	doc.mark_modified('payload');
 }

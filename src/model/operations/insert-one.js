@@ -26,7 +26,7 @@ async function exec_insert_one(model, document_value) {
 	model.schema.validate(document);
 	apply_insert_timestamps(document);
 
-	const payload = instance.payload;
+	const payload = instance.document.data;
 	const base_fields = Object.assign({}, instance.timestamps);
 
 	if(model.schema.id_strategy === IdStrategies.uuidv7) {

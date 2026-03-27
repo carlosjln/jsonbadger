@@ -17,7 +17,7 @@ import DeltaTracker from '#src/utils/delta-tracker/index.js';
 import {exec_delete_one} from '#src/model/operations/delete-one.js';
 import {exec_insert_one} from '#src/model/operations/insert-one.js';
 import {exec_update_one} from '#src/model/operations/update-one.js';
-import {base_field_keys, DocumentInputMode, timestamp_fields, unsafe_from_keys} from '#src/model/factory/constants.js';
+import {base_field_keys, timestamp_fields, unsafe_from_keys} from '#src/model/factory/constants.js';
 
 import {is_array} from '#src/utils/array.js';
 import {split_dot_path} from '#src/utils/object-path.js';
@@ -51,14 +51,6 @@ Object.defineProperty(Model.prototype, 'created_at', {
 Object.defineProperty(Model.prototype, 'updated_at', {
 	get: function () {return this.document.updated_at;},
 	set: function (value) {this.document.updated_at = value;}
-});
-
-Object.defineProperty(Model.prototype, 'payload', {
-	get: function () {
-		// Return the lazily-proxied data object directly,
-		// so that any mutations here trigger the DeltaTracker.
-		return this.document.data;
-	}
 });
 
 Object.defineProperty(Model.prototype, 'timestamps', {
@@ -249,7 +241,7 @@ Model.prototype.update = async function () {
  */
 
 /**
- * Build a new document from external input.
+ * Build a new document from external payload input.
  *
  * @param {*} data
  * @param {object} [options]
@@ -257,7 +249,7 @@ Model.prototype.update = async function () {
  */
 Model.from = function (data, options = {}) {
 	const model = this;
-	const document = normalize_document_data(model, data, options, DocumentInputMode.From);
+	const document = normalize_from_input(model, data, options);
 
 	// Validate the document state before building the instance.
 	model.schema.validate(document);
@@ -275,7 +267,7 @@ Model.from = function (data, options = {}) {
  */
 Model.hydrate = function (data, options = {}) {
 	const model = this;
-	const doc = normalize_document_data(model, data, options, DocumentInputMode.Hydrate);
+	const doc = normalize_hydrated_input(model, data, options);
 
 	// Validate the document state before building the instance.
 	model.schema.validate(doc);
@@ -422,12 +414,21 @@ Model.count_documents = function (query_filter) {
  * MODEL HELPERS
  */
 
-// Build one validated document state for create or hydrate flows.
-function normalize_document_data(model, input_data, options, input_mode) {
-	const schema = model.schema;
+// Build one validated document state for new document construction.
+function normalize_from_input(model, input_data, options) {
+	const document = extract_from_document_fields(input_data);
+	return finalize_normalized_document(model, document, options);
+}
 
-	// Inspect the incoming shape and normalize it into one document state envelope.
-	const document = normalize_document_fields(input_data, input_mode);
+// Build one validated document state for persisted-row hydration.
+function normalize_hydrated_input(model, input_data, options) {
+	const document = extract_hydrated_document_fields(input_data);
+	return finalize_normalized_document(model, document, options);
+}
+
+// Apply strict-mode shaping to one normalized document envelope.
+function finalize_normalized_document(model, document, options) {
+	const schema = model.schema;
 
 	// Resolve strictness for this input. Per-call options override schema strictness here too.
 	const strict_mode = options.strict ?? schema.strict;
@@ -446,19 +447,12 @@ function normalize_document_data(model, input_data, options, input_mode) {
 }
 
 /**
- * Normalizes incoming data into a document-ready shape.
- *
- * Process:
- * - inspect incoming shape
- * - convert object-like input into a plain object when needed
- * - extract data/base fields using the selected mode
- * - return a document-ready normalized input object
+ * Extract root base fields and preserve all other input as payload data.
  *
  * @param {*} input_data External input data.
- * @param {string} mode_value Input normalization mode.
  * @returns {{data: object, id: *, created_at: *, updated_at: *}}
  */
-function normalize_document_fields(input_data, mode_value) {
+function extract_from_document_fields(input_data) {
 	// 1. Guard against primitives, null, and arrays
 	if(is_not_object(input_data)) {
 		return {data: {}};
@@ -480,21 +474,60 @@ function normalize_document_fields(input_data, mode_value) {
 		return {data: {}};
 	}
 
-	// Input contract:
-	// - Model.from(...): extract root base fields and fold everything else into data
-	// - Model.hydrate(...): extract root base fields and use `source.data` as payload when present
-	const uses_row_payload = mode_value === DocumentInputMode.Hydrate && is_plain_object(source.data);
-	const raw_data = uses_row_payload ? source.data : source;
-	const data = deep_clone(raw_data);
+	const data = deep_clone(source);
 
-	// Base fields are reserved at the document root for both modes.
-	// In `from`, everything beyond those keys stays in data, including a root `data` key.
-	// In `hydrate`, the root data comes from `source.data` when that envelope exists.
-	if(!uses_row_payload) {
-		for(const base_field_key of base_field_keys) {
-			delete data[base_field_key];
-		}
+	// `Model.from(...)` is always payload-oriented.
+	// Root base fields are extracted, and every other root key stays in payload,
+	// including a payload key literally named `data`.
+	for(const base_field_key of base_field_keys) {
+		delete data[base_field_key];
 	}
+
+	for(const unsafe_key of unsafe_from_keys) {
+		delete data[unsafe_key];
+	}
+
+	const doc = {data};
+
+	if(has_own(source, 'id')) {
+		doc.id = source.id;
+	}
+
+	if(has_own(source, 'created_at')) {
+		doc.created_at = source.created_at;
+	}
+
+	if(has_own(source, 'updated_at')) {
+		doc.updated_at = source.updated_at;
+	}
+
+	return doc;
+}
+
+/**
+ * Extract root base fields from row-like input and use `source.data` as payload when present.
+ *
+ * @param {*} input_data Persisted row-like input.
+ * @returns {{data: object, id: *, created_at: *, updated_at: *}}
+ */
+function extract_hydrated_document_fields(input_data) {
+	if(is_not_object(input_data)) {
+		return {data: {}};
+	}
+
+	let source = input_data;
+
+	if(!is_plain_object(source)) {
+		const serialize = get_callable(source, 'to_json', 'toJSON', to_plain_object);
+		source = serialize.call(source, source);
+	}
+
+	if(!is_plain_object(source)) {
+		return {data: {}};
+	}
+
+	const raw_data = is_plain_object(source.data) ? source.data : source;
+	const data = deep_clone(raw_data);
 
 	for(const unsafe_key of unsafe_from_keys) {
 		delete data[unsafe_key];

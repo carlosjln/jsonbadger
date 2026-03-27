@@ -157,13 +157,13 @@ describe('FieldTypes runtime PostgreSQL integration', function () {
 
 			expect(updated_data.user_name).toBe('john');
 			expect(updated_data.tags).toEqual(['alpha', 'beta']);
-			expect(updated_data.payload.prefs.theme).toBe('solarized');
-			expect(has_own(updated_data.payload, 'legacy')).toBe(false);
+			expect(updated_data.document.data.payload.prefs.theme).toBe('solarized');
+			expect(has_own(updated_data.document.data.payload, 'legacy')).toBe(false);
 
 			const persisted_lookup = await Account.find_one({user_name: 'john'}).exec();
 			expect(persisted_lookup.tags).toEqual(['alpha', 'beta']);
-			expect(persisted_lookup.payload.prefs.theme).toBe('solarized');
-			expect(has_own(persisted_lookup.payload, 'legacy')).toBe(false);
+			expect(persisted_lookup.document.data.payload.prefs.theme).toBe('solarized');
+			expect(has_own(persisted_lookup.document.data.payload, 'legacy')).toBe(false);
 		} finally {
 			await drop_table_if_exists(connection, table_identifier);
 		}

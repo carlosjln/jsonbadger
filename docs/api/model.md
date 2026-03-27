@@ -67,7 +67,7 @@ It is the right place for:
 - `Model.ensure_schema()`
   - runs table + index setup together
 - `Model.from(input_data, options?)`
-  - builds a new document from external payload or row-like input without marking it persisted
+  - builds a new document from external payload input without marking it persisted
 - `Model.hydrate(input_data)`
   - builds a persisted document from existing raw data with no modified paths
 
@@ -84,7 +84,7 @@ const found_user = await User.find_one({name: 'maria'}).exec();
 
 ## Model.from
 
-Use `Model.from(...)` when you want schema casting/setters on imported input but still want a new document:
+Use `Model.from(...)` when you want schema casting/setters on payload input but still want a new document:
 
 ```js
 const imported_user = User.from({
@@ -100,13 +100,14 @@ Behavior:
 - applies schema casting/setters to known payload fields
 - treats `id`, `created_at`, and `updated_at` as reserved root base fields
 - extracts those root base fields into runtime state when present
-- folds everything else into payload, including a root `data` key
+- treats every other root key as payload, including a root `data` key
 - drops unknown payload keys by default
+- does not interpret payload input as a persisted row envelope
 
 Input flow:
 1. check whether the input is object-like
 2. extract reserved root base fields (`id`, `created_at`, `updated_at`)
-3. fold everything else into payload
+3. treat everything else as payload
 
 Example:
 
@@ -125,6 +126,42 @@ Result:
 - `base_fields.id = '7'`
 - `base_fields.created_at = '2026-03-03T08:00:00.000Z'`
 - `payload = {data: {name: 'maria'}, username: 'maria'}`
+
+Assign base fields after construction when needed:
+
+```js
+const imported_user = User.from({
+	name: 'maria'
+});
+
+imported_user.id = '7';
+imported_user.created_at = '2026-03-03T08:00:00.000Z';
+imported_user.updated_at = '2026-03-03T09:00:00.000Z';
+```
+
+Payload fields are not promoted to top-level document properties.
+
+Use:
+
+1. `doc.get('path')` / `doc.set('path', value)` for the normal document API
+2. `doc.document.data` when you need the raw tracked payload object
+
+Example:
+
+```js
+const imported_user = User.from({
+	name: 'maria',
+	profile: {city: 'Miami'}
+});
+
+imported_user.get('name'); // 'maria'
+imported_user.get('profile.city'); // 'Miami'
+
+imported_user.set('name', 'jane');
+imported_user.set('profile.city', 'Santiago');
+```
+
+Use payload paths like `'name'` or `'profile.city'`.
 
 Options:
 - `strict`
@@ -154,6 +191,7 @@ Behavior:
 - treats row-like input as the persisted envelope
 - extracts top-level base fields (`id`, `created_at`, `updated_at`) from the outer object
 - uses `input_data.data` as the payload source when it is present
+- is the only construction path that interprets a root `data` key as the persisted payload slot
 
 Input flow:
 1. check whether the input is object-like

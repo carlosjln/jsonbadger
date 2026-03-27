@@ -110,7 +110,7 @@ describe('PostgreSQL JSON capability alignment', function () {
 				}
 			});
 
-			expect(after_missing_path_create.payload.profile.state).toBe('FL');
+			expect(after_missing_path_create.document.data.payload.profile.state).toBe('FL');
 
 			const after_insert_before = await capability_model.update_one({user_name: 'alpha'}, {
 				$insert: {
@@ -140,12 +140,12 @@ describe('PostgreSQL JSON capability alignment', function () {
 				}
 			});
 
-			expect(has_own(after_delete_key.payload, 'cleanup_flag')).toBe(false);
+			expect(has_own(after_delete_key.document.data.payload, 'cleanup_flag')).toBe(false);
 
 			const persisted_alpha = await capability_model.find_one({user_name: 'alpha'}).exec();
 			expect(persisted_alpha.tags).toEqual(['zero', 'zero_plus', 'one', 'three']);
-			expect(persisted_alpha.payload.profile.state).toBe('FL');
-			expect(has_own(persisted_alpha.payload, 'cleanup_flag')).toBe(false);
+			expect(persisted_alpha.document.data.payload.profile.state).toBe('FL');
+			expect(has_own(persisted_alpha.document.data.payload, 'cleanup_flag')).toBe(false);
 		} finally {
 			await drop_table_if_exists(connection, table_identifier);
 		}
