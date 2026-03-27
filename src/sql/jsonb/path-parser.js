@@ -1,6 +1,6 @@
 /*
  * MODULE RESPONSIBILITY
- * Parse JSON paths and build SQL path expressions for read queries.
+ * Parse JSONB paths and build SQL path expressions for JSONB query helpers.
  */
 import {assert_path} from '#src/utils/assert.js';
 import {build_path_literal, split_dot_path} from '#src/utils/object-path.js';

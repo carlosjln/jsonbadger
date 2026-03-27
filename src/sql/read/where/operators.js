@@ -3,22 +3,22 @@
  * Compile operator-style read-query objects into SQL predicates.
  */
 import {
-	all_operator,
-	contains_operator,
-	has_all_keys_operator,
-	has_any_keys_operator,
-	has_key_operator,
-	jsonpath_exists_operator,
-	jsonpath_match_operator,
-	size_operator
+	all_operator
 } from '#src/sql/read/where/operators/index.js';
-import {build_json_expression, build_text_expression, parse_path} from '#src/sql/read/path-parser.js';
+import contains_operator from '#src/sql/jsonb/read/operators/contains.js';
+import has_all_keys_operator from '#src/sql/jsonb/read/operators/has-all-keys.js';
+import has_any_keys_operator from '#src/sql/jsonb/read/operators/has-any-keys.js';
+import has_key_operator from '#src/sql/jsonb/read/operators/has-key.js';
+import jsonpath_exists_operator from '#src/sql/jsonb/read/operators/jsonpath-exists.js';
+import jsonpath_match_operator from '#src/sql/jsonb/read/operators/jsonpath-match.js';
+import size_operator from '#src/sql/jsonb/read/operators/size.js';
+import {build_json_expression, build_text_expression, parse_path} from '#src/sql/jsonb/path-parser.js';
 
 import QueryError from '#src/errors/query-error.js';
 
 import {cast_operator_value} from '#src/sql/read/where/casting.js';
 import {is_array_root} from '#src/sql/read/where/context.js';
-import {compile_nested_array_operator} from '#src/sql/read/where/elem-match.js';
+import {compile_nested_array_operator} from '#src/sql/jsonb/read/elem-match.js';
 import {compile_operator_entry_clauses} from '#src/sql/read/where/operator-entries.js';
 import {compile_text_operator} from '#src/sql/read/where/text-operators.js';
 

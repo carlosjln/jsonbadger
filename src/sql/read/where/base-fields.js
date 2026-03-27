@@ -5,7 +5,7 @@
 import QueryError from '#src/errors/query-error.js';
 import {bind_parameter} from '#src/sql/parameter-binder.js';
 import IdStrategies from '#src/constants/id-strategies.js';
-import {parse_path} from '#src/sql/read/path-parser.js';
+import {parse_path} from '#src/sql/jsonb/path-parser.js';
 import {is_plain_object, is_uuid_v7} from '#src/utils/value.js';
 
 // Base fields are top-level only. Each one owns its SQL expression and allowed operators.

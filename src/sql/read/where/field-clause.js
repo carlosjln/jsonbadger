@@ -2,13 +2,14 @@
  * MODULE RESPONSIBILITY
  * Compile one read-query field clause into SQL.
  */
-import {build_text_expression} from '#src/sql/read/path-parser.js';
-import {contains_operator, eq_operator, regex_operator} from '#src/sql/read/where/operators/index.js';
+import {build_text_expression} from '#src/sql/jsonb/path-parser.js';
+import contains_operator from '#src/sql/jsonb/read/operators/contains.js';
+import {eq_operator, regex_operator} from '#src/sql/read/where/operators/index.js';
 import {compile_base_field_clause, resolve_base_field_name} from '#src/sql/read/where/base-fields.js';
 
 import {cast_array_contains_value, cast_query_value} from '#src/sql/read/where/casting.js';
 import {has_operator_entries, should_use_array_contains} from '#src/sql/read/where/context.js';
-import {compile_elem_match_clause} from '#src/sql/read/where/elem-match.js';
+import {compile_elem_match_clause} from '#src/sql/jsonb/read/elem-match.js';
 import {compile_operator_object} from '#src/sql/read/where/operators.js';
 
 import {build_nested_object} from '#src/utils/object-path.js';

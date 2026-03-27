@@ -1,7 +1,7 @@
 import {describe, expect, test} from '@jest/globals';
 
 import limit_skip_compiler from '#src/sql/read/limit-skip.js';
-import {build_elem_text_expression, build_json_expression, build_text_expression, parse_path} from '#src/sql/read/path-parser.js';
+import {build_elem_text_expression, build_json_expression, build_text_expression, parse_path} from '#src/sql/jsonb/path-parser.js';
 import sort_compiler from '#src/sql/read/sort.js';
 
 describe('query compilers', function () {

@@ -6,7 +6,7 @@ import sql from '#src/sql/index.js';
 import where_compiler from '#src/sql/read/where/index.js';
 import {create_parameter_state} from '#src/sql/parameter-binder.js';
 
-import {JsonbOps} from '#src/sql/jsonb-ops.js';
+import {JsonbOps} from '#src/sql/jsonb/ops.js';
 import {is_array} from '#src/utils/array.js';
 import {quote_identifier} from '#src/utils/assert.js';
 import {timestamp_fields} from '#src/model/factory/constants.js';

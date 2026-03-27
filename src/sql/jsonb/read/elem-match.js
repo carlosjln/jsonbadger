@@ -1,9 +1,10 @@
 /*
  * MODULE RESPONSIBILITY
- * Compile nested array and $elem_match predicates for read queries.
+ * Compile JSONB nested-array and $elem_match predicates for read queries.
  */
-import {build_elem_text_expression, build_json_expression} from '#src/sql/read/path-parser.js';
-import {elem_match_operator, eq_operator, regex_operator} from '#src/sql/read/where/operators/index.js';
+import {build_elem_text_expression, build_json_expression} from '#src/sql/jsonb/path-parser.js';
+import elem_match_operator from '#src/sql/jsonb/read/operators/elem-match.js';
+import {eq_operator, regex_operator} from '#src/sql/read/where/operators/index.js';
 
 import {has_operator_entries} from '#src/sql/read/where/context.js';
 import {compile_operator_entry_clauses} from '#src/sql/read/where/operator-entries.js';

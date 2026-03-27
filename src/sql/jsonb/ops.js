@@ -1,6 +1,6 @@
 /*
- * MODULE BOUNDARY
- * Responsibility: parse operator-style JSONB mutations and compile one SQL RHS expression.
+ * MODULE RESPONSIBILITY
+ * Parse operator-style JSONB mutations and compile one SQL RHS expression.
  */
 import QueryError from '#src/errors/query-error.js';
 import {bind_parameter} from '#src/sql/parameter-binder.js';

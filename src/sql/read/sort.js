@@ -5,7 +5,7 @@
 import QueryError from '#src/errors/query-error.js';
 import {quote_identifier} from '#src/utils/assert.js';
 import {has_own} from '#src/utils/object.js';
-import {build_text_expression} from '#src/sql/read/path-parser.js';
+import {build_text_expression} from '#src/sql/jsonb/path-parser.js';
 import {split_dot_path} from '#src/utils/object-path.js';
 
 const base_field_sort_columns = Object.freeze({

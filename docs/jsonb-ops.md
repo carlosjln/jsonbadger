@@ -146,7 +146,7 @@ That compile step folds the ordered operations into one RHS expression and pushe
 
 ## Module Responsibilities
 
-1. `src/sql/jsonb-ops.js`: parse operator-style JSONB updates and compile them into the RHS SQL expression.
+1. `src/sql/jsonb/ops.js`: parse operator-style JSONB updates and compile them into the RHS SQL expression.
 2. `src/model/operations/update-one.js`: split row timestamps, adapt tracked deltas when needed, and build the query context.
 3. `src/sql/write/build-update-query.js`: compile `jsonb_ops`, then bind row-level timestamps and assemble the final `UPDATE`.
 4. `src/model/model.js`: keep `updated_at` and `created_at` at the row boundary instead of pushing them into JSONB `$set`.
