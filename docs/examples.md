@@ -55,7 +55,7 @@ Most snippets below are intentionally short and not fully standalone. Unless a s
 - You are running ESM (`import ...`) with top-level `await` enabled.
 - You already connected with `JsonBadger.connect(...)`.
 - You defined the `User` model from `Schema and Model Definition`.
-- You either ran manual migrations (`ensure_table()` / `ensure_schema()`) or allowed a first write to create the table.
+- You already ran startup/bootstrap setup from the migration section below.
 - You seeded at least one `User` document using the `Create and Save Documents` example (including `tags`, `orders`, and `payload`).
 
 When a snippet uses a different value (for example `name: 'jane'`), either seed a matching row first or replace the filter value with one that exists in your local data.
@@ -118,7 +118,7 @@ const connection = await JsonBadger.connect(db_uri, options);
 
 Notes:
 - JsonBadger checks native `uuidv7()` support automatically during `connect(...)` and caches the capability result.
-- Reads do not auto-create tables. A first write (`save()` / `update_one(...)`) can create the table, or you can call `ensure_table()` / `ensure_schema()` explicitly.
+- Run `ensure_table()` / `ensure_schema()` during startup/bootstrap before normal runtime operations.
 
 Teardown example:
 
@@ -234,6 +234,8 @@ await User.ensure_index();
 await User.ensure_schema();
 ```
 
+> **Note:** Run these helpers during app startup/bootstrap. Normal runtime reads and writes should assume setup already happened.
+
 ## Built-in FieldType Examples
 
 ```js
@@ -281,8 +283,6 @@ Edge cases and practical notes:
 - Serialization applies getters by default; use `doc.$serialize({ getters: false })` or `doc.to_json({ getters: false })` to bypass them.
 
 ## Create and Save Documents
-
-First write can create the table if it does not exist yet.
 
 Assumes:
 - `User` is defined from the schema/model section above.
@@ -471,9 +471,6 @@ const page_of_users = await User.find({status: 'active'})
 	.skip(0)
 	.exec();
 ```
-
-Read behavior note:
-- `find(...).exec()`, `find_one(...).exec()`, and `count_documents(...).exec()` do not call `ensure_table()`.
 
 ## Direct Equality and Scalar Comparisons
 

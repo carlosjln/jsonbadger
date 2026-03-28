@@ -2,8 +2,6 @@
  * MODULE RESPONSIBILITY
  * Compile scalar and text read-query operators into SQL predicates.
  */
-import QueryError from '#src/errors/query-error.js';
-
 import {
 	eq_operator,
 	gt_operator,
@@ -27,7 +25,7 @@ import {
  * @param {string} operator_context.text_expression
  * @param {object} operator_context.parameter_state
  * @param {string} operator_context.error_message
- * @returns {string}
+ * @returns {string|null}
  * @throws {QueryError}
  */
 function compile_text_operator(operator_context) {
@@ -77,9 +75,7 @@ function compile_text_operator(operator_context) {
 		return regex_operator(text_expression, value, regex_options, parameter_state);
 	}
 
-	throw new QueryError(error_message + ': ' + name, {
-		operator: name
-	});
+	return null;
 }
 
 export {

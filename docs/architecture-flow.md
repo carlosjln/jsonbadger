@@ -172,7 +172,6 @@ User
    +--> new Model(...).save()
    |     |
    |     +--> document runtime layer
-   |     +--> Model.ensure_table()
    |     +--> sql_runner(..., Model.connection)
    |
    +--> Model.update_one(...)
@@ -191,6 +190,9 @@ User
 ## 8. Migration And Index Flow
 
 ```text
+App startup / bootstrap
+   |
+   v
 Model.ensure_table()
    |
    +--> table migration helper
@@ -208,6 +210,11 @@ Model.ensure_schema()
    +--> ensure each normalized schema index
    +--> execute through explicit Connection
 ```
+
+Important:
+
+- run `ensure_*` helpers during startup/bootstrap
+- normal runtime read/write operations should not provision tables or indexes implicitly
 
 ## Ownership Summary
 

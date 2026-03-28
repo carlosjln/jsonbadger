@@ -27,7 +27,16 @@ function are_equal(target_a, target_b, memo = new WeakMap()) {
 		return true;
 	}
 
-	// 2. If either is not an object, they are not equal (identity check failed above)
+	// 2. Handle Date objects before the generic object short-circuit.
+	if(target_a instanceof Date || target_b instanceof Date) {
+		if(!(target_a instanceof Date && target_b instanceof Date)) {
+			return false;
+		}
+
+		return target_a.getTime() === target_b.getTime();
+	}
+
+	// 3. If either is not an object, they are not equal (identity check failed above)
 	const is_array_a = Array.isArray(target_a);
 	const is_array_b = Array.isArray(target_b);
 
@@ -35,21 +44,13 @@ function are_equal(target_a, target_b, memo = new WeakMap()) {
 		return false;
 	}
 
-	// 3. Handle circular references and memoization
+	// 4. Handle circular references and memoization
 	const has_cached_reference = memo.has(target_a);
 	if(has_cached_reference) {
 		return memo.get(target_a) === target_b;
 	}
 
 	memo.set(target_a, target_b);
-
-	// 4. Handle Date objects
-	if(target_a instanceof Date || target_b instanceof Date) {
-		if(!(target_a instanceof Date && target_b instanceof Date)) {
-			return false;
-		}
-		return target_a.getTime() === target_b.getTime();
-	}
 
 	// 5. Handle Array comparison
 	if(is_array_a !== is_array_b) {

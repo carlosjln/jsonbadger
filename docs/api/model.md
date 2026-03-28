@@ -38,7 +38,7 @@ New documents start in the `is_new = true` state until they are persisted.
 It is the right place for:
 
 1. `table_name`, `data_column`, and related storage options
-2. Table and index execution helpers such as `ensure_table()` and `ensure_index()`
+2. Startup/bootstrap migration helpers such as `ensure_table()` and `ensure_index()`
 3. Query/update entry points
 4. Document construction and hydration
 
@@ -61,11 +61,11 @@ It is the right place for:
 - `Model.delete_one(filter)`
   - deletes one matching row and returns the deleted document or `null`
 - `Model.ensure_table()`
-  - creates the backing table when needed
+  - creates the backing table during startup/bootstrap setup
 - `Model.ensure_index()`
-  - creates declared indexes
+  - creates declared indexes during startup/bootstrap setup
 - `Model.ensure_schema()`
-  - runs table + index setup together
+  - runs table + index setup together during startup/bootstrap setup
 - `Model.from(input_data, options?)`
   - builds a new document from external payload input without marking it persisted
 - `Model.hydrate(input_data)`

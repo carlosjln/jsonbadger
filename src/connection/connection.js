@@ -113,13 +113,13 @@ function assert_model_definition_match(existing_model, requested_definition) {
 		model_options
 	} = requested_definition;
 
-	if(existing_model.schema_instance !== schema_instance) {
+	if(existing_model.schema !== schema_instance) {
 		throw new ModelOverwriteError('model "' + name + '" is already registered with a different schema', {
 			name
 		});
 	}
 
-	if(!are_equal(existing_model.model_options, model_options)) {
+	if(!are_equal(existing_model.options, model_options)) {
 		throw new ModelOverwriteError('model "' + name + '" is already registered with different model options', {
 			name
 		});

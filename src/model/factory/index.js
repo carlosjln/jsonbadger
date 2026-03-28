@@ -44,7 +44,6 @@ function model(name, schema, options, connection) {
 	Object.setPrototypeOf(model.prototype, Model.prototype);
 
 	// Bind schema/model/connection state onto the compiled constructor.
-	model.name = name || $options.table_name;
 	model.schema = schema;
 	model.options = $options;
 	model.state = {indexes_ensured: false};

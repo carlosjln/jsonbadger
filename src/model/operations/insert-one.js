@@ -39,7 +39,7 @@ async function exec_insert_one(model, document_value) {
 
 	instance.is_new = false;
 	document.init(saved_row);
-	document.$rebase_dirty_fields();
+	document.$rebase_changes();
 
 	return instance;
 }

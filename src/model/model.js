@@ -225,7 +225,7 @@ Model.prototype.update = async function () {
 		update_payload.updated_at = document.updated_at;
 
 		const filter = {id: this.id};
-		const updated_document = await exec_update_one(model, filter, update_payload);
+		const updated_document = await model.update_one(filter, update_payload);
 
 		if(updated_document) {
 			document.init(updated_document);

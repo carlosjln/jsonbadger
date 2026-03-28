@@ -13,13 +13,15 @@ import {is_object, to_iso_timestamp} from '#src/utils/value.js';
 
 function QueryBuilder(model, operation, query_filter) {
 	assert_condition(model, 'QueryBuilder requires model');
+	assert_condition(model.schema, 'QueryBuilder requires model.schema');
+	assert_condition(model.options, 'QueryBuilder requires model.options');
 
 	this.connection = model.connection || null;
 	this.model = model;
 	this.operation = operation;
 	this.base_filter = query_filter || {};
 	this.where_filter = {};
-	this.sort = null;
+	this.sort_filter = null;
 	this.limit_count = null;
 	this.skip_count = null;
 }
@@ -29,8 +31,8 @@ QueryBuilder.prototype.where = function (extra_filter) {
 	return this;
 };
 
-QueryBuilder.prototype.sort = function (sort) {
-	this.sort = sort || null;
+QueryBuilder.prototype.sort = function (sort_filter) {
+	this.sort_filter = sort_filter || null;
 	return this;
 };
 
@@ -66,7 +68,7 @@ QueryBuilder.prototype.exec = async function () {
 		data_identifier,
 		data_column,
 		where_result,
-		sort: this.sort,
+		sort: this.sort_filter,
 		limit_count,
 		skip_count: this.skip_count
 	};
