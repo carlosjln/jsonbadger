@@ -20,7 +20,7 @@ import {exec_update_one} from '#src/model/operations/update-one.js';
 import {base_field_keys, timestamp_fields, unsafe_from_keys} from '#src/model/factory/constants.js';
 
 import {is_array} from '#src/utils/array.js';
-import {split_dot_path} from '#src/utils/object-path.js';
+import {expand_dot_paths, read_nested_path, split_dot_path, write_nested_path} from '#src/utils/object-path.js';
 import {deep_clone, get_callable, has_own, to_plain_object} from '#src/utils/object.js';
 import {is_function, is_not_object, is_object, is_plain_object} from '#src/utils/value.js';
 
@@ -31,7 +31,8 @@ import {is_function, is_not_object, is_object, is_plain_object} from '#src/utils
  * @returns {void}
  */
 function Model(data) {
-	this.document = DeltaTracker(new Document(data), {track: ['data']});
+	const slugs = this.constructor.schema.get_slugs();
+	this.document = DeltaTracker(new Document(data), {track: slugs});
 	this.is_new = true;
 }
 
@@ -67,53 +68,41 @@ Model.state = null;
 Model.prototype.is_new = null;
 
 /**
- * Read one payload or base-field value by path or alias.
+ * Read one document value by exact path or alias.
  *
  * @param {string} path_name
- * @param {object} [runtime_options]
  * @returns {*}
  */
-Model.prototype.get = function (path_name, runtime_options) {
-	const options = is_object(runtime_options) ? runtime_options : {};
+Model.prototype.get = function (path_name) {
 	const aliases = this.constructor.schema.aliases;
 	const alias_entry = aliases[path_name] || {};
 	const resolved_path = alias_entry.path ?? path_name;
+	const segments = split_dot_path(resolved_path);
 
-	if(base_field_keys.has(path_name)) {
-		return this[path_name];
+	if(segments.length === 1) {
+		return this.document[segments[0]] ?? null;
 	}
 
-	const path_segments = split_dot_path(resolved_path);
-	const path_state = read_document_path(this.document.data, path_segments);
+	const path_state = read_nested_path(this.document, segments);
 
 	if(!path_state.exists) {
 		return undefined;
 	}
 
-	const field_type = resolve_schema_field_type(this, resolved_path);
-	const has_getter = is_function(field_type?.options?.get);
-
-	if(options.getters === false || !has_getter) {
-		return path_state.value;
-	}
-
-	return field_type.apply_get(path_state.value, {
-		path: resolved_path,
-		mode: 'get'
-	});
+	return path_state.value;
 };
 
 /**
- * Set one payload or base-field value by path or alias.
+ * Set one document value by exact path or alias.
+ *
+ * Schema-aware setter and cast logic still run before assignment.
  *
  * @param {string} path_name
  * @param {*} next_value
- * @param {object} [runtime_options]
  * @returns {Model}
  * @throws {QueryError}
  */
-Model.prototype.set = function (path_name, next_value, runtime_options) {
-	const options = is_object(runtime_options) ? runtime_options : {};
+Model.prototype.set = function (path_name, next_value) {
 	const aliases = this.constructor.schema.aliases;
 	const alias_entry = aliases[path_name] || {};
 	const resolved_path = alias_entry.path ?? path_name;
@@ -136,18 +125,16 @@ Model.prototype.set = function (path_name, next_value, runtime_options) {
 		});
 	}
 
-	const field_type = resolve_schema_field_type(this, resolved_path);
+	const field_type = this.constructor.schema.get_path(resolved_path) || null;
 	let assigned_value = next_value;
 
 	if(field_type) {
-		if(options.setters !== false) {
-			assigned_value = field_type.apply_set(assigned_value, {
-				path: resolved_path,
-				mode: 'set'
-			});
-		}
+		assigned_value = field_type.apply_set(assigned_value, {
+			path: resolved_path,
+			mode: 'set'
+		});
 
-		if(options.cast !== false && is_function(field_type.cast)) {
+		if(is_function(field_type.cast)) {
 			assigned_value = field_type.cast(assigned_value, {
 				path: resolved_path,
 				mode: 'set'
@@ -160,12 +147,8 @@ Model.prototype.set = function (path_name, next_value, runtime_options) {
 		return this;
 	}
 
-	if(is_not_object(this.document.data)) {
-		this.document.data = {};
-	}
-
 	const path_segments = split_dot_path(resolved_path);
-	write_document_path(this.document.data, path_segments, assigned_value);
+	write_nested_path(this.document, path_segments, assigned_value);
 
 	return this;
 };
@@ -416,46 +399,53 @@ Model.count_documents = function (query_filter) {
 
 // Build one validated document state for new document construction.
 function normalize_from_input(model, input_data, options) {
-	const document = extract_from_document_fields(input_data);
+	const document = extract_from_document_fields(model, input_data);
 	return finalize_normalized_document(model, document, options);
 }
 
 // Build one validated document state for persisted-row hydration.
 function normalize_hydrated_input(model, input_data, options) {
-	const document = extract_hydrated_document_fields(input_data);
+	const document = extract_hydrated_document_fields(model, input_data);
 	return finalize_normalized_document(model, document, options);
 }
 
 // Apply strict-mode shaping to one normalized document envelope.
 function finalize_normalized_document(model, document, options) {
 	const schema = model.schema;
+	const default_slug = schema.get_default_slug();
 
 	// Resolve strictness for this input. Per-call options override schema strictness here too.
 	const strict_mode = options.strict ?? schema.strict;
 
 	// Shape the extracted data into the candidate payload for this lifecycle operation.
-	const data = strict_mode ? document.data : strip_base_fields(document.data);
+	const data = strict_mode ? document[default_slug] : strip_base_fields(document[default_slug]);
 
 	if(strict_mode) {
 		schema.conform(data);
 	}
 
 	// Commit the candidate payload onto the normalized document state.
-	document.data = data;
+	document[default_slug] = data;
 
 	return document;
 }
 
 /**
- * Extract root base fields and preserve all other input as payload data.
+ * Extract root base fields and route registered slug roots out of payload data.
  *
+ * @param {Function} model
  * @param {*} input_data External input data.
- * @returns {{data: object, id: *, created_at: *, updated_at: *}}
+ * @returns {object}
  */
-function extract_from_document_fields(input_data) {
+function extract_from_document_fields(model, input_data) {
+	const schema = model.schema;
+	const default_slug = schema.get_default_slug();
+
 	// 1. Guard against primitives, null, and arrays
 	if(is_not_object(input_data)) {
-		return {data: {}};
+		return {
+			[default_slug]: {}
+		};
 	}
 
 	// 2. Convert class instances, Mongoose models, and custom objects into a plain object
@@ -471,48 +461,55 @@ function extract_from_document_fields(input_data) {
 
 	// Double check plain-object conversion succeeded before proceeding
 	if(!is_plain_object(source)) {
-		return {data: {}};
+		return {
+			[default_slug]: {}
+		};
 	}
 
-	const data = deep_clone(source);
+	// 3. Expand dotted payload keys at the public input boundary.
+	source = expand_dot_paths(source);
 
-	// `Model.from(...)` is always payload-oriented.
-	// Root base fields are extracted, and every other root key stays in payload,
-	// including a payload key literally named `data`.
-	for(const base_field_key of base_field_keys) {
-		delete data[base_field_key];
+	const registered_slug_keys = schema.get_extra_slugs();
+	const registered_slug_set = new Set(registered_slug_keys);
+	const document = {
+		[default_slug]: {}
+	};
+
+	// 4. Route root keys in one pass into base fields, registered slugs, or the default slug.
+	for(const [key, value] of Object.entries(source)) {
+		if(base_field_keys.has(key)) {
+			document[key] = value;
+			continue;
+		}
+
+		if(unsafe_from_keys.has(key)) {
+			continue;
+		}
+
+		if(registered_slug_set.has(key)) {
+			document[key] = deep_clone(value);
+			continue;
+		}
+
+		document[default_slug][key] = value;
 	}
 
-	for(const unsafe_key of unsafe_from_keys) {
-		delete data[unsafe_key];
-	}
+	// 5. Deep-clone the default slug payload so the normalized document owns its state.
+	document[default_slug] = deep_clone(document[default_slug]);
 
-	const doc = {data};
-
-	if(has_own(source, 'id')) {
-		doc.id = source.id;
-	}
-
-	if(has_own(source, 'created_at')) {
-		doc.created_at = source.created_at;
-	}
-
-	if(has_own(source, 'updated_at')) {
-		doc.updated_at = source.updated_at;
-	}
-
-	return doc;
+	return document;
 }
 
 /**
- * Extract root base fields from row-like input and use `source.data` as payload when present.
+ * Extract row-like input without applying payload-style dot-path routing.
  *
- * @param {*} input_data Persisted row-like input.
- * @returns {{data: object, id: *, created_at: *, updated_at: *}}
+ * @param {Function} model
+ * @param {*} input_data
+ * @returns {object|null}
  */
-function extract_hydrated_document_fields(input_data) {
+function extract_hydrated_document_fields(model, input_data) {
 	if(is_not_object(input_data)) {
-		return {data: {}};
+		return null;
 	}
 
 	let source = input_data;
@@ -523,34 +520,33 @@ function extract_hydrated_document_fields(input_data) {
 	}
 
 	if(!is_plain_object(source)) {
-		return {data: {}};
+		return null;
 	}
 
-	const raw_data = is_plain_object(source.data) ? source.data : source;
-	const data = deep_clone(raw_data);
+	const schema = model.schema;
+	const default_slug = schema.get_default_slug();
+	const slugs = schema.get_slugs();
+	const document = {};
+
+	for(const base_field_key of base_field_keys) {
+		if(has_own(source, base_field_key)) {
+			document[base_field_key] = source[base_field_key];
+		}
+	}
+
+	for(const slug_key of slugs) {
+		const slug_value = is_plain_object(source[slug_key]) ? source[slug_key] : {};
+		document[slug_key] = deep_clone(slug_value);
+	}
 
 	for(const unsafe_key of unsafe_from_keys) {
-		delete data[unsafe_key];
+		delete document[default_slug][unsafe_key];
 	}
 
-	const doc = {data};
-
-	if(has_own(source, 'id')) {
-		doc.id = source.id;
-	}
-
-	if(has_own(source, 'created_at')) {
-		doc.created_at = source.created_at;
-	}
-
-	if(has_own(source, 'updated_at')) {
-		doc.updated_at = source.updated_at;
-	}
-
-	return doc;
+	return document;
 }
 
-/**
+/*
  * Filters data keys without enforcing schema strictness.
  *
  * @param {object} data Source data object.
@@ -577,57 +573,6 @@ function apply_timestamps(document, is_new) {
 	}
 
 	document.updated_at = now;
-}
-
-// Resolve one schema field type for the provided path when available.
-function resolve_schema_field_type(model, path_name) {
-	const schema = model.constructor.schema;
-
-	if(!schema || !is_function(schema.get_path)) {
-		return null;
-	}
-
-	return schema.get_path(path_name) || null;
-}
-
-// Read one nested path from the provided payload root.
-function read_document_path(root_object, path_segments) {
-	let current = root_object;
-
-	for(const segment of path_segments) {
-		if(is_not_object(current) || !has_own(current, segment)) {
-			return {
-				exists: false,
-				value: undefined
-			};
-		}
-
-		current = current[segment];
-	}
-
-	return {
-		exists: true,
-		value: current
-	};
-}
-
-// Write one nested path into the provided payload root.
-function write_document_path(root_object, path_segments, next_value) {
-	let current = root_object;
-	const depth = path_segments.length - 1;
-
-	for(let i = 0; i < depth; i++) {
-		const segment = path_segments[i];
-
-		if(is_not_object(current[segment])) {
-			current[segment] = {};
-		}
-
-		current = current[segment];
-	}
-
-	const leaf_segment = path_segments[depth];
-	current[leaf_segment] = next_value;
 }
 
 export default Model;

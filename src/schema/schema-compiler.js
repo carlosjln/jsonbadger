@@ -1,8 +1,5 @@
 import field_definition_parser from '#src/schema/field-definition-parser.js';
-
-import {
-	create_path_introspection
-} from '#src/schema/path-introspection.js';
+import {create_path_introspection} from '#src/schema/path-introspection.js';
 
 import {is_array} from '#src/utils/array.js';
 import {has_own} from '#src/utils/object.js';
@@ -10,6 +7,8 @@ import {is_function, is_not_object} from '#src/utils/value.js';
 
 const schema_validation_error_message = 'Schema validation failed';
 const schema_validation_error_code = 'validation_error';
+
+// --- PUBLIC API ---
 
 function prepare_schema_state(schema_definition = {}) {
 	const parsed_schema = field_definition_parser(schema_definition);
@@ -21,6 +20,20 @@ function prepare_schema_state(schema_definition = {}) {
 		path_introspection,
 		field_types,
 		sorted_paths
+	};
+}
+
+/**
+ * Build one reusable validator from a prepared field-type path map.
+ *
+ * @param {object} field_types
+ * @returns {Function}
+ */
+function create_path_validator(field_types = {}) {
+	const sorted_paths = Object.keys(field_types).sort(sort_paths_by_depth);
+
+	return (payload) => {
+		return validate_payload(payload, sorted_paths, field_types);
 	};
 }
 
@@ -38,10 +51,8 @@ function validate_payload(payload, sorted_paths, field_types) {
 	}
 
 	const error_list = [];
-	let path_index = 0;
 
-	while(path_index < sorted_paths.length) {
-		const path_name = sorted_paths[path_index];
+	for(const path_name of sorted_paths) {
 		const field_type = field_types[path_name];
 		const path_segments = path_name.split('.');
 		const current_path_state = read_path(payload, path_segments);
@@ -54,8 +65,6 @@ function validate_payload(payload, sorted_paths, field_types) {
 				error_list.push(format_field_error(path_name, error));
 			}
 		}
-
-		path_index += 1;
 	}
 
 	return {
@@ -75,6 +84,8 @@ function sort_paths_by_depth(left_path, right_path) {
 	return left_path.localeCompare(right_path);
 }
 
+// --- LOCAL HELPER FUNCTIONS ---
+
 function format_field_error(path_name, error) {
 	const error_message = error && error.message ? error.message : schema_validation_error_message;
 	const error_code = error && error.code ? error.code : schema_validation_error_code;
@@ -89,11 +100,8 @@ function format_field_error(path_name, error) {
 
 function read_path(root_object, path_segments) {
 	let current_value = root_object;
-	let segment_index = 0;
 
-	while(segment_index < path_segments.length) {
-		const segment_value = path_segments[segment_index];
-
+	for(const segment_value of path_segments) {
 		if(current_value === null || typeof current_value !== 'object' || !has_own(current_value, segment_value)) {
 			return {
 				exists: false,
@@ -102,7 +110,6 @@ function read_path(root_object, path_segments) {
 		}
 
 		current_value = current_value[segment_value];
-		segment_index += 1;
 	}
 
 	return {
@@ -112,6 +119,7 @@ function read_path(root_object, path_segments) {
 }
 
 export {
+	create_path_validator,
 	prepare_schema_state,
 	validate_payload,
 	sort_paths_by_depth

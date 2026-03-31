@@ -1,6 +1,4 @@
-import {has_own} from '#src/utils/object.js';
-import {split_dot_path} from '#src/utils/object-path.js';
-import {is_not_object} from '#src/utils/value.js';
+import {read_nested_path, split_dot_path, write_nested_path} from '#src/utils/object-path.js';
 
 /**
  * Create one document instance from normalized state.
@@ -13,7 +11,6 @@ function Document(data = {}) {
 }
 
 Document.prototype.id = null;
-Document.prototype.data = null;
 Document.prototype.created_at = null;
 Document.prototype.updated_at = null;
 
@@ -37,17 +34,13 @@ Document.prototype.init = function (data = {}) {
  */
 Document.prototype.get = function (path_name) {
 	const path_segments = split_dot_path(path_name);
-	let current_value = this;
+	const path_state = read_nested_path(this, path_segments);
 
-	for(const segment of path_segments) {
-		if(is_not_object(current_value) || !has_own(current_value, segment)) {
-			return undefined;
-		}
-
-		current_value = current_value[segment];
+	if(!path_state.exists) {
+		return undefined;
 	}
 
-	return current_value;
+	return path_state.value;
 };
 
 /**
@@ -59,22 +52,7 @@ Document.prototype.get = function (path_name) {
  */
 Document.prototype.set = function (path, value) {
 	const path_segments = split_dot_path(path);
-	const depth = path_segments.length - 1;
-	let current_value = this;
-
-	// Traverse and create intermediate objects if they don't exist
-	for(let i = 0; i < depth; i++) {
-		const segment = path_segments[i];
-
-		if(is_not_object(current_value[segment])) {
-			current_value[segment] = {};
-		}
-
-		current_value = current_value[segment];
-	}
-
-	const leaf_segment = path_segments[depth];
-	current_value[leaf_segment] = value;
+	write_nested_path(this, path_segments, value);
 
 	return this;
 };
