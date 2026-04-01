@@ -83,8 +83,7 @@ describe('connect', function () {
 
 			expect(connection).toBeInstanceOf(Connection);
 			expect(connection.options).toEqual(expect.objectContaining({
-				id_strategy: 'bigserial',
-				auto_index: true,
+				max: 10,
 				debug: false
 			}));
 			});

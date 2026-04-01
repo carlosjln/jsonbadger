@@ -145,7 +145,7 @@ function create_array_field_type(path_value, array_definition, field_options, fi
 		throw new Error('Array type definition at path "' + path_value + '" must contain at most one item type');
 	}
 
-	const array_options = Object.assign({}, field_options || {});
+	const array_options = Object.assign({}, field_options);
 	const item_definition = array_definition.length === 1 ? array_definition[0] : undefined;
 
 	array_options.of_field_type = create_of_field_type(path_value, item_definition, field_registry);

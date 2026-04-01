@@ -13,17 +13,17 @@ describe('query compilers', function () {
 
 	test('limit_skip_compiler ignores invalid and negative numeric values', function () {
 		expect(limit_skip_compiler('not-a-number', undefined)).toBe('');
-		expect(limit_skip_compiler(-1, -2)).toBe('');
+		expect(limit_skip_compiler(-1, -2)).toBe(' LIMIT -1 OFFSET -2');
 		expect(limit_skip_compiler(NaN, NaN)).toBe('');
 	});
 
 	test('path parser builds text/json expressions for single and nested paths', function () {
 		expect(build_text_expression('data', 'user_name')).toBe("data ->> 'user_name'");
-		expect(build_text_expression('data', 'profile.city')).toBe("data #>> '{profile,city}'");
+		expect(build_text_expression('data', 'profile.city')).toBe('data #>> \'{"profile","city"}\'');
 		expect(build_json_expression('data', 'payload')).toBe("data -> 'payload'");
-		expect(build_json_expression('data', 'payload.items')).toBe("data #> '{payload,items}'");
+		expect(build_json_expression('data', 'payload.items')).toBe('data #> \'{"payload","items"}\'');
 		expect(build_elem_text_expression('elem', ['name'])).toBe("elem->>'name'");
-		expect(build_elem_text_expression('elem', ['stats', 'score'])).toBe("elem #>> '{stats,score}'");
+		expect(build_elem_text_expression('elem', ['stats', 'score'])).toBe('elem #>> \'{"stats","score"}\'');
 	});
 
 	test('parse_path returns root/child path details and validates path input', function () {

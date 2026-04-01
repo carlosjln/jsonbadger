@@ -1,6 +1,6 @@
 import {describe, expect, test} from '@jest/globals';
 
-import object_utils, {are_equal, conform, deep_clone, has_own, merge} from '#src/utils/object.js';
+import object_utils, {are_equal, conform, deep_clone, get_callable, has_own, merge, to_plain_object} from '#src/utils/object.js';
 
 function run_without_structured_clone(callback) {
 	const original_structured_clone = globalThis.structuredClone;
@@ -26,11 +26,29 @@ describe('utils/object', function () {
 
 		expect(object_utils.are_equal).toBe(are_equal);
 		expect(object_utils.has_own).toBe(has_own);
+		expect(object_utils.get_callable).toBe(get_callable);
 		expect(object_utils.deep_clone).toBe(deep_clone);
+		expect(object_utils.to_plain_object).toBe(to_plain_object);
 		expect(object_utils.conform).toBe(conform);
 		expect(object_utils.merge).toBe(merge);
 		expect(has_own(child_object, 'own_flag')).toBe(true);
 		expect(has_own(child_object, 'inherited_flag')).toBe(false);
+	});
+
+	test('get_callable returns direct function candidates, object methods, or null', function () {
+		function fallback_serializer() {
+			return 'fallback';
+		}
+
+		const target = {
+			toJSON() {
+				return 'json';
+			}
+		};
+
+		expect(get_callable(target, fallback_serializer, 'toJSON')).toBe(fallback_serializer);
+		expect(get_callable(target, 'to_json', 'toJSON')).toBe(target.toJSON);
+		expect(get_callable(target, 'missing')).toBeNull();
 	});
 
 	test('are_equal handles primitives, arrays, dates, objects, and circular references', function () {
@@ -180,6 +198,55 @@ describe('utils/object', function () {
 		expect(cloned_value.set_value).not.toBe(set_value);
 		expect(cloned_set_entry).toEqual(original_set_entry);
 		expect(cloned_set_entry).not.toBe(original_set_entry);
+	});
+
+	test('to_plain_object converts collections, typed arrays, custom serializers, and circular references', function () {
+		const typed_array = new Uint8Array([1, 2, 3]);
+		const shared_item = {name: 'Alice'};
+		const source_value = {
+			created_at: new Date('2026-03-06T10:00:00.000Z'),
+			set_value: new Set([shared_item]),
+			map_value: new Map([
+				['profile', shared_item],
+				[7, {score: 12}]
+			]),
+			typed_array,
+			list: [shared_item],
+			custom_value: {
+				toJSON() {
+					return {
+						nested: 'ok'
+					};
+				}
+			}
+		};
+		source_value.self = source_value;
+
+		const plain_value = to_plain_object(source_value);
+
+		expect(to_plain_object(null)).toBeNull();
+		expect(to_plain_object('ok')).toBe('ok');
+		expect(plain_value.created_at).toBeInstanceOf(Date);
+		expect(plain_value.created_at.getTime()).toBe(source_value.created_at.getTime());
+		expect(plain_value.set_value).toEqual([
+			{name: 'Alice'}
+		]);
+		expect(plain_value.map_value).toEqual({
+			7: {
+				score: 12
+			},
+			profile: {
+				name: 'Alice'
+			}
+		});
+		expect(plain_value.typed_array).toEqual([1, 2, 3]);
+		expect(plain_value.list).toEqual([
+			{name: 'Alice'}
+		]);
+		expect(plain_value.custom_value).toEqual({
+			nested: 'ok'
+		});
+		expect(plain_value.self).toBe(plain_value);
 	});
 
 	test('conform handles array schemas including empty schema, invalid items and circular array cache reuse', function () {

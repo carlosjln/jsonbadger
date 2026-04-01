@@ -353,10 +353,6 @@ function clone_tracked_state(source_object, track_list) {
  * Check whether the tracker currently holds any pending changes.
  */
 function has_changes(store) {
-	if(!store) {
-		return false;
-	}
-
 	return store.delta_set.size > 0 || store.delta_unset.size > 0 || store.replace_roots.size > 0;
 }
 

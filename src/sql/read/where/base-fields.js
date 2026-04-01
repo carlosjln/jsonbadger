@@ -176,11 +176,6 @@ function build_base_field_comparison(field_name, operator_name, normalized_value
 
 		return 'NOT (' + field_expression + ' = ANY(' + placeholder + '::timestamptz[]))';
 	}
-
-	throw new QueryError('Unsupported operator for base field', {
-		field: field_name,
-		operator: operator_name
-	});
 }
 
 function normalize_base_field_list(field_name, operator_value, operator_name, compile_context) {

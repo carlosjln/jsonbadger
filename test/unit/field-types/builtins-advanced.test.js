@@ -208,12 +208,8 @@ describe('advanced FieldType builtins (direct)', function () {
 	});
 
 
-	test('covers nullish and terminal advanced cast branches', function () {
+	test('Decimal128FieldType preserves nullish values and rejects terminal cast failures', function () {
 		const decimal_field = new Decimal128FieldType('price', {});
-		const bigint_field = new BigIntFieldType('count64', {});
-		const double_field = new DoubleFieldType('ratio', {});
-		const int32_field = new Int32FieldType('score', {});
-		const union_field = new UnionFieldType('choice', {of_field_types: [new StringFieldType('choice', {})]});
 
 		expect(decimal_field.cast(undefined)).toBeUndefined();
 		expect(decimal_field.cast(null)).toBeNull();
@@ -221,6 +217,10 @@ describe('advanced FieldType builtins (direct)', function () {
 			const self_ref = {valueOf: function () {return self_ref;}};
 			decimal_field.cast(self_ref);
 		}).toThrow('Cast to Decimal128 failed');
+	});
+
+	test('BigIntFieldType preserves nullish values and wraps constructor failures', function () {
+		const bigint_field = new BigIntFieldType('count64', {});
 
 		expect(bigint_field.cast(undefined)).toBeUndefined();
 		expect(bigint_field.cast(null)).toBeNull();
@@ -242,6 +242,10 @@ describe('advanced FieldType builtins (direct)', function () {
 		} finally {
 			globalThis.BigInt = original_bigint;
 		}
+	});
+
+	test('DoubleFieldType preserves nullish values and rejects valueOf self-references', function () {
+		const double_field = new DoubleFieldType('ratio', {});
 
 		expect(double_field.cast(undefined)).toBeUndefined();
 		expect(double_field.cast(null)).toBeNull();
@@ -253,6 +257,10 @@ describe('advanced FieldType builtins (direct)', function () {
 			const self_ref = {valueOf: function () {return self_ref;}};
 			double_field.cast(self_ref);
 		}).toThrow('Cast to Double failed');
+	});
+
+	test('Int32FieldType preserves nullish values and rejects valueOf self-references', function () {
+		const int32_field = new Int32FieldType('score', {});
 
 		expect(int32_field.cast(undefined)).toBeUndefined();
 		expect(int32_field.cast(null)).toBeNull();
@@ -260,23 +268,33 @@ describe('advanced FieldType builtins (direct)', function () {
 			const self_ref = {valueOf: function () {return self_ref;}};
 			int32_field.cast(self_ref);
 		}).toThrow('Cast to Int32 failed');
+	});
+
+	test('UnionFieldType preserves nullish values when candidates exist', function () {
+		const union_field = new UnionFieldType('choice', {of_field_types: [new StringFieldType('choice', {})]});
 
 		expect(union_field.cast(undefined)).toBeUndefined();
 		expect(union_field.cast(null)).toBeNull();
 	});
 
-	test('UnionFieldType exact-match covers number, double, int32, bigint, and fallback branch without last error', function () {
+	test('UnionFieldType exact-match recognizes Number and Double candidates', function () {
 		const number_union = new UnionFieldType('n', {of_field_types: [new NumberFieldType('n', {})]});
 		const double_union = new UnionFieldType('d', {of_field_types: [new DoubleFieldType('d', {})]});
-		const int32_union = new UnionFieldType('i', {of_field_types: [new Int32FieldType('i', {})]});
-		const bigint_union = new UnionFieldType('b', {of_field_types: [new BigIntFieldType('b', {})]});
-		const weird_union = new UnionFieldType('w', {of_field_types: [new StringFieldType('w', {})]});
-		let length_reads = 0;
 
 		expect(number_union.cast(12)).toBe(12);
 		expect(double_union.cast(1.25)).toBe(1.25);
+	});
+
+	test('UnionFieldType exact-match recognizes Int32 and BigInt candidates', function () {
+		const int32_union = new UnionFieldType('i', {of_field_types: [new Int32FieldType('i', {})]});
+		const bigint_union = new UnionFieldType('b', {of_field_types: [new BigIntFieldType('b', {})]});
+
 		expect(int32_union.cast(33)).toBe(33);
 		expect(bigint_union.cast(44n)).toBe(44n);
+	});
+
+	test('UnionFieldType falls back when Int32 exact-match guards reject the value', function () {
+		const int32_union = new UnionFieldType('i', {of_field_types: [new Int32FieldType('i', {})]});
 
 		// Trigger false paths inside exact Int32 checks before falling back to normalization or throwing.
 		expect(int32_union.cast('55')).toBe(55);
@@ -287,6 +305,11 @@ describe('advanced FieldType builtins (direct)', function () {
 		expect(function int32_out_of_range_not_exact_match() {
 			int32_union.cast(INT32_MAX + 1);
 		}).toThrow('Cast to Int32 failed');
+	});
+
+	test('UnionFieldType throws the generic cast error when the fallback loop is skipped', function () {
+		const weird_union = new UnionFieldType('w', {of_field_types: [new StringFieldType('w', {})]});
+		let length_reads = 0;
 
 		weird_union.of_field_types = {
 			get length() {

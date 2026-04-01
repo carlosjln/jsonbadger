@@ -12,6 +12,7 @@ import {compile_text_operator} from '#src/sql/read/where/text-operators.js';
 
 import {split_dot_path} from '#src/utils/object-path.js';
 import {is_object} from '#src/utils/value.js';
+import QueryError from '#src/errors/query-error.js';
 
 const unsupported_elem_match_operator_message = 'Unsupported operator inside $elem_match';
 
@@ -26,6 +27,12 @@ function compile_nested_array_operator(operator_name, operator_value, regex_opti
 		parameter_state,
 		error_message: unsupported_elem_match_operator_message
 	});
+
+	if(!predicate) {
+		throw new QueryError(unsupported_elem_match_operator_message + ': ' + operator_name, {
+			operator: operator_name
+		});
+	}
 
 	return elem_match_operator(array_expression, predicate);
 }
@@ -47,7 +54,7 @@ function compile_elem_match_clause(path_value, elem_match_value, data_column_ref
 	if(has_operator_entries(elem_match_value)) {
 		const option_value = elem_match_value.$options || '';
 		const compile_operator_predicate = (operator_name, operator_value) => {
-			return compile_text_operator({
+			const predicate = compile_text_operator({
 				name: operator_name,
 				value: operator_value,
 				regex_options: option_value,
@@ -55,6 +62,14 @@ function compile_elem_match_clause(path_value, elem_match_value, data_column_ref
 				parameter_state,
 				error_message: unsupported_elem_match_operator_message
 			});
+
+			if(!predicate) {
+				throw new QueryError(unsupported_elem_match_operator_message + ': ' + operator_name, {
+					operator: operator_name
+				});
+			}
+
+			return predicate;
 		};
 		const operator_predicates = compile_operator_entry_clauses(elem_match_value, compile_operator_predicate);
 		predicate_list.push.apply(predicate_list, operator_predicates);
@@ -81,7 +96,7 @@ function compile_elem_match_clause(path_value, elem_match_value, data_column_ref
 		if(is_object(nested_value) && has_operator_entries(nested_value)) {
 			const option_value = nested_value.$options || '';
 			const compile_nested_predicate = (operator_name, operator_value) => {
-				return compile_text_operator({
+				const predicate = compile_text_operator({
 					name: operator_name,
 					value: operator_value,
 					regex_options: option_value,
@@ -89,6 +104,14 @@ function compile_elem_match_clause(path_value, elem_match_value, data_column_ref
 					parameter_state,
 					error_message: unsupported_elem_match_operator_message
 				});
+
+				if(!predicate) {
+					throw new QueryError(unsupported_elem_match_operator_message + ': ' + operator_name, {
+						operator: operator_name
+					});
+				}
+
+				return predicate;
 			};
 			const nested_predicates = compile_operator_entry_clauses(nested_value, compile_nested_predicate);
 			predicate_list.push.apply(predicate_list, nested_predicates);

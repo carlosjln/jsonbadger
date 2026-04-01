@@ -33,12 +33,12 @@ describe('Connection', function () {
 		debug_logger_mock.mockReset();
 		model_factory_mock.mockReset();
 
-		model_factory_mock.mockImplementation(function (schema_instance, model_options, connection, model_name) {
+		model_factory_mock.mockImplementation(function (model_name, schema_instance, model_options, connection) {
 			function Model() {
 			}
 
-			Model.schema_instance = schema_instance;
-			Model.model_options = model_options;
+			Model.schema = schema_instance;
+			Model.options = model_options;
 			Model.connection = connection;
 			Model.model_name = model_name;
 
@@ -54,7 +54,7 @@ describe('Connection', function () {
 
 			expect(connection.pool_instance).toBe(pool_instance);
 			expect(connection.options.debug).toBe(true);
-			expect(connection.options.auto_index).toBe(true);
+			expect(connection.options.auto_index).toBeUndefined();
 			expect(connection.server_capabilities).toBe(server_capabilities);
 			expect(connection.models).toEqual({});
 		});
@@ -72,12 +72,12 @@ describe('Connection', function () {
 
 			expect(connection.models.User).toBe(registered_model);
 			expect(model_factory_mock).toHaveBeenCalledWith(
+				'User',
 				schema_instance,
 				expect.objectContaining({
 					table_name: 'users'
 				}),
-				connection,
-				'User'
+				connection
 			);
 		});
 
@@ -97,22 +97,22 @@ describe('Connection', function () {
 
 			expect(model_factory_mock).toHaveBeenNthCalledWith(
 				1,
+				'User',
 				schema_instance,
 				expect.objectContaining({
 					table_name: 'users'
 				}),
-				connection,
-				'User'
+				connection
 			);
 
 			expect(model_factory_mock).toHaveBeenNthCalledWith(
 				2,
+				'Company',
 				schema_instance,
 				expect.objectContaining({
 					table_name: 'companies'
 				}),
-				connection,
-				'Company'
+				connection
 			);
 		});
 

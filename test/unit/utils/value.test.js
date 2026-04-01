@@ -1,6 +1,13 @@
 import {describe, expect, test} from '@jest/globals';
 
-import {is_boolean, is_function, is_plain_object, is_uuid_v7, to_number} from '#src/utils/value.js';
+import {
+	get_if,
+	is_boolean,
+	is_function,
+	is_plain_object,
+	is_uuid_v7,
+	to_number
+} from '#src/utils/value.js';
 
 function CustomInstance() {
 	this.ok = true;
@@ -53,5 +60,23 @@ describe('utils/value', function () {
 		expect(is_boolean(0)).toBe(false);
 		expect(is_boolean('true')).toBe(false);
 		expect(is_boolean(null)).toBe(false);
+	});
+
+	test('get_if returns the value when the evaluator passes and the fallback otherwise', function () {
+		expect(get_if(
+			function is_positive(value) {
+				return value > 0;
+			},
+			5,
+			0
+		)).toBe(5);
+
+		expect(get_if(
+			function is_positive(value) {
+				return value > 0;
+			},
+			-1,
+			0
+		)).toBe(0);
 	});
 });

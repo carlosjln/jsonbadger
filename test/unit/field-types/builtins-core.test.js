@@ -6,6 +6,7 @@ import {
 	BufferFieldType,
 	DateFieldType,
 	MapFieldType,
+	MixedFieldType,
 	NumberFieldType,
 	StringFieldType,
 	UUIDv7FieldType,
@@ -223,24 +224,19 @@ describe('foundational FieldType builtins (direct)', function () {
 		}).toThrow('Cast to Map failed');
 	});
 
+	test('MixedFieldType returns values unchanged', function () {
+		const field_type = new MixedFieldType('payload', {});
+		const object_value = {nested: true};
 
-	test('covers nullish and remaining foundational cast branches', function () {
+		expect(field_type.cast(undefined)).toBeUndefined();
+		expect(field_type.cast(null)).toBeNull();
+		expect(field_type.cast(object_value)).toBe(object_value);
+		expect(field_type.cast('raw')).toBe('raw');
+	});
+
+
+	test('StringFieldType preserves nullish values, applies uppercase transform, and rejects default objects', function () {
 		const string_field = new StringFieldType('name', {uppercase: true, match: /^ABC$/});
-		const number_field = new NumberFieldType('age', {});
-		const date_field = new DateFieldType('created_at', {});
-		const boolean_field = new BooleanFieldType('active', {});
-		const uuid_field = new UUIDv7FieldType('owner_id', {});
-		const buffer_field = new BufferFieldType('blob', {});
-		const array_no_options = new ArrayFieldType('tags');
-		const array_with_default = new ArrayFieldType('tags', {default: ['seed']});
-		const map_no_options = new MapFieldType('meta');
-		const array_child = new ArrayFieldType('tags', {
-			of_field_type: {
-				normalize: function (value, context_value) {
-					return context_value.parent_context;
-				}
-			}
-		});
 
 		expect(string_field.cast(undefined)).toBeUndefined();
 		expect(string_field.cast(null)).toBeNull();
@@ -253,6 +249,10 @@ describe('foundational FieldType builtins (direct)', function () {
 		expect(function validate_regex_miss() {
 			string_field.run_type_validators('zzz');
 		}).toThrow('does not match pattern');
+	});
+
+	test('NumberFieldType preserves nullish values and rejects invalid cast inputs', function () {
+		const number_field = new NumberFieldType('age', {});
 
 		expect(number_field.cast(undefined)).toBeUndefined();
 		expect(number_field.cast(null)).toBeNull();
@@ -273,7 +273,12 @@ describe('foundational FieldType builtins (direct)', function () {
 		expect(function cast_invalid_value_of_number() {
 			number_field.cast({valueOf: function () {return 'nope';}});
 		}).toThrow('Cast to Number failed');
+	});
 
+	test('Date, Boolean, and UUIDv7 field types preserve nullish values and reject invalid inputs', function () {
+		const date_field = new DateFieldType('created_at', {});
+		const boolean_field = new BooleanFieldType('active', {});
+		const uuid_field = new UUIDv7FieldType('owner_id', {});
 		const now = new Date('2026-02-02T00:00:00.000Z');
 
 		expect(date_field.cast(undefined)).toBeUndefined();
@@ -293,7 +298,10 @@ describe('foundational FieldType builtins (direct)', function () {
 		expect(function cast_non_string_uuidv7() {
 			uuid_field.cast(123);
 		}).toThrow('Cast to UUIDv7 failed');
+	});
 
+	test('BufferFieldType preserves nullish values and rejects invalid array-like inputs', function () {
+		const buffer_field = new BufferFieldType('blob', {});
 		const raw_buffer = Buffer.from('Z');
 
 		expect(buffer_field.cast(undefined)).toBeUndefined();
@@ -307,6 +315,18 @@ describe('foundational FieldType builtins (direct)', function () {
 		expect(function cast_invalid_serialized_buffer_data() {
 			buffer_field.cast({type: 'Buffer', data: [Symbol('x')]});
 		}).toThrow('Cast to Buffer failed');
+	});
+
+	test('ArrayFieldType preserves nullish values, applies defaults, and normalizes child context', function () {
+		const array_no_options = new ArrayFieldType('tags');
+		const array_with_default = new ArrayFieldType('tags', {default: ['seed']});
+		const array_child = new ArrayFieldType('tags', {
+			of_field_type: {
+				normalize: function (value, context_value) {
+					return context_value.parent_context;
+				}
+			}
+		});
 
 		expect(array_no_options.of_field_type).toBeNull();
 		expect(array_no_options.cast(undefined)).toBeUndefined();
@@ -317,6 +337,10 @@ describe('foundational FieldType builtins (direct)', function () {
 		expect(array_no_options.cast(raw_array)).toBe(raw_array);
 		expect(array_with_default.resolve_default()).toEqual(['seed']);
 		expect(array_child.cast(['x'])).toEqual([{}]);
+	});
+
+	test('MapFieldType preserves nullish values and passes raw objects through without a child type', function () {
+		const map_no_options = new MapFieldType('meta');
 
 		expect(map_no_options.of_field_type).toBeNull();
 		expect(map_no_options.cast(undefined)).toBeUndefined();

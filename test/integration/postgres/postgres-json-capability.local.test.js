@@ -1,40 +1,31 @@
 import {afterAll, beforeAll, describe, expect, test} from '@jest/globals';
 
 import jsonbadger from '#src/index.js';
-import {quote_identifier} from '#src/utils/assert.js';
 import {has_own} from '#src/utils/object.js';
-import local_env_config from '#test/config/local-env-config.js';
+import {
+	build_test_table_name,
+	connect_local_jsonbadger,
+	disconnect_connection,
+	drop_table_if_exists
+} from '#test/integration/postgres/helpers.js';
 
 describe('PostgreSQL JSON capability alignment', function () {
 	let connection;
-	let pg_config;
-	let jb_config;
 
 	beforeAll(async function setup_database() {
-		const env_config = local_env_config();
-		pg_config = env_config.postgres;
-		jb_config = env_config.jsonbadger;
-
-		connection = await jsonbadger.connect(pg_config.uri, {
-			debug: jb_config.debug,
-			max: pg_config.pool_max,
-			ssl: pg_config.ssl
-		});
+		connection = await connect_local_jsonbadger(jsonbadger);
 	});
 
 	afterAll(async function teardown_database() {
-		if(connection) {
-			await connection.disconnect();
-		}
+		await disconnect_connection(connection);
 	});
 
 	test('matches PostgreSQL JSON existence and containment semantics', async function () {
-		const test_table_name = build_test_table_name();
-		const table_identifier = quote_identifier(test_table_name);
+		const test_table_name = build_test_table_name('jsonbadger_pg_caps_test');
 		const capability_model = create_capability_model(connection, test_table_name);
 
 		try {
-			await drop_table_if_exists(connection, table_identifier);
+			await drop_table_if_exists(connection, test_table_name);
 			await capability_model.ensure_table();
 			await seed_capability_documents(capability_model);
 
@@ -44,9 +35,9 @@ describe('PostgreSQL JSON capability alignment', function () {
 			const has_literal_dotted_key = await capability_model.find({payload: {$has_key: 'profile.city'}}).exec();
 			const nested_profile_has_city = await capability_model.find({'payload.profile': {$has_key: 'city'}}).exec();
 
-			expect(has_profile.map(function pick_user(row) {return row.user_name;})).toEqual(['alpha', 'beta']);
+			expect(has_profile.map(function pick_user(row) {return read_model_data(row).user_name;})).toEqual(['alpha', 'beta']);
 			expect(has_literal_dotted_key).toEqual([]);
-			expect(nested_profile_has_city.map(function pick_user(row) {return row.user_name;})).toEqual(['alpha']);
+			expect(nested_profile_has_city.map(function pick_user(row) {return read_model_data(row).user_name;})).toEqual(['alpha']);
 
 			const contains_nested_object = await capability_model.find({
 				payload: {$contains: {profile: {city: 'Miami'}}}
@@ -55,20 +46,19 @@ describe('PostgreSQL JSON capability alignment', function () {
 				payload: {$contains: {flags: ['vip']}}
 			}).exec();
 
-			expect(contains_nested_object.map(function pick_user(row) {return row.user_name;})).toEqual(['alpha']);
-			expect(contains_nested_array.map(function pick_user(row) {return row.user_name;})).toEqual(['alpha']);
+			expect(contains_nested_object.map(function pick_user(row) {return read_model_data(row).user_name;})).toEqual(['alpha']);
+			expect(contains_nested_array.map(function pick_user(row) {return read_model_data(row).user_name;})).toEqual(['alpha']);
 		} finally {
-			await drop_table_if_exists(connection, table_identifier);
+			await drop_table_if_exists(connection, test_table_name);
 		}
 	});
 
 	test('matches PostgreSQL JSONPath semantics including suppressed mismatch cases', async function () {
-		const test_table_name = build_test_table_name();
-		const table_identifier = quote_identifier(test_table_name);
+		const test_table_name = build_test_table_name('jsonbadger_pg_caps_test');
 		const capability_model = create_capability_model(connection, test_table_name);
 
 		try {
-			await drop_table_if_exists(connection, table_identifier);
+			await drop_table_if_exists(connection, test_table_name);
 			await capability_model.ensure_table();
 			await seed_capability_documents(capability_model);
 
@@ -85,22 +75,21 @@ describe('PostgreSQL JSON capability alignment', function () {
 				payload: {$json_path_exists: '$.missing.deep ? (@ > 0)'}
 			}).exec();
 
-			expect(jsonpath_exists_match.map(function pick_user(row) {return row.user_name;})).toEqual(['alpha']);
-			expect(jsonpath_predicate_match.map(function pick_user(row) {return row.user_name;})).toEqual(['alpha']);
+			expect(jsonpath_exists_match.map(function pick_user(row) {return read_model_data(row).user_name;})).toEqual(['alpha']);
+			expect(jsonpath_predicate_match.map(function pick_user(row) {return read_model_data(row).user_name;})).toEqual(['alpha']);
 			expect(jsonpath_type_mismatch).toEqual([]);
 			expect(jsonpath_missing_field).toEqual([]);
 		} finally {
-			await drop_table_if_exists(connection, table_identifier);
+			await drop_table_if_exists(connection, test_table_name);
 		}
 	});
 
 	test('matches PostgreSQL JSON update-path behavior and persisted state', async function () {
-		const test_table_name = build_test_table_name();
-		const table_identifier = quote_identifier(test_table_name);
+		const test_table_name = build_test_table_name('jsonbadger_pg_caps_test');
 		const capability_model = create_capability_model(connection, test_table_name);
 
 		try {
-			await drop_table_if_exists(connection, table_identifier);
+			await drop_table_if_exists(connection, test_table_name);
 			await capability_model.ensure_table();
 			await seed_capability_documents(capability_model);
 
@@ -110,7 +99,7 @@ describe('PostgreSQL JSON capability alignment', function () {
 				}
 			});
 
-			expect(after_missing_path_create.document.data.payload.profile.state).toBe('FL');
+			expect(read_model_data(after_missing_path_create).payload.profile.state).toBe('FL');
 
 			const after_insert_before = await capability_model.update_one({user_name: 'alpha'}, {
 				$insert: {
@@ -118,7 +107,7 @@ describe('PostgreSQL JSON capability alignment', function () {
 				}
 			});
 
-			expect(after_insert_before.tags).toEqual(['zero', 'one', 'three']);
+			expect(read_model_data(after_insert_before).tags).toEqual(['zero', 'one', 'three']);
 
 			const after_insert_after = await capability_model.update_one({user_name: 'alpha'}, {
 				$insert: {
@@ -129,7 +118,7 @@ describe('PostgreSQL JSON capability alignment', function () {
 				}
 			});
 
-			expect(after_insert_after.tags).toEqual(['zero', 'zero_plus', 'one', 'three']);
+			expect(read_model_data(after_insert_after).tags).toEqual(['zero', 'zero_plus', 'one', 'three']);
 
 			const after_delete_key = await capability_model.update_one({user_name: 'alpha'}, {
 				$set_lax: {
@@ -140,14 +129,14 @@ describe('PostgreSQL JSON capability alignment', function () {
 				}
 			});
 
-			expect(has_own(after_delete_key.document.data.payload, 'cleanup_flag')).toBe(false);
+			expect(has_own(read_model_data(after_delete_key).payload, 'cleanup_flag')).toBe(false);
 
 			const persisted_alpha = await capability_model.find_one({user_name: 'alpha'}).exec();
-			expect(persisted_alpha.tags).toEqual(['zero', 'zero_plus', 'one', 'three']);
-			expect(persisted_alpha.document.data.payload.profile.state).toBe('FL');
-			expect(has_own(persisted_alpha.document.data.payload, 'cleanup_flag')).toBe(false);
+			expect(read_model_data(persisted_alpha).tags).toEqual(['zero', 'zero_plus', 'one', 'three']);
+			expect(read_model_data(persisted_alpha).payload.profile.state).toBe('FL');
+			expect(has_own(read_model_data(persisted_alpha).payload, 'cleanup_flag')).toBe(false);
 		} finally {
-			await drop_table_if_exists(connection, table_identifier);
+			await drop_table_if_exists(connection, test_table_name);
 		}
 	});
 });
@@ -168,7 +157,7 @@ function create_capability_model(connection, table_name) {
 }
 
 async function seed_capability_documents(capability_model) {
-	await new capability_model({
+	await capability_model.from({
 		user_name: 'alpha',
 		tags: ['one', 'three'],
 		payload: {
@@ -181,7 +170,7 @@ async function seed_capability_documents(capability_model) {
 		}
 	}).save();
 
-	await new capability_model({
+	await capability_model.from({
 		user_name: 'beta',
 		tags: ['two'],
 		payload: {
@@ -194,13 +183,7 @@ async function seed_capability_documents(capability_model) {
 	}).save();
 }
 
-async function drop_table_if_exists(connection, table_identifier) {
-	await connection.pool_instance.query('DROP TABLE IF EXISTS ' + table_identifier + ';');
-}
-
-function build_test_table_name() {
-	const random_suffix = String(Math.floor(Math.random() * 1000000));
-	const timestamp = Date.now();
-
-	return 'jsonbadger_pg_caps_test_' + timestamp + '_' + random_suffix;
+function read_model_data(model_instance) {
+	const default_slug = model_instance.constructor.schema.get_default_slug();
+	return model_instance.document[default_slug];
 }

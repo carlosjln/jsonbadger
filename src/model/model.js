@@ -193,7 +193,7 @@ Model.prototype.update = async function () {
 	const document = this.document;
 
 	model.schema.validate(document);
-	apply_timestamps(document, false);
+	document.updated_at = new Date();
 
 	if(this.id === undefined || this.id === null) {
 		throw new QueryError('Document id is required for save update operations', {
@@ -262,6 +262,10 @@ Model.hydrate = function (data, options = {}) {
 	instance.document.$rebase_changes();
 
 	return instance;
+};
+
+Model.cast = function (document) {
+	return this.schema.cast(document);
 };
 
 /*
@@ -555,24 +559,6 @@ function extract_hydrated_document_fields(model, input_data) {
 function strip_base_fields(data) {
 	const {id, created_at, updated_at, ...sanitized_data} = data;
 	return sanitized_data;
-}
-
-function apply_timestamps(document, is_new) {
-	const now = new Date();
-
-	if(is_new) {
-		if(document.created_at === undefined || document.created_at === null) {
-			document.created_at = now;
-		}
-
-		if(document.updated_at === undefined || document.updated_at === null) {
-			document.updated_at = now;
-		}
-
-		return;
-	}
-
-	document.updated_at = now;
 }
 
 export default Model;

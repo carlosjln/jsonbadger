@@ -39,10 +39,10 @@ describe('PostgreSQL JSON operator mapping', function () {
 			data_column: 'data'
 		});
 
-		expect(nested_scope_result.sql).toContain("#> '{profile,city}' ? $1");
+		expect(nested_scope_result.sql).toContain("#> '{\"profile\",\"city\"}' ? $1");
 		expect(nested_scope_result.params).toEqual(['zip']);
 
-		expect(literal_key_result.sql).toContain("#> '{profile,city}' ? $1");
+		expect(literal_key_result.sql).toContain("#> '{\"profile\",\"city\"}' ? $1");
 		expect(literal_key_result.params).toEqual(['address.zip']);
 	});
 

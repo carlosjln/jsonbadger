@@ -1,6 +1,11 @@
 import {describe, expect, test} from '@jest/globals';
 
-import {FieldTypeRegistry} from '#src/field-types/registry.js';
+import {
+	create,
+	FieldTypeRegistry,
+	register,
+	resolve
+} from '#src/field-types/registry.js';
 
 function DummyFieldType(path_value, options) {
 	this.path = path_value;
@@ -99,5 +104,22 @@ describe('FieldTypeRegistry', function () {
 		} finally {
 			globalThis.structuredClone = original_structured_clone;
 		}
+	});
+
+	test('supports the default exported registry wrappers for register, resolve, and create', function () {
+		register('WrapperDummyFieldType', DummyFieldType, ['wrapper-dummy']);
+
+		expect(resolve('WrapperDummyFieldType')).toBe('WrapperDummyFieldType');
+		expect(resolve('wrapper-dummy')).toBe('WrapperDummyFieldType');
+
+		const created = create('payload.wrapper_value', 'wrapper-dummy', {
+			required: true
+		});
+
+		expect(created).toBeInstanceOf(DummyFieldType);
+		expect(created.path).toBe('payload.wrapper_value');
+		expect(created.options).toEqual({
+			required: true
+		});
 	});
 });

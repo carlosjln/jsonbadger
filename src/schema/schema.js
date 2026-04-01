@@ -11,7 +11,8 @@ import {get_path_type as resolve_path_type, is_array_root as resolve_is_array_ro
 
 import {assert_condition, assert_identifier, assert_path} from '#src/utils/assert.js';
 import {is_array, is_not_array} from '#src/utils/array.js';
-import {has_own} from '#src/utils/object.js';
+import {read_nested_path, write_nested_path} from '#src/utils/object-path.js';
+import {deep_clone, has_own} from '#src/utils/object.js';
 import {is_function, is_object, is_plain_object, is_string, is_uuid_v7, is_valid_timestamp} from '#src/utils/value.js';
 
 const base_fields = Object.freeze({
@@ -193,6 +194,56 @@ Schema.prototype.conform = function (payload) {
 	return payload;
 };
 
+Schema.prototype.cast = function (document) {
+	if(!is_plain_object(document)) {
+		return document;
+	}
+
+	const next_document = deep_clone(document);
+	const default_slug = this.get_default_slug();
+	const extra_slugs = new Set(this.get_extra_slugs());
+
+	for(const [path_name, field_type] of Object.entries(this.paths)) {
+		const path_segments = path_name.split('.');
+		const root_key = path_segments[0];
+		let target_root = next_document;
+		let target_segments = path_segments;
+
+		if(!base_fields_keys.has(root_key)) {
+			if(extra_slugs.has(root_key)) {
+				target_root = next_document[root_key];
+				target_segments = path_segments.slice(1);
+			} else {
+				target_root = next_document[default_slug];
+			}
+		}
+
+		const path_state = read_nested_path(target_root, target_segments);
+
+		if(!path_state.exists) {
+			continue;
+		}
+
+		let casted_value = path_state.value;
+		const cast_context = {
+			path: path_name,
+			mode: 'cast'
+		};
+
+		if(is_function(field_type.apply_set)) {
+			casted_value = field_type.apply_set(casted_value, cast_context);
+		}
+
+		if(is_function(field_type.cast)) {
+			casted_value = field_type.cast(casted_value, cast_context);
+		}
+
+		write_nested_path(target_root, target_segments, casted_value);
+	}
+
+	return next_document;
+};
+
 Schema.prototype.method = function (method_name, method_implementation) {
 	assert_identifier(method_name, 'method_name');
 	assert_condition(is_function(method_implementation), 'method_implementation must be a function');
@@ -265,10 +316,6 @@ function build_allowed_tree(paths) {
 	const allowed_tree = {};
 
 	for(const path_name of Object.keys(paths)) {
-		if(!is_string(path_name) || path_name.length === 0) {
-			continue;
-		}
-
 		const path_segments = path_name.split('.');
 		let current_branch = allowed_tree;
 
@@ -611,8 +658,6 @@ function normalize_index_definition(index_input, path_name) {
 
 		return normalized_definition;
 	}
-
-	return null;
 }
 
 export default Schema;
