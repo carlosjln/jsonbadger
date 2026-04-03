@@ -4,7 +4,7 @@ Models are created through the owning connection:
 
 ```js
 const connection = await JsonBadger.connect(uri, options);
-const User = connection.model({name: 'User', schema: user_schema, table_name: 'users'});
+const user_model = connection.model({name: 'User', schema: user_schema, table_name: 'users'});
 ```
 
 ## TOC
@@ -15,21 +15,35 @@ const User = connection.model({name: 'User', schema: user_schema, table_name: 'u
 - [Static Methods](#static-methods)
 - [Model.from](#modelfrom)
 - [Model.hydrate](#modelhydrate)
+- [Model.cast](#modelcast)
 - [Instance Methods](#instance-methods)
 - [Related Docs](#related-docs)
 
 ## Construction
 
-Create a document instance with `new Model(payload)`:
+Build new documents with `Model.from(...)`:
 
 ```js
-const user_document = new User({
+const user_document = user_model.from({
 	name: 'john',
 	age: 30
 });
 ```
 
-New documents start in the `is_new = true` state until they are persisted.
+Hydrate persisted row-like data with `Model.hydrate(...)`:
+
+```js
+const hydrated_user = user_model.hydrate({
+	id: '7',
+	data: {
+		name: 'maria'
+	},
+	created_at: '2026-03-03T08:00:00.000Z',
+	updated_at: '2026-03-03T09:00:00.000Z'
+});
+```
+
+> **Note:** Prefer `Model.from(...)` and `Model.hydrate(...)` over direct `new Model(...)` construction. Those entry points apply the current normalization and validation flow.
 
 ## Ownership Boundary
 
@@ -38,11 +52,11 @@ New documents start in the `is_new = true` state until they are persisted.
 It is the right place for:
 
 1. `table_name`, `data_column`, and related storage options
-2. Startup/bootstrap migration helpers such as `ensure_table()` and `ensure_index()`
-3. Query/update entry points
-4. Document construction and hydration
+2. Startup/bootstrap helpers such as `ensure_table()`, `ensure_indexes()`, and `ensure_model()`
+3. Query and update entry points
+4. Document construction and row hydration
 
-`Model` consumes a `Schema`; it does not replace it. The schema defines the document contract, and the model defines how that contract is stored and operated on.
+`Model` consumes a `Schema`; it does not replace it.
 
 ## Static Methods
 
@@ -62,32 +76,34 @@ It is the right place for:
   - deletes one matching row and returns the deleted document or `null`
 - `Model.ensure_table()`
   - creates the backing table during startup/bootstrap setup
-- `Model.ensure_index()`
+- `Model.ensure_indexes()`
   - creates declared indexes during startup/bootstrap setup
-- `Model.ensure_schema()`
-  - runs table + index setup together during startup/bootstrap setup
+- `Model.ensure_model()`
+  - runs table setup and, when `schema.auto_index` is enabled, declared indexes
 - `Model.from(input_data, options?)`
   - builds a new document from external payload input without marking it persisted
-- `Model.hydrate(input_data)`
-  - builds a persisted document from existing raw data with no modified paths
+- `Model.hydrate(input_data, options?)`
+  - builds a persisted document from existing row-like data with no modified paths
+- `Model.cast(document)`
+  - delegates to `schema.cast(document)`
 
 Example:
 
 ```js
-const saved_user = await User.create({
+const saved_user = await user_model.create({
 	name: 'maria',
 	age: 29
 });
 
-const found_user = await User.find_one({name: 'maria'}).exec();
+const found_user = await user_model.find_one({name: 'maria'}).exec();
 ```
 
 ## Model.from
 
-Use `Model.from(...)` when you want schema casting/setters on payload input but still want a new document:
+Use `Model.from(...)` when the source is external payload input and you want a new document:
 
 ```js
-const imported_user = User.from({
+const imported_user = user_model.from({
 	name: '  maria  ',
 	age: '29',
 	created_at: '2026-03-03T08:00:00.000Z'
@@ -97,87 +113,73 @@ const imported_user = User.from({
 Behavior:
 - returns a new document instance
 - keeps `is_new = true`
-- applies schema casting/setters to known payload fields
-- treats `id`, `created_at`, and `updated_at` as reserved root base fields
-- extracts those root base fields into runtime state when present
-- treats every other root key as payload, including a root `data` key
-- drops unknown payload keys by default
+- validates the normalized document before construction
+- expands dotted payload keys at the input boundary
+- routes root keys listed in `schema.options.slugs` out of the default slug
+- keeps every other non-base root key inside the default slug
 - does not interpret payload input as a persisted row envelope
 
 Input flow:
 1. check whether the input is object-like
-2. extract reserved root base fields (`id`, `created_at`, `updated_at`)
-3. treat everything else as payload
+2. serialize non-plain objects through `to_json`, `toJSON`, or `to_plain_object(...)`
+3. expand dotted payload keys into nested objects
+4. route registered extra slug roots out of the default slug
+5. keep every remaining root key in the default slug
+6. validate the final document envelope
 
-Example:
+Example with a custom default slug:
 
 ```js
-const imported_user = User.from({
+const user_schema = new JsonBadger.Schema({
+	name: String,
+	settings: {
+		theme: String
+	}
+}, {
+	default_slug: 'payload',
+	slugs: ['settings']
+});
+
+const user_model = connection.model({
+	name: 'User',
+	schema: user_schema,
+	table_name: 'users'
+});
+
+const imported_user = user_model.from({
 	id: '7',
 	created_at: '2026-03-03T08:00:00.000Z',
-	data: {
-		name: 'maria'
-	},
-	username: 'maria'
+	name: 'maria',
+	settings: {
+		theme: 'dark'
+	}
 });
 ```
 
 Result:
-- `base_fields.id = '7'`
-- `base_fields.created_at = '2026-03-03T08:00:00.000Z'`
-- `payload = {data: {name: 'maria'}, username: 'maria'}`
-
-Assign base fields after construction when needed:
-
-```js
-const imported_user = User.from({
-	name: 'maria'
-});
-
-imported_user.id = '7';
-imported_user.created_at = '2026-03-03T08:00:00.000Z';
-imported_user.updated_at = '2026-03-03T09:00:00.000Z';
-```
-
-Payload fields are not promoted to top-level document properties.
-
-Use:
-
-1. `doc.get('path')` / `doc.set('path', value)` for the normal document API
-2. `doc.document.data` when you need the raw tracked payload object
-
-Example:
-
-```js
-const imported_user = User.from({
-	name: 'maria',
-	profile: {city: 'Miami'}
-});
-
-imported_user.get('name'); // 'maria'
-imported_user.get('profile.city'); // 'Miami'
-
-imported_user.set('name', 'jane');
-imported_user.set('profile.city', 'Santiago');
-```
-
-Use payload paths like `'name'` or `'profile.city'`.
+- `imported_user.document.id === '7'`
+- `imported_user.document.created_at === '2026-03-03T08:00:00.000Z'`
+- `imported_user.document.payload.name === 'maria'`
+- `imported_user.document.settings.theme === 'dark'`
 
 Options:
 - `strict`
   - resolves as `options.strict ?? schema.strict`
-  - use `User.from(source, {strict: false})` to keep unknown payload keys
+  - use `user_model.from(source, {strict: false})` to keep unknown keys inside the default slug
 
 ## Model.hydrate
 
-Use `Model.hydrate(...)` when the source data already represents a persisted document:
+Use `Model.hydrate(...)` when the source already represents a persisted row:
 
 ```js
-const hydrated_user = User.hydrate({
+const hydrated_user = user_model.hydrate({
 	id: '7',
-	data: {
+	payload: {
 		name: 'maria',
 		age: '29'
+	},
+	settings: {
+		theme: 'dark'
 	},
 	created_at: '2026-03-03T08:00:00.000Z',
 	updated_at: '2026-03-03T09:00:00.000Z'
@@ -185,65 +187,87 @@ const hydrated_user = User.hydrate({
 ```
 
 Behavior:
-- returns a new document instance
+- returns a document instance
 - sets `is_new = false`
 - leaves no paths marked as modified initially
-- treats row-like input as the persisted envelope
-- extracts top-level base fields (`id`, `created_at`, `updated_at`) from the outer object
-- uses `input_data.data` as the payload source when it is present
-- is the only construction path that interprets a root `data` key as the persisted payload slot
+- treats the outer object as the persisted row envelope
+- reads the payload from `input_data[default_slug]`
+- preserves registered extra slug objects as sibling roots
+- ignores unregistered extra root slugs
+- does not expand dotted payload keys during hydration
 
 Input flow:
 1. check whether the input is object-like
-2. extract reserved root base fields (`id`, `created_at`, `updated_at`) from the outer object
-3. use `input_data.data` as payload when present, otherwise use the root object payload
+2. serialize non-plain objects through `to_json`, `toJSON`, or `to_plain_object(...)`
+3. copy top-level base fields from the row
+4. read `schema.get_slugs()` from the row and default missing slug roots to `{}`
+5. validate the final document envelope
 
-Example:
+> **Note:** `Model.hydrate(...)` is strict about row shape. It does not rebuild the default slug from unrelated root keys.
+
+## Model.cast
+
+Use `Model.cast(...)` when you want schema casting without building a document instance:
 
 ```js
-const hydrated_user = User.hydrate({
-	id: '7',
-	data: {
-		name: 'maria',
+const casted_document = user_model.cast({
+	payload: {
 		age: '29'
 	},
-	created_at: '2026-03-03T08:00:00.000Z',
-	updated_at: '2026-03-03T09:00:00.000Z'
+	settings: {
+		count: '7'
+	}
 });
 ```
 
-Result:
-- `base_fields.id = '7'`
-- `base_fields.created_at = '2026-03-03T08:00:00.000Z'`
-- `base_fields.updated_at = '2026-03-03T09:00:00.000Z'`
-- `payload = {name: 'maria', age: '29'}`
+Behavior:
+- delegates to `schema.cast(...)`
+- deep-clones the input document first
+- casts existing base-field, default-slug, and extra-slug values
+- does not validate
+- does not conform
 
 ## Instance Methods
 
-- `doc.validate()`
-  - validates the current document payload
 - `doc.save()`
   - inserts a new row or updates an existing persisted document
-- `doc.delete().exec()`
-  - deletes the current persisted document
-- `doc.get(path)`
-- `doc.set(path, value)`
-- `doc.mark_modified(path)`
-- `doc.clear_modified()`
-- `doc.is_modified(path?)`
-- `doc.$serialize(options?)`
-- `doc.to_json(options?)`
+- `doc.insert()`
+  - inserts the current document as a new row
+- `doc.update()`
+  - updates the current persisted document by `id`
+- `doc.get(path_name)`
+  - resolves aliases and reads the exact path from `doc.document`
+- `doc.set(path_name, value)`
+  - resolves aliases, applies schema setter/cast logic, and writes the exact path into `doc.document`
+- `doc.id`
+- `doc.created_at`
+- `doc.updated_at`
+- `doc.timestamps`
 
 Example:
 
 ```js
-const user_document = new User({name: 'john'});
+const doc = user_model.from({
+	name: 'john',
+	profile: {city: 'Miami'}
+});
 
-user_document.set('profile.city', 'Miami');
-await user_document.save();
+const default_slug = user_model.schema.get_default_slug();
 
-const snapshot = user_document.to_json();
+doc.set(default_slug + '.profile.city', 'Orlando');
+const city = doc.get(default_slug + '.profile.city');
+
+await doc.save();
 ```
+
+Direct document access:
+
+```js
+const default_slug = user_model.schema.get_default_slug();
+const payload = doc.document[default_slug];
+```
+
+> **Note:** Direct `doc.document[...]` mutation is still allowed, but it bypasses `doc.set(...)` and assignment-time casting.
 
 ## Related Docs
 

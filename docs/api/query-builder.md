@@ -21,7 +21,7 @@
 ## Execution
 
 ```js
-const result = await User.find({status: 'active'}).sort({created_at: -1}).limit(10).exec();
+const result = await user_model.find({status: 'active'}).sort({created_at: -1}).limit(10).exec();
 ```
 
 Filter objects must be plain JSON-like objects:

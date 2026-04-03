@@ -111,16 +111,16 @@ const user_schema = new JsonBadger.Schema({
 	email: {type: String, required: true, index: {unique: true, name: 'idx_users_email_unique'}}
 });
 
-export const UserModel = connection.model({name: 'User', schema: user_schema, table_name: 'users'});
+export const user_model = connection.model({name: 'User', schema: user_schema, table_name: 'users'});
 ```
 
 `controllers/user-controller.js`
 
 ```js
-import {UserModel} from '../models/user-model.js';
+import {user_model} from '../models/user-model.js';
 
 export async function get_users(req, res) {
-	const users = await UserModel.find({}).exec();
+	const users = await user_model.find({}).exec();
 	return res.json(users);
 }
 ```
@@ -144,4 +144,3 @@ What to expect:
 - `find(...).exec()` returns document instances
 - `find_one(...).exec()` returns one document instance or `null`
 - `save()`, `update_one(...)`, and `delete_one(...)` return document instances
-- `doc.to_json()` and `doc.$serialize()` return plain-object snapshots with top-level base fields

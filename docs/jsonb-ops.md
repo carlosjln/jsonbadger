@@ -4,14 +4,20 @@ This document describes the current JSONB update flow.
 
 ## Example
 
+This page describes the internal JSONB operator layer after `Model.update_one(...)` input has already been normalized.
+
 ```js
-await User.update_one({id: '1'}, {
-	updated_at: new Date(),
+const payload = {
 	$unset: ['profile.address'],
 	$set: {
 		'profile.city': 'Santiago',
 		'profile.tags': ['vip']
 	}
+};
+
+const jsonb_ops = JsonbOps.from(payload, {
+	column_name: '"data"',
+	coalesce: true
 });
 ```
 
@@ -27,7 +33,7 @@ Runtime flow:
 
 ## Current Contract
 
-`JsonbOps.from(...)` accepts operator-style input:
+`JsonbOps.from(...)` accepts the internal operator-style JSONB contract:
 
 ```js
 const jsonb_ops = JsonbOps.from(payload, {column_name: '"data"', coalesce: true});
@@ -52,11 +58,19 @@ Rules:
 
 ## Update Shapes
 
-The SQL-side contract is operator-style:
+The internal JSONB contract is operator-style:
 1. `$replace_roots`: plain object payload replacement.
 2. `$unset`: array of dot paths.
 3. `$set`: map of dot path -> value.
 4. Any top-level non-`$` key is treated as implicit `$set`.
+
+The public `Model.update_one(...)` API is different:
+1. `$set`
+2. `$insert`
+3. `$set_lax`
+4. row-level `updated_at` at the root when provided explicitly
+
+`src/model/operations/update-one.js` is the boundary that adapts the public update API and tracker deltas into the internal JSONB operator contract above.
 
 Tracked document updates come from `DeltaTracker` as:
 
@@ -64,7 +78,7 @@ Tracked document updates come from `DeltaTracker` as:
 {replace_roots: {...}, set: {...}, unset: [...]}
 ```
 
-When `track: ['data']` is used, tracked paths are prefixed like `data.profile.city`. The orchestrator boundary in `src/model/operations/update-one.js` strips that tracked root and maps the delta into operator-style input before calling `JsonbOps.from(...)`.
+When a model tracks slug roots, tracked paths are prefixed with that slug root. For example, when the default slug is still `data`, tracked paths look like `data.profile.city`. The orchestrator boundary in `src/model/operations/update-one.js` strips the tracked root and maps the delta into operator-style input before calling `JsonbOps.from(...)`.
 
 ## Interaction Model
 

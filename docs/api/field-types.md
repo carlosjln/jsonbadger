@@ -275,7 +275,7 @@ Use the public registry namespace to register or resolve field types.
 ### `JsonBadger.field_type.register(name, type_constructor, aliases?)`
 
 ```js
-JsonBadger.field_type.register('Money', MoneyFieldType, ['money']);
+JsonBadger.field_type.register('Money', money_field_type, ['money']);
 ```
 
 Registers a canonical name and optional aliases.
@@ -295,19 +295,19 @@ Custom field types are registry-based.
 Register the type first, then use the registered name or alias in schema definitions.
 
 ```js
-class MoneyFieldType {
+class money_field_type {
 	constructor(path, options) {
 		this.path = path;
 		this.options = options || {};
 		this.instance = 'Money';
 	}
 
-	validate() {
+	validate(value, context) {
 		return;
 	}
 }
 
-JsonBadger.field_type.register('Money', MoneyFieldType, ['money']);
+JsonBadger.field_type.register('Money', money_field_type, ['money']);
 ```
 
 ```js
@@ -317,7 +317,7 @@ const schema = new Schema({
 });
 ```
 
-Custom field types should follow the same runtime shape as built-in field types. In practice, the constructor is expected to expose field-type behavior such as:
+Custom field types should follow the same runtime shape as built-in field types. At minimum, the constructed instance should expose:
 
 1. `path`
 2. `options`

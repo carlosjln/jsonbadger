@@ -6,28 +6,30 @@ Use `DeltaTracker` to watch object changes and export them as one delta snapshot
 
 ```js
 const tracker = DeltaTracker({
-	data: {
+	payload: {
 		profile: {
 			name: 'John'
 		}
 	}
 }, {
-	track: ['data']
+	track: ['payload']
 });
 
-tracker.data.profile.name = 'Jane';
-delete tracker.data.profile.age;
+tracker.payload.profile.name = 'Jane';
+delete tracker.payload.profile.age;
 
 const delta = tracker.$get_delta();
 
 // {
 //   replace_roots: {},
-//   set: {'data.profile.name': 'Jane'},
-//   unset: ['data.profile.age']
+//   set: {'payload.profile.name': 'Jane'},
+//   unset: ['payload.profile.age']
 // }
 ```
 
-> **Note:** When you use `track: ['data']`, emitted paths stay rooted at `data.*`. Downstream code decides whether to keep or strip that root at the handoff boundary.
+> **Note:** When you use `track: ['payload']`, emitted paths stay rooted at `payload.*`. Downstream code decides whether to keep or strip that root at the handoff boundary.
+
+> **Note:** `payload` is only an example tracked root here. In model/runtime code, the tracked roots come from the configured slug list.
 
 ## What It Does
 
@@ -67,7 +69,7 @@ Build one delta from plain input against an empty baseline.
 
 ```js
 const delta = DeltaTracker.from({
-	data: {
+	payload: {
 		profile: {
 			name: 'Jane'
 		}

@@ -78,19 +78,21 @@ Schema
    +--> compile schema definition
    +--> build introspection paths
    +--> normalize inline index declarations
+   +--> normalize slug options
+   +--> configure validators by slug bucket
    +--> register schema instance methods via Schema.method(...)
    +--> store:
-         - $compiled_schema
          - paths
          - indexes
          - options
          - methods
+         - aliases
 ```
 
 Important:
 
-- schema runtime methods are registered on the `schema_instance`
-- those methods are later installed on document instances for model constructors using that schema
+- slug ownership belongs to `Schema`
+- schema methods are later installed on compiled model constructors
 
 ## 5. Model Registration Flow
 
@@ -107,22 +109,44 @@ Connection.model(...)
    +--> derive table_name from name when omitted
    +--> return existing model when schema/options match
    +--> throw ModelOverwriteError on conflicting redefinition
-   +--> build model constructor/runtime
+   +--> build compiled model constructor/runtime
 ```
 
-Model constructor owns:
+Compiled model owns:
 
-- `model_name`
-- `schema_instance`
-- `model_options`
+- `schema`
+- `options`
 - `connection`
+- `state`
 
 Document runtime exposes:
 
-- built-in instance methods like `validate`, `get`, `set`, `save`, `$serialize`, `to_json`, and `delete().exec()`
-- schema-defined instance methods copied from `schema_instance.methods`
+- built-in instance methods like `get`, `set`, `save`, `insert`, and `update`
+- schema-defined instance methods copied from `schema.methods`
 
-## 6. Read Query Flow
+## 6. Construction Flow
+
+```text
+User
+   |
+   +--> Model.from(input)
+   |     |
+   |     +--> normalize external payload input
+   |     +--> route keys into default slug / extra slugs
+   |     +--> schema.validate(document)
+   |     +--> new Model(document)
+   |
+   +--> Model.hydrate(row)
+         |
+         +--> normalize row-like input
+         +--> read schema.get_slugs() from row roots
+         +--> schema.validate(document)
+         +--> new Model(document)
+         +--> instance.is_new = false
+         +--> tracker rebase
+```
+
+## 7. Read Query Flow
 
 ```text
 User
@@ -155,29 +179,29 @@ Hydration path for document-returning reads:
 query row
    |
    v
-Model.create_document_from_row(...)
-   |
-   v
-document runtime layer
+Model.hydrate(...)
    |
    v
 document instance
 ```
 
-## 7. Write Flow
+## 8. Write Flow
 
 ```text
 User
    |
-   +--> new Model(...).save()
+   +--> Model.from(...).save()
    |     |
-   |     +--> document runtime layer
+   |     +--> Model.insert_one(...)
+   |     +--> exec_insert_one(...)
    |     +--> sql_runner(..., Model.connection)
    |
-   +--> Model.update_one(...)
+   +--> hydrated_doc.set(...).save()
    |     |
-   |     +--> update compiler
-   |     +--> where_compiler(...)
+   |     +--> schema.validate(document)
+   |     +--> build tracker delta
+   |     +--> Model.update_one(...)
+   |     +--> exec_update_one(...)
    |     +--> sql_runner(..., Model.connection)
    |
    +--> Model.delete_one(...)
@@ -187,7 +211,7 @@ User
          +--> sql_runner(..., Model.connection)
 ```
 
-## 8. Migration And Index Flow
+## 9. Migration And Index Flow
 
 ```text
 App startup / bootstrap
@@ -198,23 +222,23 @@ Model.ensure_table()
    +--> table migration helper
    +--> execute through explicit Connection
 
-Model.ensure_index()
+Model.ensure_indexes()
    |
    +--> resolve schema indexes
    +--> index migration helper
    +--> execute through explicit Connection
 
-Model.ensure_schema()
+Model.ensure_model()
    |
    +--> ensure table
-   +--> ensure each normalized schema index
+   +--> ensure schema indexes when auto_index is enabled
    +--> execute through explicit Connection
 ```
 
 Important:
 
 - run `ensure_*` helpers during startup/bootstrap
-- normal runtime read/write operations should not provision tables or indexes implicitly
+- normal runtime read/write operations do not provision tables or indexes implicitly
 
 ## Ownership Summary
 
@@ -225,10 +249,10 @@ Connection
   +--> owns one capability snapshot
   +--> owns one model registry
   |
-  +--> model constructors are created through Connection.model(...)
+  +--> compiled models are created through Connection.model(...)
   |     and execute through their owning Connection
   |
-  +--> schema_instance owns schema paths, indexes, options, and schema-defined methods
+  +--> Schema owns paths, indexes, slug ownership, options, and schema-defined methods
   |
   +--> document instances receive built-in runtime methods plus schema-defined methods
   |
@@ -239,19 +263,3 @@ Important:
 
 - there is no architectural singleton underneath the public API
 - any future root-level convenience must be layered on top, not treated as core runtime state
-
-## Future Extension Point
-
-If a future feature needs:
-
-- root `JsonBadger.disconnect()`
-- global connection reuse
-- multiple tracked connections
-
-then add a real registry on top of `Connection`.
-
-Do not reintroduce:
-
-- ambient current connection state
-- hidden singleton execution lookup
-- root `model(...)` as the primary ownership path

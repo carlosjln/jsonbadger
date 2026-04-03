@@ -6,6 +6,8 @@
 - [Constructor](#constructor)
 - [Ownership Boundary](#ownership-boundary)
 - [Core Methods](#core-methods)
+- [Slug Access](#slug-access)
+- [Casting and Validation](#casting-and-validation)
 - [create_index](#create_index)
 - [method](#method)
 - [Path-level Index Sugar](#path-level-index-sugar)
@@ -26,16 +28,9 @@ It is the right place for:
 2. Validation and path introspection
 3. Schema-declared indexes
 4. Schema-level document methods
+5. Slug ownership and validator domains
 
-It is not the place where table/storage configuration is chosen. That belongs to the owning model registration.
-
-Use `Schema` to describe the document contract, then use `connection.model(...)` to decide how that schema is persisted.
-
-In practice, `Schema` owns:
-
-1. Document structure
-2. Path introspection
-3. Index declarations
+Use `Schema` to define document structure and behavior. Specify table names, connection details, and other storage options later when you register the model through `connection.model(...)`.
 
 `definition` must be a plain JSON-like object:
 - use object literals for nested schema branches
@@ -46,7 +41,10 @@ In practice, `Schema` owns:
 
 ## Core Methods
 
-- `validate(payload)`
+- `validate(document)`
+- `validate_base_fields(document)`
+- `cast(document)`
+- `conform(payload)`
 - `get_path(path)`
 - `get_path_type(path)`
 - `is_array_root(path)`
@@ -57,6 +55,85 @@ In practice, `Schema` owns:
 Base-field notes:
 - `id`, `created_at`, and `updated_at` exist in schema/runtime introspection
 - if user schema declares those base fields, user definitions are preserved
+- `validate(document)` validates the full document envelope, not just the default slug
+- when a schema registers extra root slugs through `schema.options.slugs`, validation fans out across those document roots
+
+## Slug Access
+
+Read slug ownership directly from the schema:
+
+```js
+const default_slug = schema.get_default_slug();
+const extra_slugs = schema.get_extra_slugs();
+const all_slugs = schema.get_slugs();
+```
+
+Rules:
+- `get_default_slug()` returns the catch-all payload root
+- `get_extra_slugs()` returns only explicitly registered sibling roots
+- `get_slugs()` returns `[default_slug, ...extra_slugs]`
+- duplicate extra slugs are collapsed during schema option normalization
+
+## Casting and Validation
+
+Validate a full document envelope:
+
+```js
+schema.validate({
+	id: '0194f028-579a-7b5b-8107-b9ad31395f43',
+	payload: {
+		name: 'maria'
+	},
+	settings: {
+		theme: 'dark'
+	}
+});
+```
+
+Validate only root base fields:
+
+```js
+schema.validate_base_fields({
+	id: '0194f028-579a-7b5b-8107-b9ad31395f43',
+	created_at: '2026-03-03T08:00:00.000Z',
+	updated_at: '2026-03-03T09:00:00.000Z'
+});
+```
+
+Cast a document envelope without validating or conforming:
+
+```js
+const casted_document = schema.cast({
+	payload: {
+		age: '29'
+	},
+	settings: {
+		count: '7'
+	}
+});
+```
+
+Behavior:
+- `schema.cast(...)` deep-clones the input first
+- casts existing base-field, default-slug, and extra-slug values
+- leaves missing paths untouched
+- does not validate
+- does not conform
+
+Conform one payload object to the schema-owned allowed tree:
+
+```js
+const payload = {
+	name: 'maria',
+	unknown_key: true
+};
+
+schema.conform(payload);
+```
+
+After conforming:
+- known keys remain
+- unknown keys are removed
 
 ## create_index
 
@@ -86,11 +163,13 @@ Rules:
 
 ## method
 
-Install a custom instance method onto documents generated from the schema.
+Install a custom document-instance method onto models generated from the schema.
 
 ```js
-schema.method('to_object', function () {
-	return this.$serialize({transform: false});
+schema.method('full_name', function () {
+	const default_slug = this.constructor.schema.get_default_slug();
+	const payload = this.document[default_slug];
+	return payload.first_name + ' ' + payload.last_name;
 });
 ```
 
@@ -116,4 +195,4 @@ Examples:
 
 Normalization notes:
 - object-form `index` defaults to `btree` unless `using` says otherwise
-- invalid/unsupported inline index option values are normalized permissively
+- invalid or unsupported inline index values are ignored permissively

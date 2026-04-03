@@ -14,8 +14,8 @@ Use [`docs/lifecycle.md`](lifecycle.md) when you need the document phase map ins
 - Query operators use the current `$` + `snake_case` naming (for example `$elem_match`, `$has_key`, `$json_path_exists`).
 - This page only includes currently implemented behavior.
 - `Assumes:` notes tell you what earlier setup/data a snippet depends on.
-- Important mechanics: queries run when you call `.exec()` (for example `await User.find({}).exec()`), and direct in-place mutations on nested `doc.data` values may require `doc.mark_modified('path')` after mutating.
-- Operation scope: this page covers `create`, `save`, `find`, `find_one`, `find_by_id`, `count_documents`, `update_one`, `delete_one`, and instance `delete().exec()`. Bulk helpers (`insert_many`, `update_many`, `delete_many`) are not part of the current API surface.
+- Important mechanics: queries run when you call `.exec()` (for example `await User.find({}).exec()`), and direct in-place mutations on `doc.document[...]` bypass `doc.set(...)` and assignment-time casting.
+- Operation scope: this page covers `create`, `save`, `find`, `find_one`, `find_by_id`, `count_documents`, `update_one`, and `delete_one`. Bulk helpers (`insert_many`, `update_many`, `delete_many`) are not part of the current API surface.
 
 Quick jump:
 
@@ -118,7 +118,7 @@ const connection = await JsonBadger.connect(db_uri, options);
 
 Notes:
 - JsonBadger checks native `uuidv7()` support automatically during `connect(...)` and caches the capability result.
-- Run `ensure_table()` / `ensure_schema()` during startup/bootstrap before normal runtime operations.
+- Run `ensure_table()` / `ensure_indexes()` during startup/bootstrap before normal runtime operations, or use `ensure_model()` when you want the combined path.
 
 Teardown example:
 
@@ -228,13 +228,11 @@ Migration helpers (manual/explicit path):
 ```js
 // Option A: run table and indexes explicitly
 await User.ensure_table();
-await User.ensure_index();
+await User.ensure_indexes();
 
-// Option B: run both in one call
-await User.ensure_schema();
+// Option B: run the combined model bootstrap path
+await User.ensure_model();
 ```
-
-> **Note:** Run these helpers during app startup/bootstrap. Normal runtime reads and writes should assume setup already happened.
 
 ## Built-in FieldType Examples
 
@@ -277,10 +275,9 @@ Quick FieldType reference:
 | `code_or_label` | `Union<String, Number>` | `{ type: 'Union', of: [String, Number] }` |
 
 Edge cases and practical notes:
-- In-place changes to `Mixed` (`{}`) values and `Date` objects do not mark the path dirty automatically; call `doc.mark_modified('path')` after mutating them.
+- In-place changes to nested values under `doc.document[...]` bypass `doc.set(...)`; prefer `doc.set(...)` when you want assignment-time casting and setter logic.
 - Arrays default to `[]`; set `default: undefined` to disable the implicit empty-array default.
 - For `Map`-like paths, prefer `document.set('handles.github', 'name')` so casting and dirty tracking run.
-- Serialization applies getters by default; use `doc.$serialize({ getters: false })` or `doc.to_json({ getters: false })` to bypass them.
 
 ## Create and Save Documents
 
@@ -288,7 +285,7 @@ Assumes:
 - `User` is defined from the schema/model section above.
 
 ```js
-const user_doc = new User({
+const user_doc = User.from({
 	name: 'john',
 	age: 30,
 	status: 'active',
@@ -307,13 +304,12 @@ const user_doc = new User({
 	}
 });
 
-await user_doc.validate();
 const saved_user = await user_doc.save();
 ```
 
 Returns: `saved_user` is a `User` document instance.  
-Snapshot shape: `saved_user.to_json()` -> `{ id, name, age, status, tags, profile, orders, payload, created_at, updated_at }`.  
-Runtime note: `user_doc.document.data` remains the raw tracked payload object.
+Raw document shape: `saved_user.document` -> `{ id, data, created_at, updated_at }` when the default slug is still `data`.  
+Runtime note: read the default slug through `saved_user.document[User.schema.get_default_slug()]`.
 
 Static create and id lookup:
 
@@ -336,7 +332,7 @@ const imported_user = User.from({
 });
 ```
 
-`User.from(...)` extracts root `id`, `created_at`, and `updated_at` into base fields and treats everything else as payload, including a root `data` key. It does not interpret payload input as a persisted row envelope.
+`User.from(...)` extracts root `id`, `created_at`, and `updated_at` into base fields and treats every other non-base root key as default-slug payload unless that root key is registered in `schema.options.slugs`. It does not interpret payload input as a persisted row envelope.
 
 Set base fields after construction when needed:
 
@@ -364,7 +360,7 @@ const hydrated_user = User.hydrate({
 });
 ```
 
-`User.hydrate(...)` is the row-like path. When `data` is present on the outer object, it becomes the payload source.
+`User.hydrate(...)` is the row-like path. It reads the payload from the configured default slug key on the outer object and ignores unregistered extra root slugs.
 
 Timestamp helper examples on create:
 
@@ -386,7 +382,7 @@ Validation failure pattern (`validation_error`):
 
 ```js
 try {
-	const invalid_user = new User({
+	const invalid_user = User.from({
 		name: 'bad_input',
 		age: -1 // violates `min: 0` from the schema example
 	});
@@ -404,7 +400,7 @@ try {
 Constraint/query failure pattern (`query_error`):
 
 Assumes:
-- You created a unique index and applied it (for example via `ensure_schema()`).
+- You created a unique index and applied it (for example via `ensure_table()` + `ensure_indexes()` or `ensure_model()`).
 
 ```js
 const unique_user_schema = new JsonBadger.Schema({
@@ -422,7 +418,8 @@ const UniqueUser = connection.model({
 	schema: unique_user_schema,
 	table_name: 'unique_users'
 });
-await UniqueUser.ensure_schema();
+await UniqueUser.ensure_table();
+await UniqueUser.ensure_indexes();
 
 await new UniqueUser({email: 'john@example.com'}).save();
 
@@ -459,7 +456,7 @@ Returns:
 - `found_user`: `User | null`
 - `by_id_user`: `User | null`
 - `adult_count`: `number`
-- Snapshot example: `all_users[0]?.to_json()` -> `{ id, name: 'john', ..., created_at, updated_at }`
+- Snapshot example: `all_users[0]?.document` -> `{ id, data, created_at, updated_at }` when the default slug is still `data`
 
 Query builder chaining:
 
@@ -648,7 +645,7 @@ const updated_user = await User.update_one(
 ```
 
 Returns: `updated_user` is `User | null`.  
-Snapshot shape: `updated_user?.to_json()` -> `{ id, ..., created_at, updated_at }`.
+Snapshot shape: `updated_user?.document` -> `{ id, data, created_at, updated_at }` when the default slug is still `data`.
 
 `$insert` (maps to `jsonb_insert(...)`) with numeric array index paths:
 
@@ -760,17 +757,7 @@ const deleted_user = await User.delete_one({name: 'john'});
 ```
 
 Returns: `deleted_user` is `User | null`.  
-Snapshot shape: `deleted_user?.to_json()` -> `{ id, ..., created_at, updated_at }`.
-
-Instance delete flow with `.exec()`:
-
-```js
-const doc = await User.find_one({name: 'john'}).exec();
-
-if(doc) {
-	await doc.delete().exec();
-}
-```
+Snapshot shape: `deleted_user?.document` -> `{ id, data, created_at, updated_at }` when the default slug is still `data`.
 
 No match (or missing table) returns `null`:
 
@@ -783,9 +770,9 @@ if(maybe_deleted === null) {
 
 Returns: `null` when no row matches (or when the table does not exist yet).
 
-## Runtime Document Methods (get/set, dirty tracking, serialization)
+## Runtime Document Methods (get/set and direct document access)
 
-Runtime getters/setters and dirty tracking:
+Runtime getters/setters:
 
 Assumes:
 - `User` is defined from the schema/model example and includes the `name` getter configuration shown there.
@@ -793,30 +780,24 @@ Assumes:
 
 
 ```js
-const doc = new User({
+const doc = User.from({
 	name: 'jane',
 	status: 'active',
 	payload: {count: 1},
 	profile: {city: 'Miami'}
 });
 
-// normal path set/get
+const default_slug = User.schema.get_default_slug();
 
-doc.set('name', '  jane_doe  ');
-const upper_name = doc.get('name');
+doc.set(default_slug + '.name', '  jane_doe  ');
+const user_name = doc.get(default_slug + '.name');
 
-doc.set('profile.city', 'Orlando');
-const city = doc.get('profile.city');
+doc.set(default_slug + '.profile.city', 'Orlando');
+const city = doc.get(default_slug + '.profile.city');
 
-// dirty tracking
-const before_dirty = doc.is_modified('payload');
-doc.document.data.payload.count += 1;
-if(!doc.is_modified('payload')) {
-	doc.mark_modified('payload');
-}
-const after_dirty = doc.is_modified('payload');
-
-doc.clear_modified();
+// raw document access still works
+doc.document[default_slug].payload.count += 1;
+const pending_delta = doc.document.$get_delta();
 ```
 
 ### Optional Alias Path Example
@@ -835,42 +816,15 @@ const AliasUser = connection.model({
 	schema: alias_schema,
 	table_name: 'alias_users'
 });
-const alias_doc = new AliasUser({profile: {city: 'Miami'}});
+const alias_doc = AliasUser.from({profile: {city: 'Miami'}});
 
 // alias path -> underlying path
 alias_doc.get('city'); // 'Miami'
 alias_doc.set('city', 'Orlando');
-alias_doc.get('profile.city'); // 'Orlando'
+alias_doc.get('data.profile.city'); // 'Orlando' when the default slug is still `data`
 ```
 
 Aliases are schema-defined alternate path names for `doc.get(...)` and `doc.set(...)`. They are collected when the schema is created, while canonical schema paths remain the persisted keys.
-
-Serialization helpers (`$serialize`, `to_json`) apply getters by default:
-
-```js
-const as_object = doc.$serialize();
-const as_object_without_getters = doc.$serialize({getters: false});
-const as_json_ready = doc.to_json();
-```
-
-Custom schema methods can wrap `$serialize(...)`:
-
-```js
-const user_schema = new JsonBadger.Schema({
-	name: {type: String, get: function (value) {return value.toUpperCase();}}
-}, {
-	serialize: {
-		transform: function (doc, ret) {
-			ret.kind = 'user';
-			return ret;
-		}
-	}
-});
-
-user_schema.method('to_object', function () {
-	return this.$serialize({transform: false});
-});
-```
 
 Immutable behavior (`immutable: true`) after first persist:
 
@@ -884,20 +838,19 @@ await doc.save();
 ## Lifecycle Quick Reference
 
 ```js
-const doc = new User({name: 'john'});
-doc.set('profile.city', 'Miami');
+const doc = User.from({name: 'john'});
+doc.set('data.profile.city', 'Miami');
 await doc.save();
 
 const found = await User.find_by_id(doc.id).exec();
-const snapshot = found.to_json();
+const snapshot = found.document;
 ```
 
 Phase summary:
-- `new User(...)` -> constructed
+- `User.from(...)` -> constructed
 - first runtime interaction (`set/get/save/delete`) -> runtime-ready
 - `save()` on new doc -> persisted
 - `find_one(...).exec()` / `find_by_id(...).exec()` -> queried/hydrated
-- `$serialize()` / `to_json()` -> serialized snapshot
 
 For the full lifecycle contract, see [`docs/lifecycle.md`](lifecycle.md).
 

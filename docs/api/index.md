@@ -31,3 +31,4 @@ Default export (`JsonBadger`) includes the same plus:
 - [`model.md`](model.md)
 - [`query-builder.md`](query-builder.md)
 - [`field-types.md`](field-types.md)
+- [`../query-translation.md`](../query-translation.md)

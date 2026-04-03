@@ -1,189 +1,145 @@
 # JsonBadger Document Lifecycle
 
-This page explains what happens to a document instance from construction to serialization.
+This page explains what happens to a document instance from construction to persistence and hydration.
 
 Use this page when you need to answer:
 - when `is_new` changes
 - when base fields are populated
-- when dirty paths are tracked or cleared
-- what shape `$serialize()` / `to_json()` return
+- how `from(...)` and `hydrate(...)` differ
+- what `get(...)`, `set(...)`, and direct `document` mutation actually do
 
 ## Lifecycle Overview
 
 ```js
-const doc = new User({name: 'john'});
+const doc = User.from({
+	name: 'john'
+});
 
-doc.set('profile.city', 'Miami');
+doc.set('data.profile.city', 'Miami');
 await doc.save();
 
 const found = await User.find_one({id: doc.id}).exec();
-const snapshot = found.to_json();
+const snapshot = found.document;
 ```
 
 > **Note:** Query builders are not thenables. Run them with `.exec()`.
 
 Phases:
-- `constructed`: `new Model(payload)`
-- `runtime-ready`: first runtime interaction initializes internal state
-- `validated`: `doc.validate()`
-- `persisted`: successful `doc.save()`
-- `queried/hydrated`: `find(...)`, `find_one(...)`, `find_by_id(...)`, `update_one(...)`, `delete_one(...)`
-- `mutated`: `set(...)`, `mark_modified(...)`, in-place mutation + manual `mark_modified(...)`
-- `serialized`: `$serialize()`, `to_json()`, `toJSON()`
+- `constructed`: `Model.from(...)`
+- `hydrated`: `Model.hydrate(...)` or document-returning query results
+- `persisted`: successful `doc.save()` on a new document
+- `mutated`: `set(...)` or direct `document` mutation
 
 ## Transition Table
 
 | Trigger | From | To | What changes |
 | --- | --- | --- | --- |
-| `new Model(payload)` | none | constructed | `doc.data` gets the payload |
-| first `set/get/is_modified/mark_modified/save/delete` path | constructed | runtime-ready | runtime state is created, base fields are pulled out of payload if present |
-| `doc.validate()` | constructed/runtime-ready | validated | payload is cast and validated through schema |
-| `doc.save()` on new document | validated/runtime-ready | persisted | row is inserted, `is_new` becomes `false`, base fields are hydrated, dirty paths are cleared |
-| `doc.save()` on existing document | mutated/persisted | persisted | modified payload paths are sent through `update_one(...)`, returned row re-hydrates document state |
-| `find(...).exec()` / `find_one(...).exec()` / `find_by_id(...).exec()` | none | queried/hydrated | rows become document instances with top-level base fields |
-| `update_one(...)` / `delete_one(...)` | none | queried/hydrated | returned row becomes a document instance, or `null` |
-| `$serialize()` / `to_json()` | any document phase | serialized | returns plain object snapshot with base fields + payload |
+| `Model.from(input)` | none | constructed | builds a new validated document envelope |
+| `Model.hydrate(row)` | none | hydrated | builds a persisted validated document envelope from row-like input |
+| `doc.save()` on new document | constructed | persisted | inserts one row, sets `is_new = false`, and rebases tracked changes |
+| `doc.save()` on existing document | mutated/persisted | persisted | validates current state, updates one row, refreshes `updated_at`, and rebases tracked changes |
+| `find(...).exec()` / `find_one(...).exec()` / `find_by_id(...).exec()` | none | hydrated | row results become hydrated document instances |
+| `update_one(...)` / `delete_one(...)` | none | hydrated | returned row becomes a hydrated document instance, or `null` |
 
 ## Constructed
 
 ```js
-const doc = new User({
+const doc = User.from({
 	name: 'john',
 	created_at: '2026-03-03T08:00:00.000Z'
 });
 ```
 
 At construction time:
-- `doc.data` gets the input payload
-- runtime state is not created yet
-- `doc.is_new` becomes explicit on the first runtime-ready transition
+- `doc.is_new === true`
+- base fields are kept at the document root
+- payload values are stored under the schema-owned default slug
+- registered extra slugs stay as sibling document roots
 
-> **Note:** If the constructor payload includes `id`, `created_at`, or `updated_at`, those values are moved into runtime base fields the first time runtime state initializes.
-
-## Runtime-Ready
-
-```js
-doc.set('profile.city', 'Miami');
-```
-
-The first runtime interaction initializes:
-- `doc.is_new` when not already set
-- dirty-path tracking
-- base-field storage for `id`, `created_at`, `updated_at`
-
-This happens lazily today. That is intentional in the current runtime.
-
-## Validated
+## Hydrated
 
 ```js
-doc.validate();
+const doc = User.hydrate({
+	id: '7',
+	data: {
+		name: 'john'
+	},
+	created_at: '2026-03-03T08:00:00.000Z',
+	updated_at: '2026-03-03T09:00:00.000Z'
+});
 ```
 
-Validation:
-- runs schema casting and validators
-- writes the validated payload back into `doc.data`
-- does not persist anything by itself
+Hydration rules:
+- `doc.is_new === false`
+- the outer object is treated as the persisted row envelope
+- the payload is read from the configured default slug key
+- registered extra slugs are read from sibling roots
+- unregistered extra root slugs are ignored
+- dotted payload keys are not expanded during hydration
 
 ## Persisted
 
 Create path:
 
 ```js
-const created = await new User({name: 'john'}).save();
+const created = await User.from({name: 'john'}).save();
 ```
 
 Update path:
 
 ```js
 const found = await User.find_one({name: 'john'}).exec();
-found.set('profile.city', 'Orlando');
-await found.save();
+
+if(found) {
+	found.set('data.profile.city', 'Orlando');
+	await found.save();
+}
 ```
 
 After a successful save:
 - `doc.is_new === false`
-- `doc.id`, `doc.created_at`, and `doc.updated_at` reflect the returned row
-- dirty paths are cleared
+- `doc.id`, `doc.created_at`, and `doc.updated_at` reflect persisted row values
+- tracked changes are rebased
 
-Timestamp helper behavior:
-- create keeps caller-provided `created_at` / `updated_at`, otherwise fills them
-- update keeps caller-provided `updated_at`, otherwise refreshes it
-- update does not auto-change `created_at`
+Timestamp behavior:
+- inserts keep caller-provided `created_at` / `updated_at`, otherwise fill them
+- updates keep caller-provided `updated_at`, otherwise refresh it
+- updates do not auto-change `created_at`
 
-## Queried / Hydrated
-
-```js
-const doc = await User.find_by_id('1').exec();
-```
-
-Hydration rules:
-- query rows become document instances
-- row columns map to top-level base fields
-- JSON payload stays in `doc.data`
-- `doc.is_new === false`
-
-Returned values:
-- `find(...).exec()` -> `Model[]`
-- `find_one(...).exec()` -> `Model | null`
-- `find_by_id(...).exec()` -> `Model | null`
-- `update_one(...)` -> `Model | null`
-- `delete_one(...)` -> `Model | null`
-- `doc.delete().exec()` -> `Model | null`
-
-## Mutated / Dirty
+## Mutated
 
 ```js
-doc.set('profile.city', 'Miami');
-doc.is_modified('profile.city'); // true
+const doc = User.from({
+	name: 'john'
+});
 
-doc.document.data.payload.flags.push('vip');
-doc.mark_modified('payload.flags');
+doc.set('data.profile.city', 'Miami');
+doc.document.data.profile.city = 'Orlando';
+
+const pending_delta = doc.document.$get_delta();
 ```
 
-Dirty tracking rules:
-- `set(...)` marks the written path as modified
-- in-place mutations need `mark_modified(...)`
-- `clear_modified()` clears all dirty paths
+Mutation rules:
+- `set(...)` resolves aliases, applies schema setter/cast logic, and writes the exact path
+- direct `doc.document[...]` mutation stays allowed
+- direct mutation bypasses `set(...)` and assignment-time casting
+- later `schema.validate(...)` and persistence still enforce the contract
 
 Base-field write rules:
-- `id` is read-only
-- `created_at` and `updated_at` only allow top-level assignment
+- `id` is read-only through `set(...)`
+- `created_at` and `updated_at` only allow top-level assignment through `set(...)`
 - dotted timestamp writes are rejected
-
-## Serialized
-
-```js
-const as_object = doc.$serialize();
-const as_json = doc.to_json();
-```
-
-Serialization returns:
-
-```js
-{
-	id: '1',
-	name: 'john',
-	created_at: '2026-03-03T08:00:00.000Z',
-	updated_at: '2026-03-03T09:00:00.000Z'
-}
-```
-
-Serialization rules:
-- returns a plain object snapshot
-- applies getters by default
-- can run schema or call-level transforms
-- keeps base fields at the top level
 
 ## FAQ
 
-### Why does `doc.data` not include `id`?
+### Why is `id` not inside the default slug?
 
-Because `id`, `created_at`, and `updated_at` are row-level base fields, not JSON payload fields.
+Because `id`, `created_at`, and `updated_at` are row-level base fields, not payload fields.
 
 ### Why do I need `.exec()` on `find_one()` and `find_by_id()`?
 
 Because those methods return a query builder, not a promise.
 
-### Why did an in-place nested mutation not save?
+### Why did a direct nested mutation skip casting?
 
-Because JsonBadger cannot see that mutation automatically. Call `mark_modified('path')` after mutating nested `Mixed`, object, array, or `Date` values in place.
+Because direct `doc.document[...]` mutation is the lower-level escape hatch. Use `doc.set(...)` when you want schema-aware setter and cast behavior.
