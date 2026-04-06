@@ -12,7 +12,7 @@ describe('Schema construction lifecycle', function () {
 		expect(schema_definition).toEqual({
 			name: String
 		});
-		expect(Object.keys(schema_instance.paths)).toEqual(
+		expect(Object.keys(schema_instance.$field_types)).toEqual(
 			expect.arrayContaining(['id', 'created_at', 'updated_at', 'name'])
 		);
 	});

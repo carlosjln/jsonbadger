@@ -800,6 +800,18 @@ doc.document[default_slug].payload.count += 1;
 const pending_delta = doc.document.$get_delta();
 ```
 
+Bind live document fields onto another object:
+
+```js
+const user_entity = {};
+doc.bind_document(user_entity);
+
+user_entity.name; // reads from the default slug
+user_entity.profile.city = 'Tampa'; // live nested default-slug object
+```
+
+> **Note:** `bind_document(...)` flattens default-slug root fields onto the target root, but keeps extra slugs nested. It also throws if the target already owns one of the field names it needs to bind.
+
 ### Optional Alias Path Example
 
 Use aliases only when you need an alternate path name (for example, a short path shortcut for a nested field).

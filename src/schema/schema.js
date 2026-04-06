@@ -28,19 +28,19 @@ function Schema(schema_definition = {}, schema_options = {}) {
 	const $options = build_schema_options(schema_options);
 	const {path_introspection, field_types} = prepare_schema_state($schema);
 
+	this.$field_registry = default_field_type_registry;
 	this.$path_introspection = path_introspection;
 	this.$field_types = field_types;
+
 	this.indexes = [];
 	this.options = $options;
 	this.strict = this.options.strict !== false;
 	this.id_strategy = this.options.id_strategy;
 	this.auto_index = this.options.auto_index;
-	this.paths = this.$field_types;
 	this.methods = Object.create(null);
 	this.validators = Object.create(null);
-	this.aliases = collect_aliases(this.$field_types);
-	this.$field_registry = default_field_type_registry;
-	this.$conform_tree = build_allowed_tree(this.$field_types);
+	this.aliases = collect_aliases(field_types);
+	this.$conform_tree = build_allowed_tree(field_types);
 
 	assert_id_strategy(this.id_strategy);
 	assert_condition(typeof this.auto_index === 'boolean', 'auto_index must be a boolean');
@@ -68,7 +68,7 @@ Schema.prototype.configure_validators = function () {
 	};
 
 	// Get all definitions in one pass
-	const slug_definitions = extract_slug_definitions(this.paths, default_slug, registered_slug_keys);
+	const slug_definitions = extract_slug_definitions(this.$field_types, default_slug, registered_slug_keys);
 
 	// Wire up the validators dynamically
 	for(const [slug_key, field_types] of Object.entries(slug_definitions)) {
@@ -203,7 +203,7 @@ Schema.prototype.cast = function (document) {
 	const default_slug = this.get_default_slug();
 	const extra_slugs = new Set(this.get_extra_slugs());
 
-	for(const [path_name, field_type] of Object.entries(this.paths)) {
+	for(const [path_name, field_type] of Object.entries(this.$field_types)) {
 		const path_segments = path_name.split('.');
 		const root_key = path_segments[0];
 		let target_root = next_document;

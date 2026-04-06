@@ -103,7 +103,8 @@ Model.prototype.get = function (path_name) {
  * @throws {QueryError}
  */
 Model.prototype.set = function (path_name, next_value) {
-	const aliases = this.constructor.schema.aliases;
+	const schema = this.constructor.schema;
+	const aliases = schema.aliases;
 	const alias_entry = aliases[path_name] || {};
 	const resolved_path = alias_entry.path ?? path_name;
 	const base_field_root_key = resolved_path.split('.')[0];
@@ -125,7 +126,8 @@ Model.prototype.set = function (path_name, next_value) {
 		});
 	}
 
-	const field_type = this.constructor.schema.get_path(resolved_path) || null;
+	const field_type_path = resolve_field_type_path(schema, resolved_path);
+	const field_type = schema.get_path(field_type_path) || null;
 	let assigned_value = next_value;
 
 	if(field_type) {
@@ -151,6 +153,75 @@ Model.prototype.set = function (path_name, next_value) {
 	write_nested_path(this.document, path_segments, assigned_value);
 
 	return this;
+};
+
+/**
+ * Bind live document-backed fields onto another target object.
+ *
+ * Default-slug root fields are flattened onto the target root, while
+ * registered extra slugs stay nested at their slug root.
+ *
+ * @param {object} target
+ * @returns {object}
+ */
+Model.prototype.bind_document = function (target) {
+	const schema = this.constructor.schema;
+	const default_slug = schema.get_default_slug();
+	const extra_slugs = schema.get_extra_slugs();
+	const extra_slug_set = new Set(extra_slugs);
+	const seen_root_fields = new Set();
+	const proxied_fields = [...base_field_keys, ...extra_slugs];
+
+	if(is_not_object(target)) {
+		throw new Error('bind_document target must be an object');
+	}
+
+	for(const path_name of Object.keys(schema.$field_types)) {
+		const root_field = split_dot_path(path_name)[0];
+
+		if(base_field_keys.has(root_field) || extra_slug_set.has(root_field) || seen_root_fields.has(root_field)) {
+			continue;
+		}
+
+		seen_root_fields.add(root_field);
+		proxied_fields.push(root_field);
+	}
+
+	for(const field_name of proxied_fields) {
+		if(has_own(target, field_name)) {
+			throw new Error('bind_document field collision: ' + field_name);
+		}
+
+		let get_value;
+		let set_value;
+
+		if(base_field_keys.has(field_name)) {
+			get_value = () => this[field_name] ?? null;
+			set_value = (value) => {
+				this[field_name] = value;
+			};
+		} else if(extra_slug_set.has(field_name)) {
+			get_value = () => this.get(field_name);
+			set_value = (value) => {
+				this.set(field_name, value);
+			};
+		} else {
+			const path_name = default_slug + '.' + field_name;
+			get_value = () => this.get(path_name);
+			set_value = (value) => {
+				this.set(path_name, value);
+			};
+		}
+
+		Object.defineProperty(target, field_name, {
+			enumerable: true,
+			configurable: true,
+			get: get_value,
+			set: set_value
+		});
+	}
+
+	return target;
 };
 
 /*
@@ -411,6 +482,22 @@ function normalize_from_input(model, input_data, options) {
 function normalize_hydrated_input(model, input_data, options) {
 	const document = extract_hydrated_document_fields(model, input_data);
 	return finalize_normalized_document(model, document, options);
+}
+
+// Resolve one explicit document path into the matching schema field path.
+function resolve_field_type_path(schema, resolved_path) {
+	const path_segments = split_dot_path(resolved_path);
+	const root_key = path_segments[0];
+
+	if(base_field_keys.has(root_key) || schema.get_extra_slugs().includes(root_key)) {
+		return resolved_path;
+	}
+
+	if(root_key === schema.get_default_slug()) {
+		return path_segments.slice(1).join('.');
+	}
+
+	return resolved_path;
 }
 
 // Apply strict-mode shaping to one normalized document envelope.

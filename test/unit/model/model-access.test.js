@@ -63,6 +63,7 @@ describe('Model access lifecycle', function () {
 
 	test('set writes explicit-root paths and keeps schema-aware mutation for registered slug fields', function () {
 		const User = create_model({
+			age: Number,
 			settings: {
 				count: Number,
 				theme: {
@@ -83,10 +84,14 @@ describe('Model access lifecycle', function () {
 		});
 
 		const result = user_document
+			.set('payload.age', '41')
 			.set('settings.count', '41')
 			.set('settings.theme', '  dark  ');
 
 		expect(result).toBe(user_document);
+		expect(user_document.document.payload).toEqual({
+			age: 41
+		});
 		expect(user_document.document.settings).toEqual({
 			count: 41,
 			theme: 'dark'

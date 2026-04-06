@@ -239,6 +239,8 @@ Behavior:
   - resolves aliases and reads the exact path from `doc.document`
 - `doc.set(path_name, value)`
   - resolves aliases, applies schema setter/cast logic, and writes the exact path into `doc.document`
+- `doc.bind_document(target)`
+  - binds live forwarding properties onto `target` from the current document instance
 - `doc.id`
 - `doc.created_at`
 - `doc.updated_at`
@@ -259,6 +261,37 @@ const city = doc.get(default_slug + '.profile.city');
 
 await doc.save();
 ```
+
+`doc.bind_document(target)` projects live document-backed fields onto another object, such as a domain entity wrapper.
+
+```js
+const doc = user_model.hydrate({
+	id: '7',
+	payload: {
+		name: 'maria',
+		profile: {city: 'Miami'}
+	},
+	settings: {
+		theme: 'dark'
+	}
+});
+
+const entity = {};
+doc.bind_document(entity);
+
+entity.name; // 'maria'
+entity.profile.city = 'Orlando';
+entity.settings.theme = 'light';
+```
+
+Behavior:
+- returns the same `target`
+- flattens default-slug root fields onto the target root
+- keeps extra slugs nested at their slug root
+- returns live tracked objects, not snapshots
+- throws if `target` already owns a conflicting property name
+
+> **Note:** `bind_document(...)` does not create or require `target.model`. It binds directly to the current document instance. To rebind a different document later, clear or replace the old bound properties first, then call `next_doc.bind_document(target)` again.
 
 Direct document access:
 
