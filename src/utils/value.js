@@ -44,6 +44,12 @@ function is_nan(value) {
 	return Number.isNaN(numeric_value);
 }
 
+/**
+ * Normalizes one value into a finite number, falling back to zero.
+ *
+ * @param {*} value Value to normalize.
+ * @returns {number}
+ */
 function to_number(value) {
 	const number = Number(value || 0);
 	return Number.isFinite(number) ? number : 0;
@@ -53,6 +59,12 @@ function to_int(value) {
 	return Math.floor(Number(value));
 }
 
+/**
+ * Checks whether one value is a valid UUIDv7 string.
+ *
+ * @param {*} value Value to inspect.
+ * @returns {boolean}
+ */
 function is_uuid_v7(value) {
 	if(typeof value !== 'string') {
 		return false;
@@ -104,9 +116,13 @@ function to_iso_timestamp(value) {
  * @param {any} default_value - The fallback value.
  * @returns {any}
  */
-const get_if = (evaluator, value, default_value) => {
-	return evaluator(value) ? value : default_value;
-};
+function get_if(evaluator, value, default_value) {
+	if(evaluator(value)) {
+		return value;
+	}
+
+	return default_value;
+}
 
 export {
 	is_object,

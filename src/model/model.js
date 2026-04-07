@@ -290,6 +290,24 @@ Model.prototype.update = async function () {
 	return this;
 };
 
+Model.prototype.rebase = function (reference) {
+	let doc;
+
+	if(reference instanceof Model) {
+		doc = reference.document;
+	} else if(reference instanceof Document) {
+		doc = reference;
+	} else {
+		throw new Error('rebase reference must be a Model or Document');
+	}
+
+	this.is_new = false;
+	this.document.init(doc);
+	this.document.$rebase_changes();
+
+	return this;
+};
+
 /*
  * CONSTRUCTION
  */

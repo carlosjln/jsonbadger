@@ -241,6 +241,8 @@ Behavior:
   - resolves aliases, applies schema setter/cast logic, and writes the exact path into `doc.document`
 - `doc.bind_document(target)`
   - binds live forwarding properties onto `target` from the current document instance
+- `doc.rebase(reference)`
+  - replaces the current document state from another `Model` or `Document` and clears tracked changes
 - `doc.id`
 - `doc.created_at`
 - `doc.updated_at`
@@ -293,6 +295,49 @@ Behavior:
 
 > **Note:** `bind_document(...)` does not create or require `target.model`. It binds directly to the current document instance. To rebind a different document later, clear or replace the old bound properties first, then call `next_doc.bind_document(target)` again.
 
+`doc.rebase(reference)` is useful when you want to keep the same outer object but adopt a fresh persisted document state.
+
+Scenario A: keep a bound entity wrapper and adopt the saved state.
+
+```js
+const doc = user_model.from({
+	name: 'maria',
+	profile: {city: 'Miami'}
+});
+
+const entity = {};
+doc.bind_document(entity);
+
+entity.profile.city = 'Orlando';
+
+const saved_doc = await doc.save();
+doc.rebase(saved_doc);
+```
+
+Scenario B: refresh the current instance from a newer persisted copy.
+
+```js
+const current_doc = await user_model.find_one({id: user_id}).exec();
+const fresh_doc = await user_model.find_one({id: user_id}).exec();
+
+current_doc.rebase(fresh_doc);
+```
+
+Scenario C: adopt a trusted `Document` returned by a custom persistence path.
+
+```js
+const next_document = custom_save_flow(doc.document);
+doc.rebase(next_document);
+```
+
+Behavior:
+- accepts only a `Model` or `Document` reference
+- sets `doc.is_new = false`
+- replaces the current `doc.document` state
+- clears pending tracker changes after rebasing
+
+> **Note:** Use `Model.hydrate(...)` for plain row-like input. `rebase(...)` is for adopting an already-built `Model` or `Document`.
+
 Direct document access:
 
 ```js
@@ -305,6 +350,7 @@ const payload = doc.document[default_slug];
 ## Related Docs
 
 - [`connection.md`](connection.md)
+- [`document.md`](document.md)
 - [`schema.md`](schema.md)
 - [`query-builder.md`](query-builder.md)
 - [`../lifecycle.md`](../lifecycle.md)
