@@ -397,6 +397,20 @@ Model.prototype.$validate = function (options = {}) {
 	return this;
 };
 
+/**
+ * Apply the full schema lifecycle to the current tracked document state.
+ *
+ * @param {object} [options]
+ * @returns {Model}
+ */
+Model.prototype.$normalize = function (options = {}) {
+	this.$apply_defaults(options);
+	this.$cast(options);
+	this.$validate(options);
+
+	return this;
+};
+
 /*
  * INSTANCE WRITES
  */
