@@ -224,6 +224,107 @@ Model.prototype.bind_document = function (target) {
 	return target;
 };
 
+/**
+ * Apply schema defaults onto the current tracked document state.
+ *
+ * @param {object} [options]
+ * @returns {Model}
+ */
+Model.prototype.$apply_defaults = function (options = {}) {
+	const schema = this.constructor.schema;
+	const document = this.document;
+	const default_slug = schema.get_default_slug();
+	const extra_slug_set = new Set(schema.get_extra_slugs());
+
+	for(const [path_name, field_type] of Object.entries(schema.$field_types)) {
+		const path_segments = split_dot_path(path_name);
+		const root_key = path_segments[0];
+		let target_root = document;
+		let target_segments = path_segments;
+
+		if(!base_field_keys.has(root_key)) {
+			const target_key = extra_slug_set.has(root_key) ? root_key : default_slug;
+			const has_target_root = has_own(document, target_key);
+
+			if(has_target_root && is_not_object(document[target_key])) {
+				continue;
+			}
+
+			if(!has_target_root) {
+				document[target_key] = {};
+			}
+
+			target_root = document[target_key];
+
+			if(target_key === root_key) {
+				target_segments = path_segments.slice(1);
+			}
+		}
+
+		const leaf_key = target_segments[target_segments.length - 1];
+		const depth = target_segments.length - 1;
+
+		let current_object = target_root;
+		let write_index = null;
+		let path_exists = true;
+		let can_write = true;
+
+		for(const [index, segment] of target_segments.entries()) {
+			if(index >= depth) {
+				break;
+			}
+
+			if(!has_own(current_object, segment)) {
+				path_exists = false;
+				write_index = index;
+				break;
+			}
+
+			if(is_not_object(current_object[segment])) {
+				can_write = false;
+				write_index = index;
+				break;
+			}
+
+			current_object = current_object[segment];
+			write_index = index + 1;
+		}
+
+		if(!can_write) {
+			continue;
+		}
+
+		if(path_exists && has_own(current_object, leaf_key)) {
+			continue;
+		}
+
+		const default_value = field_type.resolve_default({
+			...options,
+			path: path_name,
+			mode: 'apply_defaults',
+			document,
+			model: this
+		});
+
+		if(default_value === undefined) {
+			continue;
+		}
+
+		if(write_index === null) {
+			write_index = 0;
+		}
+
+		for(const segment of target_segments.slice(write_index, depth)) {
+			current_object[segment] = {};
+			current_object = current_object[segment];
+		}
+
+		current_object[leaf_key] = deep_clone(default_value);
+	}
+
+	return this;
+};
+
 /*
  * INSTANCE WRITES
  */
