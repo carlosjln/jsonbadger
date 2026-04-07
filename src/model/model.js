@@ -325,6 +325,64 @@ Model.prototype.$apply_defaults = function (options = {}) {
 	return this;
 };
 
+/**
+ * Cast existing schema-backed values on the current tracked document state.
+ *
+ * @param {object} [options]
+ * @returns {Model}
+ */
+Model.prototype.$cast = function (options = {}) {
+	const schema = this.constructor.schema;
+	const document = this.document;
+	const default_slug = schema.get_default_slug();
+	const extra_slug_set = new Set(schema.get_extra_slugs());
+
+	for(const [path_name, field_type] of Object.entries(schema.$field_types)) {
+		const path_segments = split_dot_path(path_name);
+		const root_key = path_segments[0];
+		let target_root = document;
+		let target_segments = path_segments;
+
+		if(!base_field_keys.has(root_key)) {
+			const target_key = extra_slug_set.has(root_key) ? root_key : default_slug;
+			const has_target_root = has_own(document, target_key);
+			const target_value = document[target_key];
+
+			if(!has_target_root || is_not_object(target_value)) {
+				continue;
+			}
+
+			target_root = target_value;
+
+			if(target_key === root_key) {
+				target_segments = path_segments.slice(1);
+			}
+		}
+
+		const path_state = read_nested_path(target_root, target_segments);
+
+		if(!path_state.exists) {
+			continue;
+		}
+
+		const cast_context = {
+			...options,
+			path: path_name,
+			mode: 'cast',
+			document,
+			model: this
+		};
+
+		let casted_value = path_state.value;
+		casted_value = field_type.apply_set(casted_value, cast_context);
+		casted_value = field_type.cast(casted_value, cast_context);
+
+		write_nested_path(target_root, target_segments, casted_value);
+	}
+
+	return this;
+};
+
 /*
  * INSTANCE WRITES
  */
