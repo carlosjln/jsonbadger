@@ -383,6 +383,20 @@ Model.prototype.$cast = function (options = {}) {
 	return this;
 };
 
+/**
+ * Validate the current tracked document state against schema rules.
+ *
+ * @param {object} [options]
+ * @returns {Model}
+ */
+Model.prototype.$validate = function (options = {}) {
+	void options;
+
+	this.constructor.schema.validate(this.document);
+
+	return this;
+};
+
 /*
  * INSTANCE WRITES
  */
