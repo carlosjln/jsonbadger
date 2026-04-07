@@ -600,7 +600,7 @@ function extract_from_document_fields(model, input_data) {
 		};
 	}
 
-	// 2. Convert class instances, Mongoose models, and custom objects into a plain object
+	// 2. Convert class instances, models, and custom objects into a plain object
 	let source = input_data;
 
 	// Its a class or constructor instance of some sort

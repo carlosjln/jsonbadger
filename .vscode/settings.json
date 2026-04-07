@@ -2,9 +2,10 @@
 	"editor.tabSize": 2,
 	"editor.insertSpaces": false,
 	"editor.codeLens": false,
-	"vetur.format.options.useTabs": false,
-	"vetur.format.options.tabSize": 4,
 	"[css]": {
 		"editor.tabSize": 2
 	},
+	"[markdown]": {
+		"editor.wordWrap": "off"
+	}
 }

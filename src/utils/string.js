@@ -1,3 +1,11 @@
+function trim_text(value) {
+	return String(value || '').trim();
+}
+
+function trim_and_lowercase(value) {
+	return trim_text(value).toLowerCase();
+}
+
 /**
  * Converts a singular identifier into a simple plural form.
  *
@@ -35,9 +43,13 @@ function is_vowel(character_value) {
 }
 
 export {
+	trim_text,
+	trim_and_lowercase,
 	pluralize
 };
 
 export default {
+	trim_text,
+	trim_and_lowercase,
 	pluralize
 };

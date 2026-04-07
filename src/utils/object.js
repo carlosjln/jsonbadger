@@ -5,10 +5,13 @@ function has_own(target, key) {
 }
 
 function get_callable(target, ...method_names) {
-	for(const name of method_names) {
-		if(typeof name === 'function') return name;
-		if(typeof target[name] === 'function') return target[name];
+	if(target) {
+		for(const name of method_names) {
+			if(typeof name === 'function') return name;
+			if(typeof target[name] === 'function') return target[name];
+		}
 	}
+
 	return null;
 }
 
@@ -108,57 +111,57 @@ function are_equal(target_a, target_b, memo = new WeakMap()) {
 function deep_clone(value) {
 	const cache = new WeakMap();
 
-	const clone = (_value) => {
-		if(_value === null || typeof _value !== 'object') {
-			return _value;
+	const clone = ($value) => {
+		if($value === null || typeof $value !== 'object') {
+			return $value;
 		}
 
-		if(cache.has(_value)) {
-			return cache.get(_value);
+		if(cache.has($value)) {
+			return cache.get($value);
 		}
 
-		if(_value instanceof Date) {
-			return new Date(_value.getTime());
+		if($value instanceof Date) {
+			return new Date($value.getTime());
 		}
 
-		if(_value instanceof RegExp) {
-			const cloned_regexp = new RegExp(_value.source, _value.flags);
-			cloned_regexp.lastIndex = _value.lastIndex;
+		if($value instanceof RegExp) {
+			const cloned_regexp = new RegExp($value.source, $value.flags);
+			cloned_regexp.lastIndex = $value.lastIndex;
 			return cloned_regexp;
 		}
 
-		if(Buffer.isBuffer(_value)) {
-			return Buffer.from(_value);
+		if(Buffer.isBuffer($value)) {
+			return Buffer.from($value);
 		}
 
-		if(_value instanceof Map) {
+		if($value instanceof Map) {
 			const cloned_map = new Map();
-			cache.set(_value, cloned_map);
+			cache.set($value, cloned_map);
 
-			for(const [map_key, map_value] of _value.entries()) {
+			for(const [map_key, map_value] of $value.entries()) {
 				cloned_map.set(clone(map_key), clone(map_value));
 			}
 
 			return cloned_map;
 		}
 
-		if(_value instanceof Set) {
+		if($value instanceof Set) {
 			const cloned_set = new Set();
-			cache.set(_value, cloned_set);
+			cache.set($value, cloned_set);
 
-			for(const set_value of _value.values()) {
+			for(const set_value of $value.values()) {
 				cloned_set.add(clone(set_value));
 			}
 
 			return cloned_set;
 		}
 
-		if(Array.isArray(_value)) {
+		if(Array.isArray($value)) {
 			const result = [];
-			cache.set(_value, result);
+			cache.set($value, result);
 
-			for(let i = 0; i < _value.length; i++) {
-				result[i] = clone(_value[i]);
+			for(let i = 0; i < $value.length; i++) {
+				result[i] = clone($value[i]);
 			}
 
 			return result;
@@ -168,17 +171,17 @@ function deep_clone(value) {
 		// Native structuredClone flattens custom class instances into plain objects, which corrupts
 		// parser-produced FieldType instances stored inside options (`of_field_type`, union candidates).
 		// Keep non-plain objects by reference here so runtime methods stay intact.
-		if(!is_plain_object(_value)) {
-			return _value;
+		if(!is_plain_object($value)) {
+			return $value;
 		}
 
 		const result = {};
-		const keys = Object.keys(_value);
-		cache.set(_value, result);
+		const keys = Object.keys($value);
+		cache.set($value, result);
 
 		for(let i = 0; i < keys.length; i++) {
 			const key = keys[i];
-			result[key] = clone(_value[key]);
+			result[key] = clone($value[key]);
 		}
 
 		return result;
@@ -219,6 +222,10 @@ function to_plain_object(value) {
 		// then continue plainifying the returned value.
 		if(typeof val.toJSON === 'function') {
 			return transform(val.toJSON());
+		}
+
+		if(typeof val.to_json === 'function') {
+			return transform(val.to_json());
 		}
 
 		// 5. Handle Collections (Sets) -> Array

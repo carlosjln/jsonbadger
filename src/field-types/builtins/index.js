@@ -383,7 +383,7 @@ ArrayFieldType.prototype.resolve_default = function (context_value) {
 		return BaseFieldType.prototype.resolve_default.call(this, context_value);
 	}
 
-	return [];
+	return null;
 };
 
 ArrayFieldType.prototype.cast = function (value, context_value) {
