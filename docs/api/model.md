@@ -70,6 +70,8 @@ It is the right place for:
   - returns a query builder for one document by top-level `id`
 - `Model.count_documents(filter)`
   - returns a query builder that resolves to a count
+- `Model.insert_one(input_data)`
+  - inserts one plain payload input and returns the persisted document
 - `Model.update_one(filter, update_definition)`
   - updates one matching row and returns the updated document or `null`
 - `Model.delete_one(filter)`
@@ -97,6 +99,8 @@ const saved_user = await user_model.create({
 
 const found_user = await user_model.find_one({name: 'maria'}).exec();
 ```
+
+> **Note:** `Model.insert_one(...)` accepts plain input only. If you already have a document instance, use `doc.insert()` or `doc.save()`.
 
 ## Model.from
 

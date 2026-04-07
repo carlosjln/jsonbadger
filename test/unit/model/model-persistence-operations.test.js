@@ -42,7 +42,7 @@ describe('Model persistence operations lifecycle', function () {
 		expect(sql_runner_mock).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO "users"'), expect.any(Array), connection);
 	});
 
-	test('insert_one preserves explicit timestamps and includes uuid ids for uuidv7 models', async function () {
+	test('doc.insert preserves explicit created_at, refreshes updated_at, and includes uuid ids for uuidv7 models', async function () {
 		const created_at = new Date('2026-03-06T10:00:00.000Z');
 		const updated_at = new Date('2026-03-06T11:00:00.000Z');
 
@@ -65,15 +65,26 @@ describe('Model persistence operations lifecycle', function () {
 			updated_at
 		});
 
-		await User.insert_one(user_document);
+		await user_document.insert();
 
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('INSERT INTO "users" ("data", id, created_at, updated_at)');
-		expect(sql_runner_mock.mock.calls[0][1]).toEqual([
-			'{"name":"saved"}',
-			'019631f7-ef80-7c17-8cf0-a9b241551111',
-			created_at,
-			updated_at
-		]);
+		expect(sql_runner_mock.mock.calls[0][1][0]).toBe('{"name":"saved"}');
+		expect(sql_runner_mock.mock.calls[0][1][1]).toBe('019631f7-ef80-7c17-8cf0-a9b241551111');
+		expect(sql_runner_mock.mock.calls[0][1][2]).toBe(created_at);
+		expect(sql_runner_mock.mock.calls[0][1][3]).toEqual(expect.any(Date));
+		expect(sql_runner_mock.mock.calls[0][1][3]).not.toBe(updated_at);
+	});
+
+	test('insert_one rejects existing model instances and requires plain input', async function () {
+		const User = create_model(new Schema({name: String}), connection);
+		const user_document = User.from({
+			name: 'saved'
+		});
+
+		await expect(User.insert_one(user_document)).rejects.toThrow(
+			'Model.insert_one accepts only plain object; use doc.insert() or doc.save() for existing documents'
+		);
+		expect(sql_runner_mock).not.toHaveBeenCalled();
 	});
 
 	test('update_one normalizes public dotted input into the JSONB update path and hydrates the returned row', async function () {

@@ -250,7 +250,32 @@ Model.prototype.save = async function () {
  */
 Model.prototype.insert = async function () {
 	const model = this.constructor;
-	return model.insert_one(this);
+	const document = this.document;
+	const data_column = model.options.data_column;
+
+	model.schema.validate(document);
+	apply_timestamps(document);
+
+	const base_fields = {
+		created_at: document.created_at,
+		updated_at: document.updated_at
+	};
+
+	if(model.schema.id_strategy === IdStrategies.uuidv7) {
+		base_fields.id = document.id;
+	}
+
+	const data = {
+		payload: document[data_column],
+		base_fields
+	};
+	const saved_row = await exec_insert_one(model, data);
+
+	if(saved_row) {
+		this.rebase(new Document(saved_row));
+	}
+
+	return this;
 };
 
 /**
@@ -279,11 +304,10 @@ Model.prototype.update = async function () {
 		update_payload.updated_at = document.updated_at;
 
 		const filter = {id: this.id};
-		const updated_document = await model.update_one(filter, update_payload);
+		const updated_row = await exec_update_one(model, filter, update_payload);
 
-		if(updated_document) {
-			document.init(updated_document);
-			document.$rebase_changes();
+		if(updated_row) {
+			this.rebase(new Document(updated_row));
 		}
 	}
 
@@ -291,18 +315,20 @@ Model.prototype.update = async function () {
 };
 
 Model.prototype.rebase = function (reference) {
-	let doc;
+	let document;
 
 	if(reference instanceof Model) {
-		doc = reference.document;
+		document = reference.document;
 	} else if(reference instanceof Document) {
-		doc = reference;
+		document = reference;
 	} else {
 		throw new Error('rebase reference must be a Model or Document');
 	}
 
+	const data = deep_clone(document);
+
 	this.is_new = false;
-	this.document.init(doc);
+	this.document.init(data);
 	this.document.$rebase_changes();
 
 	return this;
@@ -382,15 +408,20 @@ Model.create = async function (documents) {
 };
 
 /**
- * Insert one model instance or plain document input.
+ * Insert one plain payload input through the compiled model convenience API.
  *
- * @param {*|object} document_value
+ * @param {*|object} record
  * @returns {Promise<object>}
  * @throws {QueryError}
  */
-Model.insert_one = async function (document_value) {
+Model.insert_one = async function (record) {
 	const model = this;
-	return exec_insert_one(model, document_value);
+	if(!is_plain_object(record)) {
+		throw new Error('Model.insert_one accepts only plain object; use doc.insert() or doc.save() for existing documents');
+	}
+
+	const instance = model.from(record);
+	return instance.insert();
 };
 
 /**
@@ -402,12 +433,24 @@ Model.insert_one = async function (document_value) {
  */
 Model.update_one = async function (query_filter, update_definition) {
 	const model = this;
-	return exec_update_one(model, query_filter, update_definition);
+	const row = await exec_update_one(model, query_filter, update_definition);
+
+	if(row) {
+		return model.hydrate(row);
+	}
+
+	return null;
 };
 
 Model.delete_one = async function (query_filter) {
 	const model = this;
-	return exec_delete_one(model, query_filter);
+	const row = await exec_delete_one(model, query_filter);
+
+	if(row) {
+		return model.hydrate(row);
+	}
+
+	return null;
 };
 
 /*
@@ -664,6 +707,16 @@ function extract_hydrated_document_fields(model, input_data) {
 function strip_base_fields(data) {
 	const {id, created_at, updated_at, ...sanitized_data} = data;
 	return sanitized_data;
+}
+
+function apply_timestamps(document) {
+	const now = new Date();
+
+	if(document.created_at === undefined || document.created_at === null) {
+		document.created_at = now;
+	}
+
+	document.updated_at = now;
 }
 
 export default Model;

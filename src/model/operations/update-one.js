@@ -65,11 +65,7 @@ async function exec_update_one(model, query_filter, update_definition) {
 	const query_result = await sql.run(update_query.sql_text, update_query.sql_params, model.connection);
 	const row = query_result.rows.length ? query_result.rows[0] : null;
 
-	if(row) {
-		return model.hydrate(row);
-	}
-
-	return null;
+	return row;
 }
 
 // --- LOCAL HELPER FUNCTIONS ---

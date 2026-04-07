@@ -31,11 +31,7 @@ async function exec_delete_one(model, query_filter) {
 	const rows = query_result.rows;
 	const row = rows.length ? rows[0] : null;
 
-	if(row) {
-		return model.hydrate(row);
-	}
-
-	return null;
+	return row;
 }
 
 export {

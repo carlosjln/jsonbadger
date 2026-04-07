@@ -190,25 +190,39 @@ document instance
 ```text
 User
    |
-   +--> Model.from(...).save()
+   +--> Model.insert_one(plain_input)
    |     |
-   |     +--> Model.insert_one(...)
+   |     +--> Model.from(...)
+   |     +--> doc.insert()
    |     +--> exec_insert_one(...)
    |     +--> sql_runner(..., Model.connection)
+   |     +--> raw inserted row
+   |     +--> rebase same instance
+   |
+   +--> Model.from(...).save()
+   |     |
+   |     +--> doc.insert()
+   |     +--> exec_insert_one(...)
+   |     +--> sql_runner(..., Model.connection)
+   |     +--> raw inserted row
+   |     +--> rebase same instance
    |
    +--> hydrated_doc.set(...).save()
    |     |
    |     +--> schema.validate(document)
    |     +--> build tracker delta
-   |     +--> Model.update_one(...)
    |     +--> exec_update_one(...)
    |     +--> sql_runner(..., Model.connection)
+   |     +--> raw updated row
+   |     +--> rebase current document
    |
    +--> Model.delete_one(...)
          |
          +--> delete compiler
          +--> where_compiler(...)
          +--> sql_runner(..., Model.connection)
+         +--> raw deleted row
+         +--> Model.hydrate(row)
 ```
 
 ## 9. Migration And Index Flow

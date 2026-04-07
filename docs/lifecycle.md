@@ -102,7 +102,8 @@ After a successful save:
 - tracked changes are rebased
 
 Timestamp behavior:
-- inserts keep caller-provided `created_at` / `updated_at`, otherwise fill them
+- inserts keep caller-provided `created_at`, otherwise fill it
+- inserts always refresh `updated_at`
 - updates keep caller-provided `updated_at`, otherwise refresh it
 - updates do not auto-change `created_at`
 

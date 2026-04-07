@@ -28,6 +28,7 @@ Runtime flow:
 2. `JsonbOps.from(payload, {column_name, coalesce: true})` returns a `JsonbOps` instance with `target` and ordered `operations`.
 3. `jsonb_ops.compile(parameter_state)` folds `operations` into one SQL RHS expression and binds JSON values into the shared parameter state.
 4. `build_update_query(...)` assembles `UPDATE ... SET ...` and binds only the row-level timestamp parameters it receives after the JSONB expression is finalized.
+5. `exec_update_one(...)` returns the raw updated row to the public model boundary, which can then hydrate or rebase as needed.
 
 > **Note:** `jsonb_set(NULL, ...)` returns `NULL`. Partial JSONB updates must start from `COALESCE(column, '{}'::jsonb)`.
 

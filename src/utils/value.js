@@ -85,6 +85,14 @@ function is_boolean(value) {
 	return typeof value === 'boolean';
 }
 
+function is_date(value) {
+	return value instanceof Date;
+}
+
+function is_not_date(value) {
+	return !(value instanceof Date);
+}
+
 function is_valid_timestamp(value) {
 	return !Number.isNaN(new Date(value).getTime());
 }
@@ -135,6 +143,8 @@ export {
 	is_string,
 	is_function,
 	is_boolean,
+	is_date,
+	is_not_date,
 	is_valid_timestamp,
 	to_iso_timestamp,
 	get_if
@@ -151,6 +161,8 @@ export default {
 	is_string,
 	is_function,
 	is_boolean,
+	is_date,
+	is_not_date,
 	is_valid_timestamp,
 	to_iso_timestamp,
 	get_if
