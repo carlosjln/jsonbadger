@@ -202,6 +202,66 @@ describe('Model construction lifecycle', function () {
 			});
 		});
 
+		test('applies schema defaults across the default slug and extra slugs during hydrate()', function () {
+			const User = create_payload_model({
+				name: {
+					type: String,
+					default: 'anonymous'
+				},
+				profile: {
+					city: {
+						type: String,
+						default: 'Miami'
+					}
+				},
+				settings: {
+					theme: {
+						type: String,
+						default: 'dark'
+					}
+				}
+			}, ['settings']);
+
+			const hydrated_document = User.hydrate({
+				payload: {}
+			});
+
+			expect(hydrated_document.is_new).toBe(false);
+			expect(hydrated_document.document.payload).toEqual({
+				name: 'anonymous',
+				profile: {
+					city: 'Miami'
+				}
+			});
+			expect(hydrated_document.document.settings).toEqual({
+				theme: 'dark'
+			});
+		});
+
+		test('passes hydrate lifecycle context into function defaults', function () {
+			const observed_contexts = [];
+			const User = create_payload_model({
+				name: {
+					type: String,
+					default: function (context_value) {
+						observed_contexts.push(context_value);
+						return 'alice';
+					}
+				}
+			});
+
+			const hydrated_document = User.hydrate({
+				payload: {}
+			});
+
+			expect(hydrated_document.document.payload.name).toBe('alice');
+			expect(observed_contexts).toHaveLength(1);
+			expect(observed_contexts[0].mode).toBe('hydrate');
+			expect(observed_contexts[0].path).toBe('name');
+			expect(observed_contexts[0].model).toBe(hydrated_document);
+			expect(observed_contexts[0].document).toBe(hydrated_document.document);
+		});
+
 		test('documents current hydrate debt for primitive, null, and array input', function () {
 			const User = create_stubbed_model({
 				default_slug: 'payload'
