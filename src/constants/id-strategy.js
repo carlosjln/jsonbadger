@@ -1,11 +1,11 @@
 import {assert_condition} from '#src/utils/assert.js';
 
-const IdStrategies = Object.freeze({
+const ID_STRATEGY = Object.freeze({
 	bigserial: 'bigserial',
 	uuidv7: 'uuidv7'
 });
 
-const id_strategy_values = Object.freeze(Object.values(IdStrategies));
+const id_strategy_values = Object.freeze(Object.values(ID_STRATEGY));
 
 function is_valid(id_strategy) {
 	return id_strategy_values.includes(id_strategy);
@@ -20,9 +20,9 @@ function assert_id_strategy(id_strategy) {
 }
 
 export {
-	IdStrategies,
+	ID_STRATEGY,
 	is_valid,
 	assert_id_strategy
 };
 
-export default IdStrategies;
+export default ID_STRATEGY;

@@ -3,12 +3,12 @@
  * Ensure the model backing table exists with the expected base columns.
  */
 import {assert_identifier, quote_identifier} from '#src/utils/assert.js';
-import IdStrategies, {assert_id_strategy} from '#src/constants/id-strategies.js';
+import ID_STRATEGY, {assert_id_strategy} from '#src/constants/id-strategy.js';
 import run from '#src/sql/run.js';
 
 const ID_COLUMN_SQL_BY_STRATEGY = {
-	[IdStrategies.bigserial]: 'id BIGSERIAL PRIMARY KEY',
-	[IdStrategies.uuidv7]: 'id UUID PRIMARY KEY DEFAULT uuidv7()'
+	[ID_STRATEGY.bigserial]: 'id BIGSERIAL PRIMARY KEY',
+	[ID_STRATEGY.uuidv7]: 'id UUID PRIMARY KEY DEFAULT uuidv7()'
 };
 
 async function ensure_table(context) {

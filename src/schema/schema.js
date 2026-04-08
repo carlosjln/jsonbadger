@@ -1,6 +1,6 @@
 import defaults from '#src/constants/defaults.js';
-import IdStrategies from '#src/constants/id-strategies.js';
-import {assert_id_strategy} from '#src/constants/id-strategies.js';
+import ID_STRATEGY from '#src/constants/id-strategy.js';
+import {assert_id_strategy} from '#src/constants/id-strategy.js';
 
 import ValidationError from '#src/errors/validation-error.js';
 
@@ -478,7 +478,7 @@ function build_schema_options(schema_options = {}) {
 function validate_base_field_values(document, id_strategy) {
 	const error_details = [];
 
-	if(id_strategy === IdStrategies.uuidv7 && document.id != null && !is_uuid_v7(document.id)) {
+	if(id_strategy === ID_STRATEGY.uuidv7 && document.id != null && !is_uuid_v7(document.id)) {
 		error_details.push({
 			path: 'id',
 			code: 'validator_error',

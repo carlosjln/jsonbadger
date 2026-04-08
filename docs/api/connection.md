@@ -23,7 +23,7 @@ const connection = await JsonBadger.connect(uri, options);
 - `max`: pool size
 - `debug`: logs SQL/debug events when `true`
 - `auto_index`: server-wide default for automatic index creation when `Model.ensure_table()` is called
-- `id_strategy`: server-wide default row-id strategy (`IdStrategies.bigserial` or `IdStrategies.uuidv7`)
+- `id_strategy`: server-wide default row-id strategy (`ID_STRATEGY.bigserial` or `ID_STRATEGY.uuidv7`)
 - any supported `pg` pool options (`ssl`, `host`, `port`, `user`, `password`, `database`)
 
 ## Connection Lifecycle
@@ -38,7 +38,7 @@ await connection.disconnect();
 ## UUIDv7 Compatibility
 
 - `connect(...)` performs a PostgreSQL capability scan and caches the result
-- if connection-level `id_strategy` resolves to `IdStrategies.uuidv7` and native support is unavailable, `connect(...)` fails fast
+- if connection-level `id_strategy` resolves to `ID_STRATEGY.uuidv7` and native support is unavailable, `connect(...)` fails fast
 - later model-level `uuidv7` overrides are checked against the cached capability info
 
 > **Note:** Troubleshooting SQL like `SELECT version();` and `SHOW server_version;` is optional. Runtime checks are machine-readable and internal.

@@ -13,7 +13,7 @@ Use this directory for module-scoped API reference pages.
 Named exports:
 - `connect(uri, options)`
 - `Schema`
-- `IdStrategies`
+- `ID_STRATEGY`
 - `field_type`
 
 Default export (`JsonBadger`) includes the same plus:

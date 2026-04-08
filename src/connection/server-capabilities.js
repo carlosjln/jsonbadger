@@ -1,4 +1,4 @@
-import IdStrategies from '#src/constants/id-strategies.js';
+import ID_STRATEGY from '#src/constants/id-strategy.js';
 import {assert_condition} from '#src/utils/assert.js';
 import {is_function} from '#src/utils/value.js';
 
@@ -31,7 +31,7 @@ async function scan_server_capabilities(pool_instance) {
 }
 
 function assert_id_strategy_capability(id_strategy, server_capabilities) {
-	if(id_strategy !== IdStrategies.uuidv7) {
+	if(id_strategy !== ID_STRATEGY.uuidv7) {
 		return;
 	}
 

@@ -2,8 +2,9 @@
  * MODULE RESPONSIBILITY
  * Own document lifecycle, schema validation, timestamp policy, and persistence delegation.
  */
+import ID_STRATEGY from '#src/constants/id-strategy.js';
+import INTAKE_MODE from '#src/constants/intake-mode.js';
 import QueryError from '#src/errors/query-error.js';
-import IdStrategies from '#src/constants/id-strategies.js';
 import {assert_id_strategy_capability} from '#src/connection/server-capabilities.js';
 
 import ensure_index_sql from '#src/migration/ensure-index.js';
@@ -448,7 +449,7 @@ Model.prototype.insert = async function () {
 		updated_at: document.updated_at
 	};
 
-	if(model.schema.id_strategy === IdStrategies.uuidv7) {
+	if(model.schema.id_strategy === ID_STRATEGY.uuidv7) {
 		base_fields.id = document.id;
 	}
 
@@ -536,10 +537,10 @@ Model.from = function (data, options = {}) {
 	const model = this;
 	const fields = extract_from_document_fields(model, data);
 	const doc = model.schema.conform(fields);
+	const instance = new model(doc);
 
 	// Build a new document, then run the composed lifecycle on the tracked instance state.
-	const instance = new model(doc);
-	instance.$normalize({...options, mode: 'from'});
+	instance.$normalize({mode: INTAKE_MODE.from, ...options});
 
 	return instance;
 };
@@ -555,15 +556,11 @@ Model.hydrate = function (data, options = {}) {
 	const model = this;
 	const fields = extract_hydrated_document_fields(model, data);
 	const doc = model.schema.conform(fields);
-	void options;
-
-	// Validate the document state before building the instance.
-	model.schema.validate(doc);
-
-	// Build a persisted document. This path reconstructs row-backed state and sets `is_new = false`.
 	const instance = new model(doc);
+
+	// Build a persisted document, then run the composed lifecycle on the tracked instance state.
+	instance.$normalize({mode: INTAKE_MODE.hydrate, ...options});
 	instance.is_new = false;
-	instance.document.init(doc);
 	instance.document.$rebase_changes();
 
 	return instance;
@@ -667,7 +664,7 @@ Model.ensure_table = async function () {
 	const server_capabilities = model.connection?.server_capabilities;
 
 	// Some id strategies depend on server-side support, so verify capability before creating the table.
-	if(id_strategy === IdStrategies.uuidv7 && server_capabilities) {
+	if(id_strategy === ID_STRATEGY.uuidv7 && server_capabilities) {
 		assert_id_strategy_capability(id_strategy, server_capabilities);
 	}
 
