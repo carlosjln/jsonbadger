@@ -11,7 +11,6 @@ const defaults = {
 	},
 
 	schema_options: {
-		strict: true,
 		id_strategy: ID_STRATEGY.bigserial,
 		auto_index: true,
 

@@ -852,17 +852,6 @@ function extract_hydrated_document_fields(model, input_data) {
 	return document;
 }
 
-/*
- * Filters data keys without enforcing schema strictness.
- *
- * @param {object} data Source data object.
- * @returns {object}
- */
-function strip_base_fields(data) {
-	const {id, created_at, updated_at, ...sanitized_data} = data;
-	return sanitized_data;
-}
-
 function apply_timestamps(document) {
 	const now = new Date();
 

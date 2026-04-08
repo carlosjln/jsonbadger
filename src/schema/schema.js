@@ -36,7 +36,6 @@ function Schema(schema_definition = {}, schema_options = {}) {
 
 	this.indexes = [];
 	this.options = $options;
-	this.strict = this.options.strict !== false;
 	this.id_strategy = this.options.id_strategy;
 	this.auto_index = this.options.auto_index;
 	this.methods = Object.create(null);
