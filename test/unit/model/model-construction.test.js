@@ -291,6 +291,64 @@ describe('Model construction lifecycle', function () {
 		});
 	});
 
+	describe('low-level constructor', function () {
+		test('does not apply schema lifecycle automatically when constructed directly', function () {
+			const User = create_payload_model({
+				name: {
+					type: String,
+					default: 'anonymous'
+				},
+				age: Number
+			});
+
+			const user_document = new User({
+				payload: {
+					age: '41'
+				}
+			});
+
+			expect(user_document.is_new).toBe(true);
+			expect(user_document.document.payload).toEqual({
+				age: '41'
+			});
+			expect(user_document.document.payload.name).toBeUndefined();
+		});
+
+		test('allows manual lifecycle methods to apply defaults, cast, and validate after direct construction', function () {
+			const User = create_payload_model({
+				name: {
+					type: String,
+					default: 'anonymous'
+				},
+				age: Number
+			});
+
+			const user_document = new User({
+				payload: {
+					age: '41'
+				}
+			});
+
+			user_document.$apply_defaults({mode: 'from'});
+
+			expect(user_document.document.payload).toEqual({
+				name: 'anonymous',
+				age: '41'
+			});
+
+			user_document.$cast({mode: 'from'});
+
+			expect(user_document.document.payload).toEqual({
+				name: 'anonymous',
+				age: 41
+			});
+
+			expect(function validate_document() {
+				user_document.$validate({mode: 'from'});
+			}).not.toThrow();
+		});
+	});
+
 	describe('cast', function () {
 		test('delegates to schema.cast(...) as a thin model-level alias', function () {
 			const User = create_payload_model({
