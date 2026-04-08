@@ -302,7 +302,6 @@ Model.prototype.$apply_defaults = function (options = {}) {
 		const default_value = field_type.resolve_default({
 			...options,
 			path: path_name,
-			mode: 'apply_defaults',
 			document,
 			model: this
 		});

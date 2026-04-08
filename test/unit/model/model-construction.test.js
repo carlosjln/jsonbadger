@@ -79,14 +79,74 @@ describe('Model construction lifecycle', function () {
 				theme: 'dark'
 			});
 		});
+
+		test('applies schema defaults across the default slug and extra slugs during from()', function () {
+			const User = create_payload_model({
+				name: {
+					type: String,
+					default: 'anonymous'
+				},
+				profile: {
+					city: {
+						type: String,
+						default: 'Miami'
+					}
+				},
+				settings: {
+					theme: {
+						type: String,
+						default: 'dark'
+					}
+				}
+			}, ['settings']);
+
+			const user_document = User.from({});
+
+			expect(user_document.document.payload).toEqual({
+				name: 'anonymous',
+				profile: {
+					city: 'Miami'
+				}
+			});
+			expect(user_document.document.settings).toEqual({
+				theme: 'dark'
+			});
+		});
+
+		test('passes from lifecycle context into function defaults', function () {
+			const observed_contexts = [];
+			const User = create_payload_model({
+				name: {
+					type: String,
+					default: function (context_value) {
+						observed_contexts.push(context_value);
+						return 'alice';
+					}
+				}
+			});
+
+			const user_document = User.from({});
+
+			expect(user_document.document.payload.name).toBe('alice');
+			expect(observed_contexts).toHaveLength(1);
+			expect(observed_contexts[0].mode).toBe('from');
+			expect(observed_contexts[0].path).toBe('name');
+			expect(observed_contexts[0].model).toBe(user_document);
+			expect(observed_contexts[0].document).toBe(user_document.document);
+		});
 	});
 
 	describe('hydrate', function () {
 		test('uses the configured default slug and ignores unregistered row roots', function () {
-			const User = create_stubbed_model({
-				default_slug: 'payload',
-				slugs: ['settings', 'status']
-			});
+			const User = create_payload_model({
+				name: String,
+				settings: {
+					theme: String
+				},
+				status: {
+					flag: Boolean
+				}
+			}, ['settings', 'status']);
 
 			const hydrated_document = User.hydrate({
 				payload: {
@@ -108,8 +168,8 @@ describe('Model construction lifecycle', function () {
 		});
 
 		test('keeps row orientation and does not recover default payload from unrelated root fields', function () {
-			const User = create_stubbed_model({
-				default_slug: 'payload'
+			const User = create_payload_model({
+				name: String
 			});
 
 			const hydrated_document = User.hydrate({
@@ -123,7 +183,7 @@ describe('Model construction lifecycle', function () {
 			expect(hydrated_document.document.name).toBeUndefined();
 		});
 
-		test('accepts serializable row objects and strips payload base fields in non-strict mode', function () {
+		test('accepts serializable row objects and strips payload base fields', function () {
 			const User = create_payload_model({
 				name: String
 			});
@@ -135,11 +195,8 @@ describe('Model construction lifecycle', function () {
 					created_at: 'drop-me-too',
 					updated_at: 'drop-me-three'
 				}
-			}), {
-				strict: false
-			});
+			}));
 
-			expect(hydrated_document.document.id).toBe('7');
 			expect(hydrated_document.document.payload).toEqual({
 				name: 'alice'
 			});

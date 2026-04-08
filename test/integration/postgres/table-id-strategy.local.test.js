@@ -14,7 +14,7 @@ describe('Table ID strategy integration (local PostgreSQL)', function () {
 
 	beforeAll(async function setup_database() {
 		connection = await connect_local_jsonbadger(jsonbadger, {
-			id_strategy: jsonbadger.IdStrategies.uuidv7
+			id_strategy: jsonbadger.ID_STRATEGY.uuidv7
 		});
 	});
 
@@ -40,15 +40,15 @@ describe('Table ID strategy integration (local PostgreSQL)', function () {
 			name: 'BigserialModel_' + bigserial_table_name,
 			schema: shared_schema,
 			table_name: bigserial_table_name,
-			id_strategy: jsonbadger.IdStrategies.bigserial
+			id_strategy: jsonbadger.ID_STRATEGY.bigserial
 		});
 
 		try {
 			await drop_table_if_exists(connection, uuid_table_name);
 			await drop_table_if_exists(connection, bigserial_table_name);
 
-			expect(uuid_model.resolve_id_strategy()).toBe(jsonbadger.IdStrategies.uuidv7);
-			expect(bigserial_model.resolve_id_strategy()).toBe(jsonbadger.IdStrategies.bigserial);
+			expect(uuid_model.resolve_id_strategy()).toBe(jsonbadger.ID_STRATEGY.uuidv7);
+			expect(bigserial_model.resolve_id_strategy()).toBe(jsonbadger.ID_STRATEGY.bigserial);
 
 			await uuid_model.from({name: 'alpha'}).save();
 			await bigserial_model.from({name: 'beta'}).save();

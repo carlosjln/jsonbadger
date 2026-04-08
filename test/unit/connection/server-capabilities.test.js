@@ -1,6 +1,6 @@
 import {describe, expect, jest, test} from '@jest/globals';
 
-const {default: IdStrategies} = await import('#src/constants/id-strategies.js');
+const {default: ID_STRATEGY} = await import('#src/constants/id-strategy.js');
 const {scan_server_capabilities, assert_id_strategy_capability} = await import('#src/connection/server-capabilities.js');
 
 describe('server capability scan', function () {
@@ -45,13 +45,13 @@ describe('server capability scan', function () {
 describe('id strategy capability assertion', function () {
 	test('does nothing for non-uuidv7 strategies', function () {
 		expect(function assert_bigserial_capability() {
-			assert_id_strategy_capability(IdStrategies.bigserial, null);
+			assert_id_strategy_capability(ID_STRATEGY.bigserial, null);
 		}).not.toThrow();
 	});
 
 	test('throws a clear error when uuidv7 is unsupported', function () {
 		expect(function assert_unsupported_uuidv7() {
-			assert_id_strategy_capability(IdStrategies.uuidv7, {
+			assert_id_strategy_capability(ID_STRATEGY.uuidv7, {
 				server_version: '17.4',
 				server_version_num: 170004,
 				supports_uuidv7: false

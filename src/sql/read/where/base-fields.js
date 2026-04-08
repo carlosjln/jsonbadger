@@ -3,8 +3,8 @@
  * Compile top-level base-field predicates for read queries.
  */
 import QueryError from '#src/errors/query-error.js';
+import ID_STRATEGY from '#src/constants/id-strategy.js';
 import {bind_parameter} from '#src/sql/parameter-binder.js';
-import IdStrategies from '#src/constants/id-strategies.js';
 import {parse_path} from '#src/sql/jsonb/path-parser.js';
 import {is_plain_object, is_uuid_v7} from '#src/utils/value.js';
 
@@ -225,7 +225,7 @@ function normalize_timestamp_value(field_name, operator_name, operator_value) {
 }
 
 function normalize_id_value(operator_value, operator_name, id_strategy) {
-	if(id_strategy === IdStrategies.uuidv7) {
+	if(id_strategy === ID_STRATEGY.uuidv7) {
 		const uuid_value = String(operator_value);
 
 		if(!is_uuid_v7(uuid_value)) {
@@ -269,7 +269,7 @@ function normalize_id_value(operator_value, operator_name, id_strategy) {
 }
 
 function resolve_id_parameter_cast(id_strategy) {
-	if(id_strategy === IdStrategies.uuidv7) {
+	if(id_strategy === ID_STRATEGY.uuidv7) {
 		return '::uuid';
 	}
 

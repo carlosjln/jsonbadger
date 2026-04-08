@@ -2,7 +2,7 @@
  * MODULE RESPONSIBILITY
  * Create shared compile context helpers for read-query WHERE compilation.
  */
-import IdStrategies from '#src/constants/id-strategies.js';
+import ID_STRATEGY from '#src/constants/id-strategy.js';
 
 import {quote_identifier} from '#src/utils/assert.js';
 import {is_function, is_object} from '#src/utils/value.js';
@@ -46,7 +46,7 @@ function create_compile_context(compile_options) {
 	const data_column_name = options.data_column ?? 'data';
 	const data_column_reference = quote_identifier(data_column_name);
 	const schema_instance = options.schema ?? null;
-	const id_strategy = options.id_strategy === IdStrategies.uuidv7 ? IdStrategies.uuidv7 : IdStrategies.bigserial;
+	const id_strategy = options.id_strategy === ID_STRATEGY.uuidv7 ? ID_STRATEGY.uuidv7 : ID_STRATEGY.bigserial;
 
 	return {
 		data_column_reference,
