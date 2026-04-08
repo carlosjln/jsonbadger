@@ -44,7 +44,7 @@ Use `Schema` to define document structure and behavior. Specify table names, con
 - `validate(document)`
 - `validate_base_fields(document)`
 - `cast(document)`
-- `conform(payload)`
+- `conform(document)`
 - `get_path(path)`
 - `get_path_type(path)`
 - `is_array_root(path)`
@@ -120,15 +120,21 @@ Behavior:
 - does not validate
 - does not conform
 
-Conform one payload object to the schema-owned allowed tree:
+Conform one document envelope to the schema-owned allowed tree:
 
 ```js
-const payload = {
-	name: 'maria',
-	unknown_key: true
+const document = {
+	payload: {
+		name: 'nell',
+		unknown_key: true
+	},
+	settings: {
+		theme: 'dark',
+		rogue: true
+	}
 };
 
-schema.conform(payload);
+schema.conform(document);
 ```
 
 After conforming:
