@@ -534,13 +534,14 @@ Model.prototype.rebase = function (reference) {
  */
 Model.from = function (data, options = {}) {
 	const model = this;
-	const document = normalize_from_input(model, data, options);
+	const fields = extract_from_document_fields(model, data);
+	const doc = model.schema.conform(fields);
 
-	// Validate the document state before building the instance.
-	model.schema.validate(document);
+	// Build a new document, then run the composed lifecycle on the tracked instance state.
+	const instance = new model(doc);
+	instance.$normalize({...options, mode: 'from'});
 
-	// Build a new document. This path keeps create semantics and leaves `is_new = true`.
-	return new model(document);
+	return instance;
 };
 
 /**
@@ -552,7 +553,9 @@ Model.from = function (data, options = {}) {
  */
 Model.hydrate = function (data, options = {}) {
 	const model = this;
-	const doc = normalize_hydrated_input(model, data, options);
+	const fields = extract_hydrated_document_fields(model, data);
+	const doc = model.schema.conform(fields);
+	void options;
 
 	// Validate the document state before building the instance.
 	model.schema.validate(doc);
@@ -720,18 +723,6 @@ Model.count_documents = function (query_filter) {
  * MODEL HELPERS
  */
 
-// Build one validated document state for new document construction.
-function normalize_from_input(model, input_data, options) {
-	const document = extract_from_document_fields(model, input_data);
-	return finalize_normalized_document(model, document, options);
-}
-
-// Build one validated document state for persisted-row hydration.
-function normalize_hydrated_input(model, input_data, options) {
-	const document = extract_hydrated_document_fields(model, input_data);
-	return finalize_normalized_document(model, document, options);
-}
-
 // Resolve one explicit document path into the matching schema field path.
 function resolve_field_type_path(schema, resolved_path) {
 	const path_segments = split_dot_path(resolved_path);
@@ -746,27 +737,6 @@ function resolve_field_type_path(schema, resolved_path) {
 	}
 
 	return resolved_path;
-}
-
-// Apply strict-mode shaping to one normalized document envelope.
-function finalize_normalized_document(model, document, options) {
-	const schema = model.schema;
-	const default_slug = schema.get_default_slug();
-
-	// Resolve strictness for this input. Per-call options override schema strictness here too.
-	const strict_mode = options.strict ?? schema.strict;
-
-	// Shape the extracted data into the candidate payload for this lifecycle operation.
-	const data = strict_mode ? document[default_slug] : strip_base_fields(document[default_slug]);
-
-	if(strict_mode) {
-		schema.conform(data);
-	}
-
-	// Commit the candidate payload onto the normalized document state.
-	document[default_slug] = data;
-
-	return document;
 }
 
 /**

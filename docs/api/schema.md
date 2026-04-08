@@ -9,7 +9,7 @@
 - [Slug Access](#slug-access)
 - [Casting and Validation](#casting-and-validation)
 - [create_index](#create_index)
-- [method](#method)
+- [add_method](#add_method)
 - [Path-level Index Sugar](#path-level-index-sugar)
 
 ## Constructor
@@ -50,7 +50,7 @@ Use `Schema` to define document structure and behavior. Specify table names, con
 - `is_array_root(path)`
 - `create_index(index_definition)`
 - `get_indexes()`
-- `method(name, method_implementation)`
+- `add_method(name, method_implementation)`
 
 Base-field notes:
 - `id`, `created_at`, and `updated_at` exist in schema/runtime introspection
@@ -161,12 +161,12 @@ Rules:
 - `using: 'btree'` requires `path` or `paths`
 - `order` is only valid when using a single `path` with `using: 'btree'`
 
-## method
+## add_method
 
 Install a custom document-instance method onto models generated from the schema.
 
 ```js
-schema.method('full_name', function () {
+schema.add_method('full_name', function () {
 	const default_slug = this.constructor.schema.get_default_slug();
 	const payload = this.document[default_slug];
 	return payload.first_name + ' ' + payload.last_name;

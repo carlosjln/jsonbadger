@@ -11,19 +11,19 @@ describe('Schema runtime helpers lifecycle', function () {
 			return 'hi';
 		}
 
-		expect(schema_instance.method('greet', greet)).toBe(schema_instance);
+		expect(schema_instance.add_method('greet', greet)).toBe(schema_instance);
 		expect(schema_instance.methods.greet).toBe(greet);
 
 		expect(function register_invalid_name() {
-			schema_instance.method('bad-name', greet);
+			schema_instance.add_method('bad-name', greet);
 		}).toThrow('method_name has invalid characters');
 
 		expect(function register_invalid_implementation() {
-			schema_instance.method('wave', 'nope');
+			schema_instance.add_method('wave', 'nope');
 		}).toThrow('method_implementation must be a function');
 
 		expect(function register_duplicate_name() {
-			schema_instance.method('greet', function greet_again() {
+			schema_instance.add_method('greet', function greet_again() {
 				return 'again';
 			});
 		}).toThrow('Schema method "greet" already exists');

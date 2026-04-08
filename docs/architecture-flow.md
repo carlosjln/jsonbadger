@@ -80,7 +80,7 @@ Schema
    +--> normalize inline index declarations
    +--> normalize slug options
    +--> configure validators by slug bucket
-   +--> register schema instance methods via Schema.method(...)
+   +--> register schema instance methods via Schema.add_method(...)
    +--> store:
          - paths
          - indexes

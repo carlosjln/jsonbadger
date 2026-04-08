@@ -24,9 +24,11 @@ const base_fields = Object.freeze({
 const base_fields_keys = new Set(Object.keys(base_fields));
 
 function Schema(schema_definition = {}, schema_options = {}) {
-	const $schema = inject_base_fields(schema_definition);
+	const $schema = apply_base_fields(schema_definition);
 	const $options = build_schema_options(schema_options);
 	const {path_introspection, field_types} = prepare_schema_state($schema);
+	const default_slug = $options.default_slug;
+	const extra_slug_keys = $options.slugs;
 
 	this.$field_registry = default_field_type_registry;
 	this.$path_introspection = path_introspection;
@@ -40,7 +42,7 @@ function Schema(schema_definition = {}, schema_options = {}) {
 	this.methods = Object.create(null);
 	this.validators = Object.create(null);
 	this.aliases = collect_aliases(field_types);
-	this.$conform_tree = build_allowed_tree(field_types);
+	this.$conform_tree = build_conform_tree(field_types, default_slug, extra_slug_keys);
 
 	assert_id_strategy(this.id_strategy);
 	assert_condition(typeof this.auto_index === 'boolean', 'auto_index must be a boolean');
@@ -68,7 +70,7 @@ Schema.prototype.configure_validators = function () {
 	};
 
 	// Get all definitions in one pass
-	const slug_definitions = extract_slug_definitions(this.$field_types, default_slug, registered_slug_keys);
+	const slug_definitions = build_slug_field_maps(this.$field_types, default_slug, registered_slug_keys);
 
 	// Wire up the validators dynamically
 	for(const [slug_key, field_types] of Object.entries(slug_definitions)) {
@@ -96,7 +98,7 @@ Schema.prototype.register_field_indexes = function (schema_definition) {
 
 Schema.prototype.collect_field_defined_indexes = function (schema_definition) {
 	const index_definitions = [];
-	walk_schema_for_indexes(schema_definition, '', this.$field_registry, index_definitions);
+	collect_schema_indexes(schema_definition, '', this.$field_registry, index_definitions);
 	return index_definitions;
 };
 
@@ -184,16 +186,23 @@ Schema.prototype.get_slugs = function () {
 	return [default_slug, ...extra_slugs];
 };
 
-Schema.prototype.conform = function (payload) {
-	if(!is_plain_object(payload)) {
-		return;
-	}
-
-	walk_conform_tree(payload, this.$conform_tree);
-
-	return payload;
+/**
+ * Remove keys that are not allowed by the compiled schema tree.
+ *
+ * @param {object} document
+ * @returns {object|undefined}
+ */
+Schema.prototype.conform = function (document) {
+	prune_document_shape(document, this.$conform_tree);
+	return document;
 };
 
+/**
+ * Cast one full document envelope according to compiled schema paths.
+ *
+ * @param {object} document
+ * @returns {object}
+ */
 Schema.prototype.cast = function (document) {
 	if(!is_plain_object(document)) {
 		return document;
@@ -244,7 +253,7 @@ Schema.prototype.cast = function (document) {
 	return next_document;
 };
 
-Schema.prototype.method = function (method_name, method_implementation) {
+Schema.prototype.add_method = function (method_name, method_implementation) {
 	assert_identifier(method_name, 'method_name');
 	assert_condition(is_function(method_implementation), 'method_implementation must be a function');
 	assert_condition(has_own(this.methods, method_name) === false, 'Schema method "' + method_name + '" already exists');
@@ -300,7 +309,7 @@ Schema.prototype.get_indexes = function () {
 
 // --- LOCAL HELPER FUNCTIONS ---
 
-function inject_base_fields(schema_def) {
+function apply_base_fields(schema_def) {
 	const next_schema = Object.assign({}, schema_def);
 
 	for(const [field_name, field_config] of Object.entries(base_fields)) {
@@ -312,22 +321,29 @@ function inject_base_fields(schema_def) {
 	return next_schema;
 }
 
-function build_allowed_tree(paths) {
+function build_conform_tree(paths, default_slug, slug_keys) {
 	const allowed_tree = {};
+	const extra_slug_set = new Set(slug_keys || []);
 
 	for(const path_name of Object.keys(paths)) {
 		const path_segments = path_name.split('.');
-		let current_branch = allowed_tree;
-
-		const depth = path_segments.length - 1;
 		const root_segment = path_segments[0];
+		let current_branch = allowed_tree;
+		let target_segments = path_segments;
 
 		if(base_fields_keys.has(root_segment)) {
 			continue;
 		}
 
+		// Unprefixed schema paths belong to the default slug, so wrap them under that slug root here.
+		if(!extra_slug_set.has(root_segment)) {
+			target_segments = [default_slug, ...path_segments];
+		}
+
+		const depth = target_segments.length - 1;
+
 		for(let i = 0; i < depth; i++) {
-			const segment_value = path_segments[i];
+			const segment_value = target_segments[i];
 
 			if(!is_plain_object(current_branch[segment_value])) {
 				current_branch[segment_value] = {};
@@ -336,7 +352,7 @@ function build_allowed_tree(paths) {
 			current_branch = current_branch[segment_value];
 		}
 
-		current_branch[path_segments[depth]] = true;
+		current_branch[target_segments[depth]] = true;
 	}
 
 	return allowed_tree;
@@ -392,7 +408,7 @@ function collect_aliases(paths) {
  * @returns {object}
  * @throws {Error} If a registered slug is defined as a primitive instead of an object.
  */
-function extract_slug_definitions(field_types, default_slug, slug_keys) {
+function build_slug_field_maps(field_types, default_slug, slug_keys) {
 	const definitions = {
 		[default_slug]: {}
 	};
@@ -492,29 +508,47 @@ function validate_base_field_values(document, id_strategy) {
 	};
 }
 
-function walk_conform_tree(data, branch) {
-	if(!is_plain_object(data) || !is_plain_object(branch)) {
+/**
+ * Remove keys that are not allowed by one compiled schema branch and recurse into nested objects.
+ *
+ * @param {object} document
+ * @param {object} branch
+ * @returns {void}
+ */
+function prune_document_shape(document, branch) {
+	if(!is_plain_object(document) || !is_plain_object(branch)) {
 		return;
 	}
 
-	for(const key of Object.keys(data)) {
+	for(const key of Object.keys(document)) {
 		// If key is not in schema branch, delete it
 		if(!has_own(branch, key)) {
-			delete data[key];
+			delete document[key];
 			continue;
 		}
 
 		const next_branch = branch[key];
-		const next_data = data[key];
+		const next_data = document[key];
 
 		// If branch continues and data is an object, keep walking
 		if(next_branch !== true && is_plain_object(next_data)) {
-			walk_conform_tree(next_data, next_branch);
+			prune_document_shape(next_data, next_branch);
 		}
 	}
+
+	return document;
 }
 
-function walk_schema_for_indexes(current_definition, parent_path, field_registry, index_definitions) {
+/**
+ * Recursively collect inline index definitions from one schema definition tree.
+ *
+ * @param {object} current_definition
+ * @param {string} parent_path
+ * @param {object} field_registry
+ * @param {object[]} index_definitions
+ * @returns {void}
+ */
+function collect_schema_indexes(current_definition, parent_path, field_registry, index_definitions) {
 	for(const [path_segment, field_definition] of Object.entries(current_definition)) {
 		const full_path = parent_path ? `${parent_path}.${path_segment}` : path_segment;
 
@@ -529,7 +563,7 @@ function walk_schema_for_indexes(current_definition, parent_path, field_registry
 				index_definitions.push(inline_index_definition);
 			}
 		} else if(is_object(field_definition)) {
-			walk_schema_for_indexes(field_definition, full_path, field_registry, index_definitions);
+			collect_schema_indexes(field_definition, full_path, field_registry, index_definitions);
 		}
 	}
 }
