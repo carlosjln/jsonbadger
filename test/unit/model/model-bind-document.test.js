@@ -49,8 +49,8 @@ describe('Model document binding lifecycle', function () {
 
 		expect(result).toBe(entity);
 		expect(entity.id).toBe('9');
-		expect(entity.created_at).toBe('2026-04-05T08:00:00.000Z');
-		expect(entity.updated_at).toBe('2026-04-05T09:00:00.000Z');
+		expect(entity.created_at).toEqual(new Date('2026-04-05T08:00:00.000Z'));
+		expect(entity.updated_at).toEqual(new Date('2026-04-05T09:00:00.000Z'));
 		expect(entity.email).toBe('alice@example.com');
 		expect(entity.profile).toBe(user_document.document.payload.profile);
 		expect(entity.settings).toBe(user_document.document.settings);

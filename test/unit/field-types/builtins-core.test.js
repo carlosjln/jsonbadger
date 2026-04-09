@@ -155,7 +155,7 @@ describe('foundational FieldType builtins (direct)', function () {
 		}).toThrow('Cast to Buffer failed');
 	});
 
-	test('ArrayFieldType provides implicit default and normalizes items through child type', function () {
+	test('ArrayFieldType keeps a null default unless explicitly configured and normalizes items through child type', function () {
 		const calls = [];
 		const child_field_type = {
 			normalize: function (value, context_value) {
@@ -165,7 +165,7 @@ describe('foundational FieldType builtins (direct)', function () {
 		};
 		const field_type = new ArrayFieldType('tags', {of_field_type: child_field_type});
 
-		expect(field_type.resolve_default()).toEqual([]);
+		expect(field_type.resolve_default()).toBeNull();
 		expect(field_type.cast(['a', 'b'], {mode: 'save'})).toEqual(['A', 'B']);
 		expect(calls).toEqual([
 			{

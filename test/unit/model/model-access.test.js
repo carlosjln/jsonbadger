@@ -17,11 +17,11 @@ describe('Model access lifecycle', function () {
 		});
 
 		expect(user_document.id).toBe('9');
-		expect(user_document.created_at).toBe('2026-03-03T08:00:00.000Z');
-		expect(user_document.updated_at).toBe('2026-03-03T09:00:00.000Z');
+		expect(user_document.created_at).toEqual(new Date('2026-03-03T08:00:00.000Z'));
+		expect(user_document.updated_at).toEqual(new Date('2026-03-03T09:00:00.000Z'));
 		expect(user_document.timestamps).toEqual({
-			created_at: '2026-03-03T08:00:00.000Z',
-			updated_at: '2026-03-03T09:00:00.000Z'
+			created_at: new Date('2026-03-03T08:00:00.000Z'),
+			updated_at: new Date('2026-03-03T09:00:00.000Z')
 		});
 
 		user_document.id = '10';

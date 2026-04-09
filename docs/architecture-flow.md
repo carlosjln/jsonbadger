@@ -126,24 +126,83 @@ Document runtime exposes:
 
 ## 6. Construction Flow
 
+New payload intake:
+
 ```text
-User
+External payload
    |
-   +--> Model.from(input)
-   |     |
-   |     +--> normalize external payload input
-   |     +--> route keys into default slug / extra slugs
-   |     +--> schema.validate(document)
-   |     +--> new Model(document)
+   v
+Model.from(...)
    |
-   +--> Model.hydrate(row)
-         |
-         +--> normalize row-like input
-         +--> read schema.get_slugs() from row roots
-         +--> schema.validate(document)
-         +--> new Model(document)
-         +--> instance.is_new = false
-         +--> tracker rebase
+   v
+extract_from_document_fields(...)
+   |
+   +--> serialize non-plain input
+   +--> expand dotted payload keys
+   +--> route base fields / default slug / extra slugs
+   |
+   v
+new Model(document)
+   |
+   v
+instance.$normalize({mode: 'from'})
+   |
+   +--> instance.$conform_document(...)
+   +--> instance.$apply_defaults(...)
+   +--> instance.$cast(...)
+   +--> instance.$validate(...)
+   +--> tracker rebase
+   |
+   v
+new document instance
+```
+
+Persisted row intake:
+
+```text
+Raw row from SQL
+   |
+   v
+Model.hydrate(...)
+   |
+   v
+extract_hydrated_document_fields(...)
+   |
+   +--> serialize non-plain row input
+   +--> copy base fields from row root
+   +--> read schema.get_slugs() from row roots
+   |
+   v
+new Model(document)
+   |
+   v
+instance.$normalize({mode: 'hydrate'})
+   |
+   +--> instance.$conform_document(...)
+   +--> instance.$apply_defaults(...)
+   +--> instance.$cast(...)
+   +--> instance.$validate(...)
+   |
+   +--> instance.is_new = false
+   +--> tracker rebase
+   |
+   v
+rebased persisted model instance
+```
+
+Manual low-level path:
+
+```text
+const instance = new UserModel(document)
+   |
+   +--> raw tracked document state only
+   +--> no conform / defaults / cast / validate yet
+   |
+   +--> instance.$conform_document(...)
+   +--> instance.$apply_defaults(...)
+   +--> instance.$cast(...)
+   +--> instance.$validate(...)
+   +--> or instance.$normalize(...)
 ```
 
 ## 7. Read Query Flow

@@ -226,6 +226,17 @@ Model.prototype.bind_document = function (target) {
 };
 
 /**
+ * Conform the current tracked document state to the schema-owned document shape.
+ *
+ * @param {object} [options]
+ * @returns {Model}
+ */
+Model.prototype.$conform_document = function () {
+	this.constructor.schema.conform(this.document);
+	return this;
+};
+
+/**
  * Apply schema defaults onto the current tracked document state.
  *
  * @param {object} [options]
@@ -404,6 +415,7 @@ Model.prototype.$validate = function (options = {}) {
  * @returns {Model}
  */
 Model.prototype.$normalize = function (options = {}) {
+	this.$conform_document(options);
 	this.$apply_defaults(options);
 	this.$cast(options);
 	this.$validate(options);
@@ -535,11 +547,11 @@ Model.prototype.rebase = function (reference) {
 Model.from = function (data, options = {}) {
 	const model = this;
 	const fields = extract_from_document_fields(model, data);
-	const doc = model.schema.conform(fields);
-	const instance = new model(doc);
+	const instance = new model(fields);
 
 	// Build a new document, then run the composed lifecycle on the tracked instance state.
 	instance.$normalize({mode: INTAKE_MODE.from, ...options});
+	instance.document.$rebase_changes();
 
 	return instance;
 };
@@ -554,13 +566,12 @@ Model.from = function (data, options = {}) {
 Model.hydrate = function (data, options = {}) {
 	const model = this;
 	const fields = extract_hydrated_document_fields(model, data);
-	const doc = model.schema.conform(fields);
-	const instance = new model(doc);
+	const instance = new model(fields);
 
 	// Build a persisted document, then run the composed lifecycle on the tracked instance state.
 	instance.$normalize({mode: INTAKE_MODE.hydrate, ...options});
-	instance.is_new = false;
 	instance.document.$rebase_changes();
+	instance.is_new = false;
 
 	return instance;
 };

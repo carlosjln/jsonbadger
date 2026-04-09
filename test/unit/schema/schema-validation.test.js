@@ -58,27 +58,32 @@ describe('Schema validation lifecycle', function () {
 		}).toThrow('Schema validation failed');
 	});
 
-	test('conform strips unknown payload keys using the compiled schema tree', function () {
+	test('conform strips unknown keys from the full document envelope using the compiled schema tree', function () {
 		const schema_instance = new Schema({
 			name: String,
 			profile: {
 				city: String
 			}
 		});
-		const payload = {
-			name: 'alice',
-			profile: {
-				city: 'Madrid',
-				age: 32
+		const document = {
+			data: {
+				name: 'alice',
+				profile: {
+					city: 'Madrid',
+					age: 32
+				},
+				role: 'admin'
 			},
-			role: 'admin'
+			debug: true
 		};
 
-		expect(schema_instance.conform(payload)).toBe(payload);
-		expect(payload).toEqual({
-			name: 'alice',
-			profile: {
-				city: 'Madrid'
+		expect(schema_instance.conform(document)).toBe(document);
+		expect(document).toEqual({
+			data: {
+				name: 'alice',
+				profile: {
+					city: 'Madrid'
+				}
 			}
 		});
 	});
@@ -216,24 +221,28 @@ describe('Schema validation lifecycle', function () {
 		}
 	});
 
-	test('conform returns early for non-plain payloads and defensive non-plain conform trees', function () {
+	test('conform leaves non-object input unchanged and returns early for defensive non-object conform trees', function () {
 		const schema_instance = new Schema({
 			name: String
 		});
-		const payload = {
-			name: 'alice',
-			role: 'admin'
+		const document = {
+			data: {
+				name: 'alice',
+				role: 'admin'
+			}
 		};
 
-		expect(schema_instance.conform(null)).toBeUndefined();
-		expect(schema_instance.conform('alice')).toBeUndefined();
-		expect(schema_instance.conform(['alice'])).toBeUndefined();
+		expect(schema_instance.conform(null)).toBeNull();
+		expect(schema_instance.conform('alice')).toBe('alice');
+		expect(schema_instance.conform(['alice'])).toEqual(['alice']);
 
 		schema_instance.$conform_tree = null;
-		expect(schema_instance.conform(payload)).toBe(payload);
-		expect(payload).toEqual({
-			name: 'alice',
-			role: 'admin'
+		expect(schema_instance.conform(document)).toBe(document);
+		expect(document).toEqual({
+			data: {
+				name: 'alice',
+				role: 'admin'
+			}
 		});
 	});
 });

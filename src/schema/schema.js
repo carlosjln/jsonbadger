@@ -324,6 +324,10 @@ function build_conform_tree(paths, default_slug, slug_keys) {
 	const allowed_tree = {};
 	const extra_slug_set = new Set(slug_keys || []);
 
+	for(const base_field_key of base_fields_keys) {
+		allowed_tree[base_field_key] = true;
+	}
+
 	for(const path_name of Object.keys(paths)) {
 		const path_segments = path_name.split('.');
 		const root_segment = path_segments[0];
@@ -515,7 +519,7 @@ function validate_base_field_values(document, id_strategy) {
  * @returns {void}
  */
 function prune_document_shape(document, branch) {
-	if(!is_plain_object(document) || !is_plain_object(branch)) {
+	if(!is_object(document) || !is_object(branch)) {
 		return;
 	}
 
@@ -530,7 +534,7 @@ function prune_document_shape(document, branch) {
 		const next_data = document[key];
 
 		// If branch continues and data is an object, keep walking
-		if(next_branch !== true && is_plain_object(next_data)) {
+		if(next_branch !== true && is_object(next_data)) {
 			prune_document_shape(next_data, next_branch);
 		}
 	}

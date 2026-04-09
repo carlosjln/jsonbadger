@@ -43,9 +43,9 @@ const hydrated_user = user_model.hydrate({
 });
 ```
 
-> **Note:** Prefer `Model.from(...)` and `Model.hydrate(...)` over direct `new Model(...)` construction. Those entry points apply schema defaults, casting, and validation before returning the document instance.
+> **Note:** Prefer `Model.from(...)` and `Model.hydrate(...)` over direct `new Model(...)` construction. Those entry points conform the document envelope, then apply schema defaults, casting, and validation before returning the document instance.
 >
-> Direct `new user_model(document)` construction remains available as a low-level path. It bypasses lifecycle until you call `doc.$apply_defaults(...)`, `doc.$cast(...)`, `doc.$validate(...)`, or `doc.$normalize(...)` manually.
+> Direct `new user_model(document)` construction remains available as a low-level path. It bypasses lifecycle until you call `doc.$conform_document(...)`, `doc.$apply_defaults(...)`, `doc.$cast(...)`, `doc.$validate(...)`, or `doc.$normalize(...)` manually.
 
 ## Ownership Boundary
 
@@ -119,7 +119,8 @@ const imported_user = user_model.from({
 Behavior:
 - returns a new document instance
 - keeps `is_new = true`
-- applies schema defaults, casting, and validation before returning
+- leaves no paths marked as modified after lifecycle normalization
+- conforms the document envelope, then applies schema defaults, casting, and validation before returning
 - expands dotted payload keys at the input boundary
 - routes root keys listed in `schema.options.slugs` out of the default slug
 - keeps every other non-base root key inside the default slug
@@ -131,9 +132,9 @@ Input flow:
 3. expand dotted payload keys into nested objects
 4. route registered extra slug roots out of the default slug
 5. keep every remaining root key in the default slug
-6. conform the final document envelope to registered slug roots and schema-owned paths
-7. build the document instance
-8. apply schema defaults, casting, and validation
+6. build the document instance
+7. conform the document envelope, then apply schema defaults, casting, and validation
+8. clear tracker changes so the normalized state becomes the baseline
 
 Example with a custom default slug:
 
@@ -166,7 +167,7 @@ const imported_user = user_model.from({
 
 Result:
 - `imported_user.document.id === '7'`
-- `imported_user.document.created_at === '2026-03-03T08:00:00.000Z'`
+- `imported_user.document.created_at instanceof Date`
 - `imported_user.document.payload.name === 'maria'`
 - `imported_user.document.settings.theme === 'dark'`
 
@@ -205,10 +206,10 @@ Input flow:
 2. serialize non-plain objects through `to_json`, `toJSON`, or `to_plain_object(...)`
 3. copy top-level base fields from the row
 4. read `schema.get_slugs()` from the row and default missing slug roots to `{}`
-5. conform the final document envelope to registered slug roots and schema-owned paths
-6. build the document instance
-7. apply schema defaults, casting, and validation
-8. mark the document persisted and clear tracked changes
+5. build the document instance
+6. conform the document envelope, then apply schema defaults, casting, and validation
+7. clear tracker changes
+8. mark the document persisted
 
 > **Note:** `Model.hydrate(...)` is strict about row shape. It does not rebuild the default slug from unrelated root keys.
 
@@ -248,12 +249,14 @@ Behavior:
   - resolves aliases, applies schema setter/cast logic, and writes the exact path into `doc.document`
 - `doc.$apply_defaults(options?)`
   - fills missing paths from schema defaults on the current tracked document
+- `doc.$conform_document(options?)`
+  - removes unknown envelope keys from the current tracked document according to schema slugs and paths
 - `doc.$cast(options?)`
   - applies schema setter/cast logic across the current tracked document
 - `doc.$validate(options?)`
   - validates the current document envelope against the schema
 - `doc.$normalize(options?)`
-  - runs `$apply_defaults(...)`, `$cast(...)`, and `$validate(...)` in order
+  - runs `$conform_document(...)`, `$apply_defaults(...)`, `$cast(...)`, and `$validate(...)` in order
 - `doc.bind_document(target)`
   - binds live forwarding properties onto `target` from the current document instance
 - `doc.rebase(reference)`
@@ -293,7 +296,7 @@ doc.$normalize({mode: 'from'});
 
 Behavior:
 - direct `new user_model(document)` keeps the raw tracked state as given
-- defaults, casting, and validation do not run automatically on that low-level path
+- conform, defaults, casting, and validation do not run automatically on that low-level path
 - manual lifecycle methods are available when you intentionally want that control
 
 `doc.bind_document(target)` projects live document-backed fields onto another object, such as a domain entity wrapper.
