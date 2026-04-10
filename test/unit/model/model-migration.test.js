@@ -61,7 +61,7 @@ describe('Model migration lifecycle', function () {
 		expect(ensure_table_mock).toHaveBeenCalledWith({
 			table_name: 'users',
 			data_column: 'data',
-			id_strategy: 'bigserial',
+			id_strategy: 'uuidv7',
 			connection
 		});
 		expect(ensure_index_mock).toHaveBeenCalledWith({

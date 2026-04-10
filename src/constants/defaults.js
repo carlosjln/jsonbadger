@@ -11,7 +11,7 @@ const defaults = {
 	},
 
 	schema_options: {
-		id_strategy: ID_STRATEGY.bigserial,
+		id_strategy: ID_STRATEGY.uuidv7,
 		auto_index: true,
 
 		default_slug: DEFAULT_SLUG,

@@ -2,13 +2,16 @@ import {describe, expect, test} from '@jest/globals';
 
 import {create_model} from '#test/unit/model/test-helpers.js';
 
+const existing_uuid = '0194f028-579a-7b5b-8107-b9ad31395f43';
+const next_uuid = '0194f028-579a-7b5b-8107-b9ad31395f44';
+
 describe('Model access lifecycle', function () {
 	test('dx aliases read and write the root document fields directly', function () {
 		const User = create_model({
 			name: String
 		});
 		const user_document = User.hydrate({
-			id: '9',
+			id: existing_uuid,
 			data: {
 				name: 'alice'
 			},
@@ -16,7 +19,7 @@ describe('Model access lifecycle', function () {
 			updated_at: '2026-03-03T09:00:00.000Z'
 		});
 
-		expect(user_document.id).toBe('9');
+		expect(user_document.id).toBe(existing_uuid);
 		expect(user_document.created_at).toEqual(new Date('2026-03-03T08:00:00.000Z'));
 		expect(user_document.updated_at).toEqual(new Date('2026-03-03T09:00:00.000Z'));
 		expect(user_document.timestamps).toEqual({
@@ -24,11 +27,11 @@ describe('Model access lifecycle', function () {
 			updated_at: new Date('2026-03-03T09:00:00.000Z')
 		});
 
-		user_document.id = '10';
+		user_document.id = next_uuid;
 		user_document.created_at = '2026-03-04T08:00:00.000Z';
 		user_document.updated_at = '2026-03-04T09:00:00.000Z';
 
-		expect(user_document.document.id).toBe('10');
+		expect(user_document.document.id).toBe(next_uuid);
 		expect(user_document.document.created_at).toBe('2026-03-04T08:00:00.000Z');
 		expect(user_document.document.updated_at).toBe('2026-03-04T09:00:00.000Z');
 	});
@@ -45,7 +48,7 @@ describe('Model access lifecycle', function () {
 		});
 
 		const user_document = User.hydrate({
-			id: '9',
+			id: existing_uuid,
 			payload: {
 				name: 'alice'
 			},
@@ -54,7 +57,7 @@ describe('Model access lifecycle', function () {
 			}
 		});
 
-		expect(user_document.get('id')).toBe('9');
+		expect(user_document.get('id')).toBe(existing_uuid);
 		expect(user_document.get('payload.name')).toBe('alice');
 		expect(user_document.get('settings.theme')).toBe('dark');
 		expect(user_document.get('missing')).toBeNull();
@@ -106,7 +109,7 @@ describe('Model access lifecycle', function () {
 		});
 
 		const user_document = User.hydrate({
-			id: '9',
+			id: existing_uuid,
 			payload: {
 				name: 'alice'
 			},
@@ -114,7 +117,7 @@ describe('Model access lifecycle', function () {
 		});
 
 		expect(function assign_id() {
-			user_document.set('id', '10');
+			user_document.set('id', next_uuid);
 		}).toThrow('Read-only base field cannot be assigned by path mutation');
 
 		expect(function assign_nested_timestamp() {
@@ -127,7 +130,7 @@ describe('Model access lifecycle', function () {
 			name: String
 		});
 		const user_document = User.hydrate({
-			id: '9',
+			id: existing_uuid,
 			data: {
 				name: 'alice'
 			},

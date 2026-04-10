@@ -5,7 +5,7 @@ import Connection from '#src/connection/connection.js';
 import debug_logger from '#src/debug/debug-logger.js';
 
 import {assert_condition} from '#src/utils/assert.js';
-import {assert_id_strategy_capability, scan_server_capabilities} from '#src/connection/server-capabilities.js';
+import {scan_server_capabilities} from '#src/connection/server-capabilities.js';
 import {is_function, is_string} from '#src/utils/value.js';
 
 async function connect(uri, options) {
@@ -20,10 +20,6 @@ async function connect(uri, options) {
 	try {
 		await pool_instance.query('SELECT 1');
 		server_capabilities = await scan_server_capabilities(pool_instance);
-
-		if(final_options.id_strategy) {
-			assert_id_strategy_capability(final_options.id_strategy, server_capabilities);
-		}
 	} catch(error) {
 		await close_pool_quietly(pool_instance);
 		throw error;

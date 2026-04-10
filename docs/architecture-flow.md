@@ -33,11 +33,14 @@ JsonBadger.connect(uri, options)
    v
 connection bootstrap
    |
-   +--> validate options / id_strategy
+   +--> validate options
    +--> create pg.Pool
    +--> SELECT 1
    +--> scan server capabilities
    +--> create Connection(pool_instance, options, server_capabilities)
+   +--> on bootstrap failure:
+         - close_pool_quietly(pool_instance)
+         - rethrow original error
    |
    v
 returns Connection
@@ -55,12 +58,12 @@ Important:
 Connection
    |
    +--> owns pool_instance
-   +--> owns options
+   +--> owns normalized options
    +--> owns server_capabilities
    +--> owns model registry
    +--> exposes:
-         - model(model_definition)
-         - disconnect()
+          - model(model_definition)
+          - disconnect()
 ```
 
 ## 4. Schema Flow
@@ -79,19 +82,29 @@ Schema
    +--> build introspection paths
    +--> normalize inline index declarations
    +--> normalize slug options
-   +--> configure validators by slug bucket
+   +--> build aliases
+   +--> build conform tree
+   +--> configure validators:
+         - base field validator
+         - slug-slice validators
+   +--> register field-defined indexes
    +--> register schema instance methods via Schema.add_method(...)
    +--> store:
-         - paths
-         - indexes
-         - options
-         - methods
-         - aliases
+          - paths
+          - indexes
+          - options
+          - id_strategy
+          - auto_index
+          - methods
+          - aliases
+          - validators
+          - $conform_tree
 ```
 
 Important:
 
 - slug ownership belongs to `Schema`
+- `Schema` owns the final runtime `id_strategy`
 - schema methods are later installed on compiled model constructors
 
 ## 5. Model Registration Flow
@@ -105,15 +118,18 @@ connection.model({name, schema, table_name, ...})
    v
 Connection.model(...)
    |
+   +--> validate model_definition.name
    +--> build model options from model_definition
    +--> derive table_name from name when omitted
    +--> return existing model when schema/options match
    +--> throw ModelOverwriteError on conflicting redefinition
+   +--> require schema instanceof Schema
    +--> build compiled model constructor/runtime
 ```
 
 Compiled model owns:
 
+- `$name`
 - `schema`
 - `options`
 - `connection`
@@ -151,7 +167,9 @@ instance.$normalize({mode: 'from'})
    +--> instance.$apply_defaults(...)
    +--> instance.$cast(...)
    +--> instance.$validate(...)
-   +--> tracker rebase
+   |
+   v
+instance.document.$rebase_changes()
    |
    v
 new document instance
@@ -183,8 +201,11 @@ instance.$normalize({mode: 'hydrate'})
    +--> instance.$cast(...)
    +--> instance.$validate(...)
    |
-   +--> instance.is_new = false
-   +--> tracker rebase
+   v
+instance.document.$rebase_changes()
+   |
+   v
+instance.is_new = false
    |
    v
 rebased persisted model instance
@@ -203,6 +224,7 @@ const instance = new UserModel(document)
    +--> instance.$cast(...)
    +--> instance.$validate(...)
    +--> or instance.$normalize(...)
+   +--> optionally instance.document.$rebase_changes()
 ```
 
 ## 7. Read Query Flow
@@ -220,7 +242,7 @@ model constructor read methods
    v
 query builder
    |
-   +--> where_compiler(...)
+   +--> where_compiler(..., {schema, data_column, id_strategy})
    +--> sort_compiler(...)
    +--> limit_skip_compiler(...)
    +--> sql_runner(sql_text, params, Model.connection)
@@ -236,6 +258,11 @@ Hydration path for document-returning reads:
 
 ```text
 query row
+   |
+   +--> row_to_document(...)
+   |     - id -> string|null
+   |     - data -> object fallback
+   |     - created_at / updated_at -> ISO timestamp
    |
    v
 Model.hydrate(...)
@@ -253,6 +280,8 @@ User
    |     |
    |     +--> Model.from(...)
    |     +--> doc.insert()
+   |     +--> schema.validate(document)
+   |     +--> apply_timestamps(document)
    |     +--> exec_insert_one(...)
    |     +--> sql_runner(..., Model.connection)
    |     +--> raw inserted row
@@ -261,27 +290,41 @@ User
    +--> Model.from(...).save()
    |     |
    |     +--> doc.insert()
+   |     +--> schema.validate(document)
+   |     +--> apply_timestamps(document)
    |     +--> exec_insert_one(...)
    |     +--> sql_runner(..., Model.connection)
    |     +--> raw inserted row
    |     +--> rebase same instance
    |
-   +--> hydrated_doc.set(...).save()
+   +--> hydrated_doc.save()
    |     |
    |     +--> schema.validate(document)
+   |     +--> set updated_at
+   |     +--> require id for persisted update
    |     +--> build tracker delta
    |     +--> exec_update_one(...)
    |     +--> sql_runner(..., Model.connection)
    |     +--> raw updated row
    |     +--> rebase current document
    |
+   +--> Model.update_one(filter, update_definition)
+   |     |
+   |     +--> normalize update gateway
+   |     +--> normalize update definition
+   |     +--> JsonbOps.from(...)
+   |     +--> where_compiler(..., {schema, data_column, id_strategy})
+   |     +--> exec_update_one(...)
+   |     +--> sql_runner(..., Model.connection)
+   |     +--> raw updated row
+   |     +--> Model.hydrate(row)
+   |
    +--> Model.delete_one(...)
-         |
-         +--> delete compiler
-         +--> where_compiler(...)
-         +--> sql_runner(..., Model.connection)
-         +--> raw deleted row
-         +--> Model.hydrate(row)
+          |
+          +--> where_compiler(..., {schema, data_column, id_strategy})
+          +--> sql_runner(..., Model.connection)
+          +--> raw deleted row
+          +--> Model.hydrate(row)
 ```
 
 ## 9. Migration And Index Flow
@@ -292,6 +335,8 @@ App startup / bootstrap
    v
 Model.ensure_table()
    |
+   +--> read model.schema.id_strategy
+   +--> if uuidv7: assert server capability snapshot
    +--> table migration helper
    +--> execute through explicit Connection
 
@@ -304,13 +349,14 @@ Model.ensure_indexes()
 Model.ensure_model()
    |
    +--> ensure table
-   +--> ensure schema indexes when auto_index is enabled
+   +--> ensure schema indexes when schema.auto_index is enabled
    +--> execute through explicit Connection
 ```
 
 Important:
 
 - run `ensure_*` helpers during startup/bootstrap
+- `uuidv7` capability is enforced at `Model.ensure_table()`, not at `connect(...)`
 - normal runtime read/write operations do not provision tables or indexes implicitly
 
 ## Ownership Summary
@@ -319,17 +365,30 @@ Important:
 Connection
   |
   +--> owns one pool
+  +--> owns normalized connection options
   +--> owns one capability snapshot
   +--> owns one model registry
   |
-  +--> compiled models are created through Connection.model(...)
-  |     and execute through their owning Connection
+Schema
   |
-  +--> Schema owns paths, indexes, slug ownership, options, and schema-defined methods
+  +--> owns paths, indexes, slug ownership, aliases, and validators
+  +--> owns id_strategy and auto_index
+  +--> owns the document conform tree
   |
-  +--> document instances receive built-in runtime methods plus schema-defined methods
+Model
   |
-  +--> sql_runner is bound to explicit Connection context
+  +--> is compiled through Connection.model(...)
+  +--> owns schema/options/connection bindings
+  +--> reads model.schema.id_strategy as final runtime truth
+  +--> executes through its owning Connection
+  |
+Document instances
+  |
+  +--> receive built-in runtime methods plus schema-defined methods
+  |
+SQL execution
+  |
+  +--> stays bound to explicit Connection context
 ```
 
 Important:

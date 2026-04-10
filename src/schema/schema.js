@@ -1,6 +1,5 @@
 import defaults from '#src/constants/defaults.js';
 import ID_STRATEGY from '#src/constants/id-strategy.js';
-import {assert_id_strategy} from '#src/constants/id-strategy.js';
 
 import ValidationError from '#src/errors/validation-error.js';
 
@@ -36,14 +35,13 @@ function Schema(schema_definition = {}, schema_options = {}) {
 
 	this.indexes = [];
 	this.options = $options;
-	this.id_strategy = this.options.id_strategy;
-	this.auto_index = this.options.auto_index;
+	this.id_strategy = $options.id_strategy;
+	this.auto_index = $options.auto_index;
 	this.methods = Object.create(null);
 	this.validators = Object.create(null);
 	this.aliases = collect_aliases(field_types);
 	this.$conform_tree = build_conform_tree(field_types, default_slug, extra_slug_keys);
 
-	assert_id_strategy(this.id_strategy);
 	assert_condition(typeof this.auto_index === 'boolean', 'auto_index must be a boolean');
 
 	this.configure_validators();
@@ -76,7 +74,7 @@ Schema.prototype.configure_validators = function () {
 		const validate_slice = create_path_validator(field_types);
 
 		validators[slug_key] = (document) => {
-			const slice = (is_plain_object(document) && has_own(document, slug_key)) ? document[slug_key] : {};
+			const slice = (is_object(document) && has_own(document, slug_key)) ? document[slug_key] : {};
 			return validate_slice(slice);
 		};
 	}
@@ -259,6 +257,25 @@ Schema.prototype.add_method = function (method_name, method_implementation) {
 
 	this.methods[method_name] = method_implementation;
 	return this;
+};
+
+Schema.prototype.clone = function () {
+	const cloned_schema = Object.create(Schema.prototype);
+
+	cloned_schema.$field_registry = this.$field_registry;
+	cloned_schema.$path_introspection = deep_clone(this.$path_introspection);
+	cloned_schema.$field_types = deep_clone(this.$field_types);
+
+	cloned_schema.indexes = this.get_indexes();
+	cloned_schema.options = deep_clone(this.options);
+	cloned_schema.id_strategy = this.id_strategy;
+	cloned_schema.auto_index = this.auto_index;
+	cloned_schema.methods = Object.assign(Object.create(null), this.methods);
+	cloned_schema.validators = Object.create(null);
+	cloned_schema.aliases = deep_clone(this.aliases);
+	cloned_schema.$conform_tree = deep_clone(this.$conform_tree);
+
+	return cloned_schema;
 };
 
 Schema.prototype.create_index = function (index_definition) {

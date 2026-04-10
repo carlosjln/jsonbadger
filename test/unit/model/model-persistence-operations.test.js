@@ -11,6 +11,10 @@ jest.unstable_mockModule('#src/sql/run.js', function () {
 const {default: Schema} = await import('#src/schema/schema.js');
 const {default: model} = await import('#src/model/factory/index.js');
 
+const first_uuid = '0194f028-579a-7b5b-8107-b9ad31395f43';
+const second_uuid = '0194f028-579a-7b5b-8107-b9ad31395f44';
+const third_uuid = '0194f028-579a-7b5b-8107-b9ad31395f45';
+
 describe('Model persistence operations lifecycle', function () {
 	let connection;
 
@@ -25,7 +29,7 @@ describe('Model persistence operations lifecycle', function () {
 	test('insert_one persists plain input through the insert path and returns a hydrated instance', async function () {
 		sql_runner_mock.mockResolvedValueOnce({
 			rows: [{
-				id: '11',
+				id: first_uuid,
 				data: {name: 'saved'},
 				created_at: new Date('2026-03-06T10:00:00.000Z'),
 				updated_at: new Date('2026-03-06T11:00:00.000Z')
@@ -90,7 +94,7 @@ describe('Model persistence operations lifecycle', function () {
 	test('update_one normalizes public dotted input into the JSONB update path and hydrates the returned row', async function () {
 		sql_runner_mock.mockResolvedValueOnce({
 			rows: [{
-				id: '12',
+				id: second_uuid,
 				data: {
 					profile: {
 						city: 'Madrid'
@@ -107,7 +111,7 @@ describe('Model persistence operations lifecycle', function () {
 			}
 		}), connection);
 
-		const updated_document = await User.update_one({id: '12'}, {
+		const updated_document = await User.update_one({id: second_uuid}, {
 			'profile.city': 'Madrid'
 		});
 
@@ -118,12 +122,12 @@ describe('Model persistence operations lifecycle', function () {
 			}
 		});
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('jsonb_set');
-		expect(sql_runner_mock.mock.calls[0][1]).toEqual(expect.arrayContaining(['"Madrid"', '12']));
+		expect(sql_runner_mock.mock.calls[0][1]).toEqual(expect.arrayContaining(['"Madrid"', second_uuid]));
 	});
 
 	test('update_one returns null immediately when the update definition is empty', async function () {
 		const User = create_model(new Schema({name: String}), connection);
-		const result = await User.update_one({id: '12'}, {});
+		const result = await User.update_one({id: second_uuid}, {});
 
 		expect(result).toBeNull();
 		expect(sql_runner_mock).not.toHaveBeenCalled();
@@ -134,7 +138,7 @@ describe('Model persistence operations lifecycle', function () {
 
 		const User = create_model(new Schema({name: String}), connection);
 
-		const result = await User.update_one({id: '21'}, {
+		const result = await User.update_one({id: third_uuid}, {
 			set: {
 				'data.name': 'bob'
 			},
@@ -145,7 +149,7 @@ describe('Model persistence operations lifecycle', function () {
 		expect(result).toBeNull();
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('jsonb_set');
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('#-');
-		expect(sql_runner_mock.mock.calls[0][1]).toEqual(expect.arrayContaining(['"bob"', '21']));
+		expect(sql_runner_mock.mock.calls[0][1]).toEqual(expect.arrayContaining(['"bob"', third_uuid]));
 	});
 
 	test('delete_one returns null when no row matches and hydrates the deleted row when one exists', async function () {
@@ -157,7 +161,7 @@ describe('Model persistence operations lifecycle', function () {
 
 		sql_runner_mock.mockResolvedValueOnce({
 			rows: [{
-				id: '13',
+				id: third_uuid,
 				data: {name: 'deleted'},
 				created_at: new Date('2026-03-06T10:00:00.000Z'),
 				updated_at: new Date('2026-03-06T11:00:00.000Z')

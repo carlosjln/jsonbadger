@@ -139,37 +139,35 @@ try {
 
 ## ID Strategy Examples
 
-Server-wide default (`connect`) plus model override (`conn.model(...)`):
+Schema-level `id_strategy` selection:
 
 ```js
 const db_uri = 'postgresql://user:pass@localhost:5432/dbname';
-const options = {
-	id_strategy: JsonBadger.IdStrategies.uuidv7 // PostgreSQL 18+ native uuidv7() required
-};
-
-const connection = await JsonBadger.connect(db_uri, options);
+const connection = await JsonBadger.connect(db_uri);
 
 const AuditLog = connection.model({
 	name: 'AuditLog',
 	schema: new JsonBadger.Schema({
 		event_name: String
+	}, {
+		id_strategy: JsonBadger.IdStrategies.uuidv7 // PostgreSQL 18+ native uuidv7() required
 	}),
-	table_name: 'audit_logs',
-	// inherits server id_strategy: uuidv7
+	table_name: 'audit_logs'
 });
 
 const Counter = connection.model({
 	name: 'Counter',
 	schema: new JsonBadger.Schema({
 		label: String
+	}, {
+		id_strategy: JsonBadger.IdStrategies.bigserial // schema override
 	}),
-	table_name: 'counters',
-	id_strategy: JsonBadger.IdStrategies.bigserial // model override
+	table_name: 'counters'
 });
 ```
 
 Notes:
-- `id_strategy` precedence is: model option -> connection option -> library default (`bigserial`).
+- `id_strategy` lives on the schema. If omitted, the library default is `bigserial`.
 - `IdStrategies.uuidv7` uses database-generated IDs (`DEFAULT uuidv7()`) and JsonBadger validates support internally.
 
 Create-time `id` behavior example:

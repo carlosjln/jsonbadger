@@ -37,8 +37,7 @@ const options = {
 	debug: false,
 	max: 10,
 	ssl: false,
-	auto_index: true,
-	id_strategy: JsonBadger.IdStrategies.bigserial // server default: bigserial | uuidv7 (native PostgreSQL uuidv7() required)
+	auto_index: true
 };
 const connection = await JsonBadger.connect(db_uri, options);
 
@@ -48,6 +47,8 @@ const user_schema = new JsonBadger.Schema({
 	age: {type: Number, min: 0, index: -1},
 	type: {type: String},
 	email: {type: String, index: {unique: true, name: 'idx_users_email_unique'}}
+}, {
+	id_strategy: JsonBadger.IdStrategies.bigserial
 });
 
 // 3. Declare indexes on schema (path-level + schema-level compound index)
@@ -59,8 +60,7 @@ const User = connection.model({
 	name: 'User',
 	schema: user_schema,
 	table_name: 'users',
-	auto_index: false, // optional model-level override
-	id_strategy: JsonBadger.IdStrategies.bigserial // optional model-level override (uuidv7 uses DB-generated ids)
+	auto_index: false // optional model-level override
 });
 
 // 5. Run migrations manually (optional if you rely on first-write auto table creation via save()/update_one())
@@ -84,7 +84,7 @@ const found_user = await User.find_one({
 // found_user?.to_json() -> { id, name, age, type, created_at, updated_at }
 ```
 
-When using `IdStrategies.uuidv7`, JsonBadger checks PostgreSQL native `uuidv7()` support automatically during `connect(...)` and reuses cached capability info for later model-level `uuidv7` overrides. You do not need to run manual version checks; `SELECT version();` and `SHOW server_version;` are optional troubleshooting commands only.
+When using `IdStrategies.uuidv7`, declare it on the schema. JsonBadger checks PostgreSQL native `uuidv7()` support automatically during `Model.ensure_table()` using capability data captured at `connect(...)`. You do not need to run manual version checks; `SELECT version();` and `SHOW server_version;` are optional troubleshooting commands only.
 
 ## Examples Cheat Sheet
 

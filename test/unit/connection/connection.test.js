@@ -20,7 +20,12 @@ const {default: Connection} = await import('#src/connection/connection.js');
 
 function create_schema() {
 	return {
-		validate: jest.fn()
+		validate: jest.fn(),
+		configure_validators: jest.fn(),
+		options: {
+			id_strategy: 'bigserial'
+		},
+		id_strategy: 'bigserial'
 	};
 }
 

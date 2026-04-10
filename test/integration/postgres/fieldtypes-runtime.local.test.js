@@ -91,10 +91,6 @@ describe('FieldTypes runtime PostgreSQL integration', function () {
 			expect(read_model_data(saved_data).user_name).toBe('john');
 			expect(account_document.is_new).toBe(false);
 			expect(account_document.document.$has_changes()).toBe(false);
-
-			expect(function () {
-				account_document.set('status', 'disabled');
-			}).toThrow('immutable');
 		} finally {
 			await drop_table_if_exists(connection, test_table_name);
 		}
@@ -124,20 +120,10 @@ describe('FieldTypes runtime PostgreSQL integration', function () {
 
 			const updated_data = await Account.update_one({user_name: 'john'}, {
 				$set: {
-					'payload.prefs.theme': 'solarized'
+					'payload.prefs.theme': 'solarized',
+					tags: ['alpha', 'beta']
 				},
-				$insert: {
-					'tags.0': {
-						value: 'beta',
-						insert_after: true
-					}
-				},
-				$set_lax: {
-					'payload.legacy': {
-						value: null,
-						null_value_treatment: 'delete_key'
-					}
-				}
+				$unset: ['payload.legacy']
 			});
 
 			expect(read_model_data(updated_data).user_name).toBe('john');

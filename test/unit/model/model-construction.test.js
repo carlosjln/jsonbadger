@@ -1,9 +1,10 @@
 import {describe, expect, test} from '@jest/globals';
 
 import {
-	create_payload_model,
-	create_stubbed_model
+	create_payload_model
 } from '#test/unit/model/test-helpers.js';
+
+const existing_uuid = '0194f028-579a-7b5b-8107-b9ad31395f43';
 
 describe('Model construction lifecycle', function () {
 	describe('from', function () {
@@ -188,7 +189,7 @@ describe('Model construction lifecycle', function () {
 				name: String
 			});
 			const hydrated_document = User.hydrate(new SerializableRow({
-				id: '7',
+				id: existing_uuid,
 				payload: {
 					name: 'alice',
 					id: 'drop-me',
@@ -262,32 +263,22 @@ describe('Model construction lifecycle', function () {
 			expect(observed_contexts[0].document).toBe(hydrated_document.document);
 		});
 
-		test('documents current hydrate debt for primitive, null, and array input', function () {
-			const User = create_stubbed_model({
-				default_slug: 'payload'
+		test('falls back to an empty default slug for primitive, null, and array hydrate input', function () {
+			const User = create_payload_model({
+				name: String
 			});
 
-			expect(function hydrate_null() {
-				User.hydrate(null);
-			}).toThrow(TypeError);
-
-			expect(function hydrate_primitive() {
-				User.hydrate('alice');
-			}).toThrow(TypeError);
-
-			expect(function hydrate_array() {
-				User.hydrate(['alice']);
-			}).toThrow(TypeError);
+			expect(User.hydrate(null).document.payload).toEqual({});
+			expect(User.hydrate('alice').document.payload).toEqual({});
+			expect(User.hydrate(['alice']).document.payload).toEqual({});
 		});
 
-		test('documents current hydrate debt when serialization does not produce a plain row object', function () {
-			const User = create_stubbed_model({
-				default_slug: 'payload'
+		test('falls back to an empty default slug when row serialization does not produce a plain object', function () {
+			const User = create_payload_model({
+				name: String
 			});
 
-			expect(function hydrate_broken_serializable_row() {
-				User.hydrate(new BrokenSerializableRow());
-			}).toThrow(TypeError);
+			expect(User.hydrate(new BrokenSerializableRow()).document.payload).toEqual({});
 		});
 	});
 

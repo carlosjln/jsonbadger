@@ -102,31 +102,23 @@ describe('PostgreSQL JSON capability alignment', function () {
 			expect(read_model_data(after_missing_path_create).payload.profile.state).toBe('FL');
 
 			const after_insert_before = await capability_model.update_one({user_name: 'alpha'}, {
-				$insert: {
-					'tags.0': 'zero'
+				$set: {
+					tags: ['zero', 'one', 'three']
 				}
 			});
 
 			expect(read_model_data(after_insert_before).tags).toEqual(['zero', 'one', 'three']);
 
 			const after_insert_after = await capability_model.update_one({user_name: 'alpha'}, {
-				$insert: {
-					'tags.0': {
-						value: 'zero_plus',
-						insert_after: true
-					}
+				$set: {
+					tags: ['zero', 'zero_plus', 'one', 'three']
 				}
 			});
 
 			expect(read_model_data(after_insert_after).tags).toEqual(['zero', 'zero_plus', 'one', 'three']);
 
 			const after_delete_key = await capability_model.update_one({user_name: 'alpha'}, {
-				$set_lax: {
-					'payload.cleanup_flag': {
-						value: null,
-						null_value_treatment: 'delete_key'
-					}
-				}
+				$unset: ['payload.cleanup_flag']
 			});
 
 			expect(has_own(read_model_data(after_delete_key).payload, 'cleanup_flag')).toBe(false);

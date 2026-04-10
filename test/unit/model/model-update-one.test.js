@@ -11,6 +11,9 @@ jest.unstable_mockModule('#src/sql/run.js', function () {
 const {default: Schema} = await import('#src/schema/schema.js');
 const {default: model} = await import('#src/model/factory/index.js');
 
+const existing_uuid = '0194f028-579a-7b5b-8107-b9ad31395f43';
+const next_uuid = '0194f028-579a-7b5b-8107-b9ad31395f44';
+
 describe('Model.update_one gateway normalization', function () {
 	let connection;
 
@@ -255,7 +258,7 @@ describe('Model.update_one gateway normalization', function () {
 		const User = create_model(new Schema({name: String}), connection);
 		const next_updated_at = '2026-03-31T12:00:00.000Z';
 
-		await User.update_one({id: '21'}, {
+		await User.update_one({id: existing_uuid}, {
 			set: {
 				'data.name': 'alice',
 				updated_at: next_updated_at
@@ -267,7 +270,7 @@ describe('Model.update_one gateway normalization', function () {
 
 		expect(sql_text).toContain('updated_at =');
 		expect(sql_params).toEqual([
-			'21',
+			existing_uuid,
 			'"alice"',
 			next_updated_at
 		]);
@@ -300,7 +303,7 @@ describe('Model.update_one gateway normalization', function () {
 	test('returns a hydrated document when update_one receives a row', async function () {
 		sql_runner_mock.mockResolvedValueOnce({
 			rows: [{
-				id: '12',
+				id: next_uuid,
 				data: {
 					name: 'alice'
 				},

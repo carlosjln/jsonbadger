@@ -3,13 +3,16 @@ import {describe, expect, jest, test} from '@jest/globals';
 import Document from '#src/model/document.js';
 import {create_model} from '#test/unit/model/test-helpers.js';
 
+const existing_uuid = '0194f028-579a-7b5b-8107-b9ad31395f43';
+const updated_uuid = '0194f028-579a-7b5b-8107-b9ad31395f44';
+
 describe('Model save lifecycle', function () {
 	test('insert delegates to the compiled model insert_one path', async function () {
 		const connection = {
 			pool_instance: {
 				query: jest.fn().mockResolvedValue({
 					rows: [{
-						id: '7',
+						id: updated_uuid,
 						data: {
 							name: 'alice'
 						},
@@ -92,7 +95,7 @@ describe('Model save lifecycle', function () {
 			name: String
 		}, {}, {}, connection);
 		const user_document = User.hydrate({
-			id: '7',
+			id: existing_uuid,
 			data: {
 				name: 'alice'
 			},

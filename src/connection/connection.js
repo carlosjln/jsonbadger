@@ -84,10 +84,9 @@ Connection.prototype.disconnect = async function () {
  * @returns {object}
  */
 function create_model_options(model_definition) {
-	const model_options = Object.assign({}, model_definition);
-
-	delete model_options.name;
-	delete model_options.schema;
+	const {name, schema, ...model_options} = model_definition;
+	void name;
+	void schema;
 
 	if(!model_options.table_name) {
 		model_options.table_name = pluralize(model_definition.name);

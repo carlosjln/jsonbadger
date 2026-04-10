@@ -2,6 +2,8 @@ import {describe, expect, test} from '@jest/globals';
 
 import {create_payload_model} from '#test/unit/model/test-helpers.js';
 
+const existing_uuid = '0194f028-579a-7b5b-8107-b9ad31395f43';
+
 function create_hydrated_document(schema_definition, document_data, slugs = []) {
 	const User = create_payload_model(schema_definition, slugs);
 	return User.hydrate(document_data);
@@ -30,7 +32,7 @@ describe('Model document binding lifecycle', function () {
 				theme: String
 			}
 		}, {
-			id: '9',
+			id: existing_uuid,
 			payload: {
 				email: 'alice@example.com',
 				profile: {
@@ -48,7 +50,7 @@ describe('Model document binding lifecycle', function () {
 		const result = user_document.bind_document(entity);
 
 		expect(result).toBe(entity);
-		expect(entity.id).toBe('9');
+		expect(entity.id).toBe(existing_uuid);
 		expect(entity.created_at).toEqual(new Date('2026-04-05T08:00:00.000Z'));
 		expect(entity.updated_at).toEqual(new Date('2026-04-05T09:00:00.000Z'));
 		expect(entity.email).toBe('alice@example.com');

@@ -13,42 +13,51 @@ describe('Table ID strategy integration (local PostgreSQL)', function () {
 	let connection;
 
 	beforeAll(async function setup_database() {
-		connection = await connect_local_jsonbadger(jsonbadger, {
-			id_strategy: jsonbadger.ID_STRATEGY.uuidv7
-		});
+		connection = await connect_local_jsonbadger(jsonbadger);
 	});
 
 	afterAll(async function teardown_database() {
 		await disconnect_connection(connection);
 	});
 
-	test('uses server default uuidv7 and model override bigserial', async function () {
+	test('uses schema-selected uuidv7 and schema-selected bigserial', async function () {
 		const uuid_table_name = build_test_table_name('jsonbadger_id_strategy_test', 'uuid');
 		const bigserial_table_name = build_test_table_name('jsonbadger_id_strategy_test', 'bigserial');
 
-		const shared_schema = new jsonbadger.Schema({
+		const uuid_schema = new jsonbadger.Schema({
 			name: {type: String, required: true}
+		}, {
+			id_strategy: jsonbadger.ID_STRATEGY.uuidv7
+		});
+		const bigserial_schema = new jsonbadger.Schema({
+			name: {type: String, required: true}
+		}, {
+			id_strategy: jsonbadger.ID_STRATEGY.bigserial
 		});
 
 		const uuid_model = connection.model({
 			name: 'UuidModel_' + uuid_table_name,
-			schema: shared_schema,
+			schema: uuid_schema,
 			table_name: uuid_table_name
 		});
 
 		const bigserial_model = connection.model({
 			name: 'BigserialModel_' + bigserial_table_name,
-			schema: shared_schema,
-			table_name: bigserial_table_name,
-			id_strategy: jsonbadger.ID_STRATEGY.bigserial
+			schema: bigserial_schema,
+			table_name: bigserial_table_name
 		});
 
 		try {
 			await drop_table_if_exists(connection, uuid_table_name);
 			await drop_table_if_exists(connection, bigserial_table_name);
 
-			expect(uuid_model.resolve_id_strategy()).toBe(jsonbadger.ID_STRATEGY.uuidv7);
-			expect(bigserial_model.resolve_id_strategy()).toBe(jsonbadger.ID_STRATEGY.bigserial);
+			expect(uuid_model.schema.id_strategy).toBe(jsonbadger.ID_STRATEGY.uuidv7);
+			expect(bigserial_model.schema.id_strategy).toBe(jsonbadger.ID_STRATEGY.bigserial);
+			expect(uuid_schema.id_strategy).toBe(jsonbadger.ID_STRATEGY.uuidv7);
+			expect(bigserial_schema.id_strategy).toBe(jsonbadger.ID_STRATEGY.bigserial);
+
+			await uuid_model.ensure_table();
+			await bigserial_model.ensure_table();
 
 			await uuid_model.from({name: 'alpha'}).save();
 			await bigserial_model.from({name: 'beta'}).save();

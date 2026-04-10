@@ -4,10 +4,8 @@ import Connection from '#src/connection/connection.js';
 const Pool_mock = jest.fn();
 const debug_logger_mock = jest.fn();
 const scan_server_capabilities_mock = jest.fn();
-const assert_id_strategy_capability_mock = jest.fn();
 const uri = 'postgresql://example/db';
 const default_connect_options = {
-	id_strategy: 'bigserial',
 	auto_index: true,
 	debug: false
 };
@@ -36,8 +34,7 @@ jest.unstable_mockModule('#src/debug/debug-logger.js', function () {
 
 jest.unstable_mockModule('#src/connection/server-capabilities.js', function () {
 	return {
-		scan_server_capabilities: scan_server_capabilities_mock,
-		assert_id_strategy_capability: assert_id_strategy_capability_mock
+		scan_server_capabilities: scan_server_capabilities_mock
 	};
 });
 
@@ -48,7 +45,6 @@ describe('connect', function () {
 		Pool_mock.mockReset();
 		debug_logger_mock.mockReset();
 		scan_server_capabilities_mock.mockReset();
-		assert_id_strategy_capability_mock.mockReset();
 		pool_instance_state.query.mockReset();
 		pool_instance_state.end.mockReset();
 
@@ -60,8 +56,6 @@ describe('connect', function () {
 		pool_instance_state.end.mockResolvedValue(undefined);
 
 		scan_server_capabilities_mock.mockResolvedValue(server_capabilities);
-		assert_id_strategy_capability_mock.mockImplementation(function () {
-		});
 	});
 
 		describe('connection startup', function () {
@@ -74,8 +68,6 @@ describe('connect', function () {
 			expect(Pool_mock).toHaveBeenCalledTimes(1);
 			expect(pool_instance_state.query).toHaveBeenCalledWith('SELECT 1');
 			expect(scan_server_capabilities_mock).toHaveBeenCalledWith(pool_instance_state);
-
-			expect(assert_id_strategy_capability_mock).toHaveBeenCalledWith('bigserial', server_capabilities);
 		});
 
 		test('stores normalized default options when connect options are omitted', async function () {
@@ -108,8 +100,8 @@ describe('connect', function () {
 						return second_pool_instance;
 					});
 
-				const first_connection = await connect(uri, {id_strategy: 'bigserial'});
-				const second_connection = await connect(uri, {id_strategy: 'bigserial'});
+				const first_connection = await connect(uri, {debug: false});
+				const second_connection = await connect(uri, {debug: false});
 
 				expect(first_connection).toBeInstanceOf(Connection);
 				expect(second_connection).toBeInstanceOf(Connection);
@@ -122,19 +114,6 @@ describe('connect', function () {
 		});
 
 	describe('startup failure cleanup', function () {
-		test('fails fast and closes pool when uuidv7 capability assertion fails', async function () {
-			assert_id_strategy_capability_mock.mockImplementation(function () {
-				throw new Error('uuidv7 unsupported');
-			});
-
-			await expect(connect(uri, {
-				id_strategy: 'uuidv7',
-				auto_index: true
-			})).rejects.toThrow('uuidv7 unsupported');
-
-			expect(pool_instance_state.end).toHaveBeenCalledTimes(1);
-		});
-
 		test('preserves the original startup error when the pool has no end method', async function () {
 			const startup_error = new Error('startup failed');
 
@@ -145,7 +124,6 @@ describe('connect', function () {
 			});
 
 			await expect(connect(uri, {
-				id_strategy: 'bigserial',
 				auto_index: true
 			})).rejects.toThrow('startup failed');
 
@@ -159,7 +137,6 @@ describe('connect', function () {
 			pool_instance_state.end.mockRejectedValue(shutdown_error);
 
 			await expect(connect(uri, {
-				id_strategy: 'bigserial',
 				auto_index: true
 			})).rejects.toThrow('startup failed');
 

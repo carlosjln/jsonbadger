@@ -1,9 +1,10 @@
 import defaults from '#src/constants/defaults.js';
 
 import Model from '#src/model/model.js';
+import Schema from '#src/schema/schema.js';
 
 import {assert_condition, assert_identifier} from '#src/utils/assert.js';
-import {is_function, is_not_object} from '#src/utils/value.js';
+import {is_not_object} from '#src/utils/value.js';
 
 /**
  * Compile one concrete Model constructor for a schema/config/connection definition.
@@ -24,15 +25,13 @@ import {is_function, is_not_object} from '#src/utils/value.js';
  */
 function model(name, schema, options, connection) {
 	// Validate schema/config input.
-	assert_condition(schema && is_function(schema.validate), 'schema is required');
+	assert_condition(schema instanceof Schema, 'schema must be a Schema instance');
 	assert_condition(!is_not_object(options), 'options are required');
+	assert_identifier(options.table_name, 'table_name');
 
 	// Override default model options with instance options
 	const $options = Object.assign({}, defaults.model_options, options);
-	const $connection = connection;
-
-	assert_identifier($options.table_name, 'table_name');
-	assert_identifier($options.data_column, 'data_column');
+	const $schema = schema;
 
 	// Create the concrete Model constructor for this definition.
 	function model(data) {
@@ -44,12 +43,13 @@ function model(name, schema, options, connection) {
 	Object.setPrototypeOf(model.prototype, Model.prototype);
 
 	// Bind schema/model/connection state onto the compiled constructor.
-	model.schema = schema;
+	model.$name = name;
+	model.schema = $schema;
 	model.options = $options;
 	model.state = {indexes_ensured: false};
 
-	model.connection = $connection;
-	model.prototype.connection = $connection;
+	model.connection = connection;
+	model.prototype.connection = connection;
 
 	// Return the compiled Model constructor.
 	return model;
