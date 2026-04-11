@@ -23,6 +23,7 @@ data
 .codex
 .npm-cache/
 .npm-cache-*/
+.npmrc
 
 test/coverage/
 jest-output.json
