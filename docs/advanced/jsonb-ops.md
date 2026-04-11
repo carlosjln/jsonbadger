@@ -1,10 +1,12 @@
 # JSONB Update Pipeline
 
-This document describes the current JSONB update flow.
+This page is a maintainer reference for the JSONB update flow.
+
+If you only want to use `update_one(...)`, use [`../examples.md`](../examples.md) instead.
 
 ## Example
 
-This page describes the internal JSONB operator layer after `Model.update_one(...)` input has already been normalized.
+This page describes the lower-level JSONB operator layer after `Model.update_one(...)` input has already been normalized.
 
 ```js
 const payload = {

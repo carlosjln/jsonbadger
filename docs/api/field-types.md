@@ -249,7 +249,7 @@ const schema = new Schema({
 
 ## Introspection
 
-Use `schema.get_path(path_name)` to inspect one compiled field type:
+Use `schema.get_path(path_name)` to inspect one resolved field type:
 
 ```js
 const schema = new Schema({

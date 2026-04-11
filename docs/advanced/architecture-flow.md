@@ -1,6 +1,6 @@
 # Architecture Flow
 
-This page shows the current JsonBadger runtime flow as ASCII diagrams.
+Use this page for architecture review and contributor work. If you only want to use the library, start with [`../examples.md`](../examples.md).
 
 ## 1. Bootstrap
 

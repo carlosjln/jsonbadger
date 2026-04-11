@@ -4,7 +4,7 @@
 
 Most app code should go through `Model.from(...)`, `Model.hydrate(...)`, and model instance methods such as `doc.get(...)`, `doc.set(...)`, and `doc.save()`.
 
-Use `Document` directly when you are working on runtime internals, custom persistence flows, or when you need to adopt trusted state through `doc.rebase(...)`.
+Use `Document` directly only for advanced or framework-level code, such as custom persistence flows or adopting trusted state through `doc.rebase(...)`.
 
 ## TOC
 

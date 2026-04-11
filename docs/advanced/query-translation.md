@@ -1,6 +1,8 @@
 # query translation
 
-This project compiles Mongo-like filters into PostgreSQL SQL over JSONB data.
+Advanced reference for people who want to understand how JsonBadger queries relate to PostgreSQL JSONB features.
+
+If you only want to use the library, start with [`../examples.md`](../examples.md) and [`../api/query-builder.md`](../api/query-builder.md).
 
 ## base behavior
 
@@ -44,17 +46,18 @@ Top-level semantics note:
 - `$json_path_exists` -> `@?` with a `::jsonpath` parameter
 - `$json_path_match` -> `@@` with a `::jsonpath` parameter
 - invalid/empty JSONPath values fail before SQL execution
+- these operators require native PostgreSQL JSONPath support
 
 ## JSON update operators
 
 - `$set` -> `jsonb_set(target, path, value, true)`
-- `$insert` -> `jsonb_insert(target, path, value, insert_after)`
-- `$set_lax` -> `jsonb_set_lax(target, path, value, create_if_missing, null_value_treatment)`
+- `$unset` -> `target #- path`
+- `$replace_roots` -> replace the full JSONB target
+- implicit top-level keys are normalized into `$set`
 
 Update path behavior:
 - Dot paths are validated before SQL execution.
-- Nested numeric segments are allowed for JSON array index paths in updates (for example `tags.0`).
-- Conflicting update paths in a single `update_one(...)` call (same path or parent/child overlap) fail before SQL execution.
+- Tracker-delta shapes (`replace_roots`, `set`, `unset`) are normalized into operator-style buckets before SQL generation.
 
 ## regex
 
@@ -70,7 +73,7 @@ Update path behavior:
 
 ## PostgreSQL capability map
 
-This table is the implementation-facing capability map for currently supported query/update operators over JSONB.
+This table is an advanced PostgreSQL reference for the currently supported query and update operators.
 
 | JsonBadger feature | PostgreSQL operator/function | Notes | Indexability expectation |
 | --- | --- | --- | --- |
@@ -85,11 +88,11 @@ This table is the implementation-facing capability map for currently supported q
 | `$has_key` | `?` | Top-level key existence on the left JSONB value | GIN on JSONB value is the expected index family |
 | `$has_any_keys` | `?|` | Any-key existence | GIN on JSONB value is the expected index family |
 | `$has_all_keys` | `?&` | All-keys existence | GIN on JSONB value is the expected index family |
-| `$json_path_exists` | `@?` | JSONPath existence predicate | Can benefit from JSONB GIN indexing depending on operator class/query shape |
-| `$json_path_match` | `@@` | JSONPath predicate match | Can benefit from JSONB GIN indexing depending on operator class/query shape |
+| `$json_path_exists` | `@?` | JSONPath existence predicate; requires native PostgreSQL JSONPath support | Can benefit from JSONB GIN indexing depending on operator class/query shape |
+| `$json_path_match` | `@@` | JSONPath predicate match; requires native PostgreSQL JSONPath support | Can benefit from JSONB GIN indexing depending on operator class/query shape |
 | `update_one.$set` | `jsonb_set(...)` | Creates missing path segments when configured (`true`) | N/A (write-path function) |
-| `update_one.$insert` | `jsonb_insert(...)` | Supports `insert_after` and numeric array-index path segments | N/A (write-path function) |
-| `update_one.$set_lax` | `jsonb_set_lax(...)` | Supports `create_if_missing` + `null_value_treatment` | N/A (write-path function) |
+| `update_one.$unset` | `#-` | Removes one JSON path from the target | N/A (write-path function) |
+| `update_one.$replace_roots` | direct JSONB replacement | Replaces the full JSONB root before later operations | N/A (write-path function) |
 
 Index helper behavior:
 - `schema.create_index({using: 'gin', path: 'profile.city'})` creates a GIN index on the extracted JSONB path expression.

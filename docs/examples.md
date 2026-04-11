@@ -4,7 +4,7 @@ JsonBadger is a PostgreSQL-backed document mapper for working with JSONB data th
 
 This page is an example-first cheat sheet for users and AI agents. It shows copy-pasteable JsonBadger usage in increasing complexity and covers the currently implemented query and update operator surface.
 
-Use this page for syntax and working shapes. Use [`docs/api/index.md`](api/index.md) for the module API map and [`docs/query-translation.md`](query-translation.md) for PostgreSQL operator/function semantics.
+Use this page for syntax and working shapes. Use [`docs/api/index.md`](api/index.md) for the module API map and [`docs/advanced/query-translation.md`](advanced/query-translation.md) only when you want the advanced PostgreSQL reference behind the query surface.
 Use [`docs/lifecycle.md`](lifecycle.md) when you need the document phase map instead of operator syntax.
 
 ## How to Read This Page
@@ -69,10 +69,10 @@ When a snippet uses a different value (for example `name: 'jane'`), either seed 
 - Query/sort support for base fields is top-level only (no dotted base-field paths like `created_at.value`).
 
 `id` behavior:
-- Create with `IdStrategies.uuidv7`:
+- Create with `ID_STRATEGY.uuidv7`:
   - caller-provided `id` is used.
   - if `id` is omitted, PostgreSQL default `uuidv7()` generates it.
-- Create with `IdStrategies.bigserial`:
+- Create with `ID_STRATEGY.bigserial`:
   - caller-provided `id` is ignored silently.
   - PostgreSQL sequence generates it.
 - Update paths cannot mutate `id`.
@@ -88,7 +88,7 @@ Timestamp helper behavior:
 
 ## Setup and Connect
 
-> Important: `IdStrategies.uuidv7` requires native PostgreSQL `uuidv7()` support (PostgreSQL 18+).
+> Important: `ID_STRATEGY.uuidv7` requires native PostgreSQL `uuidv7()` support (PostgreSQL 18+).
 
 ```js
 import JsonBadger from 'jsonbadger';
@@ -97,27 +97,27 @@ const db_uri = 'postgresql://user:pass@localhost:5432/dbname';
 const options = {
 	debug: false,
 	max: 10,
-	ssl: false,
-	auto_index: true,
-	id_strategy: JsonBadger.IdStrategies.bigserial
+	ssl: false
 };
 
 const connection = await JsonBadger.connect(db_uri, options);
 ```
 
-UUIDv7 server default (PostgreSQL 18+ native `uuidv7()` required):
+Schema-level UUIDv7 selection (PostgreSQL 18+ native `uuidv7()` required):
 
 ```js
 const db_uri = 'postgresql://user:pass@localhost:5432/dbname';
-const options = {
-	id_strategy: JsonBadger.IdStrategies.uuidv7
-};
+const connection = await JsonBadger.connect(db_uri);
 
-const connection = await JsonBadger.connect(db_uri, options);
+const event_schema = new JsonBadger.Schema({
+	name: String
+}, {
+	id_strategy: JsonBadger.ID_STRATEGY.uuidv7
+});
 ```
 
 Notes:
-- JsonBadger checks native `uuidv7()` support automatically during `connect(...)` and caches the capability result.
+- JsonBadger checks native `uuidv7()` support automatically during `Model.ensure_table()` using the capability snapshot captured at `connect(...)`.
 - Run `ensure_table()` / `ensure_indexes()` during startup/bootstrap before normal runtime operations, or use `ensure_model()` when you want the combined path.
 
 Teardown example:
@@ -150,7 +150,7 @@ const AuditLog = connection.model({
 	schema: new JsonBadger.Schema({
 		event_name: String
 	}, {
-		id_strategy: JsonBadger.IdStrategies.uuidv7 // PostgreSQL 18+ native uuidv7() required
+		id_strategy: JsonBadger.ID_STRATEGY.uuidv7 // PostgreSQL 18+ native uuidv7() required
 	}),
 	table_name: 'audit_logs'
 });
@@ -160,15 +160,15 @@ const Counter = connection.model({
 	schema: new JsonBadger.Schema({
 		label: String
 	}, {
-		id_strategy: JsonBadger.IdStrategies.bigserial // schema override
+		id_strategy: JsonBadger.ID_STRATEGY.bigserial // schema override
 	}),
 	table_name: 'counters'
 });
 ```
 
 Notes:
-- `id_strategy` lives on the schema. If omitted, the library default is `bigserial`.
-- `IdStrategies.uuidv7` uses database-generated IDs (`DEFAULT uuidv7()`) and JsonBadger validates support internally.
+- `id_strategy` lives on the schema. If omitted, the library default is `uuidv7`.
+- `ID_STRATEGY.uuidv7` uses database-generated IDs and JsonBadger validates support automatically.
 
 Create-time `id` behavior example:
 
@@ -205,6 +205,8 @@ const user_schema = new JsonBadger.Schema({
 	},
 	orders: [{sku: String, qty: Number, price: Number}],
 	payload: {}
+}, {
+	id_strategy: JsonBadger.ID_STRATEGY.bigserial
 });
 
 // Schema-level indexes (single path and compound)
@@ -215,9 +217,7 @@ const connection = await JsonBadger.connect(db_uri, options);
 const User = connection.model({
 	name: 'User',
 	schema: user_schema,
-	table_name: 'users',
-	auto_index: true,
-	id_strategy: JsonBadger.IdStrategies.bigserial
+	table_name: 'users'
 });
 ```
 
@@ -274,7 +274,7 @@ Quick FieldType reference:
 
 Edge cases and practical notes:
 - In-place changes to nested values under `doc.document[...]` bypass `doc.set(...)`; prefer `doc.set(...)` when you want assignment-time casting and setter logic.
-- Arrays default to `[]`; set `default: undefined` to disable the implicit empty-array default.
+- Arrays default to `null` unless you explicitly declare a default such as `default: []`.
 - For `Map`-like paths, prefer `document.set('handles.github', 'name')` so casting and dirty tracking run.
 
 ## Create and Save Documents
@@ -419,10 +419,10 @@ const UniqueUser = connection.model({
 await UniqueUser.ensure_table();
 await UniqueUser.ensure_indexes();
 
-await new UniqueUser({email: 'john@example.com'}).save();
+await UniqueUser.from({email: 'john@example.com'}).save();
 
 try {
-	await new UniqueUser({email: 'john@example.com'}).save();
+	await UniqueUser.from({email: 'john@example.com'}).save();
 } catch(error) {
 	if(error.name === 'query_error') {
 		const error_payload = error.to_json();
@@ -596,6 +596,8 @@ await User.find({payload: {$has_key: 'profile.city'}}).exec();
 
 `$json_path_exists` (`@?`) and `$json_path_match` (`@@`):
 
+> **Note:** Use these operators only when your PostgreSQL version supports native JSONPath queries.
+
 Assumes:
 - Your seeded `payload` includes shapes like `items[*].qty` and `score` (as shown in `## Create and Save Documents`).
 
@@ -618,7 +620,7 @@ Expected behavior:
 
 ## Update Operators (`update_one`)
 
-`update_one(...)` supports `$set`, `$insert`, and `$set_lax`.
+`update_one(...)` supports `$set`, `$unset`, `$replace_roots`, plus implicit top-level keys that are routed into `$set`.
 
 Assumes (for update and delete sections below):
 - A matching row exists (examples use `name: 'john'` and `name: 'missing'`).
@@ -627,7 +629,7 @@ Assumes (for update and delete sections below):
 Target shape reminder:
 - `tags` is an array, `profile` is an object, and `payload.profile` / `payload.score` are nested JSON values in the seeded row.
 
-Basic `$set` (maps to `jsonb_set(...)`):
+Use `$set` to assign or replace one or more JSON values:
 
 ```js
 const updated_user = await User.update_one(
@@ -645,86 +647,55 @@ const updated_user = await User.update_one(
 Returns: `updated_user` is `User | null`.  
 Snapshot shape: `updated_user?.document` -> `{ id, data, created_at, updated_at }` when the default slug is still `data`.
 
-`$insert` (maps to `jsonb_insert(...)`) with numeric array index paths:
+Use `$unset` to remove one or more JSON paths:
 
 ```js
 await User.update_one({name: 'john'}, {
-	$insert: {
-		'tags.0': 'first_tag'
-	}
+	$unset: [
+		'payload.cleanup_flag',
+		'profile.country'
+	]
 });
+```
 
+`$replace_roots` (replaces the full JSONB document):
+
+```js
 await User.update_one({name: 'john'}, {
-	$insert: {
-		'tags.0': {
-			value: 'after_first',
-			insert_after: true
-		}
+	$replace_roots: {
+		name: 'john',
+		age: 31,
+		status: 'active',
+		profile: {city: 'Orlando'}
 	}
 });
 ```
 
-`$set_lax` (maps to `jsonb_set_lax(...)`) object form:
-
-Target shape reminder for `$set_lax`:
-- `payload` is a JSON object; these examples update or delete nested keys inside `payload`.
+Implicit top-level keys are routed into `$set`:
 
 ```js
 await User.update_one({name: 'john'}, {
-	$set_lax: {
-		'payload.cleanup_flag': {
-			value: null,
-			null_value_treatment: 'delete_key'
-		}
-	}
+	age: 32,
+	'profile.city': 'Tampa'
 });
 ```
 
-`$set_lax` options example (`create_if_missing`, `null_value_treatment`):
+Multiple update operators in one call (application order is `$replace_roots` -> `$unset` -> `$set`):
 
 ```js
 await User.update_one({name: 'john'}, {
-	$set_lax: {
-		'payload.archived_at': {
-			value: null,
-			create_if_missing: false,
-			null_value_treatment: 'return_target'
-		}
-	}
-});
-```
-
-Multiple update operators in one call (application order is `$set` -> `$insert` -> `$set_lax`):
-
-```js
-await User.update_one({name: 'john'}, {
+	$replace_roots: {
+		name: 'john',
+		status: 'active',
+		profile: {city: 'Miami'}
+	},
+	$unset: [
+		'profile.country'
+	],
 	$set: {
 		'payload.score': 50
-	},
-	$insert: {
-		'tags.0': {value: 'vip', insert_after: true}
-	},
-	$set_lax: {
-		'payload.cleanup_flag': {
-			value: null,
-			null_value_treatment: 'delete_key'
-		}
 	}
 });
-```
-
-Conflict rule (rejected before SQL):
-
-```js
-await User.update_one({name: 'john'}, {
-	$set: {
-		payload: {nested: true}
-	},
-	$set_lax: {
-		'payload.value': 'ok'
-	}
-});
-// throws: conflicting update paths (same path or parent/child overlap)
 ```
 
 Timestamp helper examples on update:
@@ -875,7 +846,7 @@ For the full lifecycle contract, see [`docs/lifecycle.md`](lifecycle.md).
 | JSON containment | `$contains` |
 | JSONB key existence | `$has_key`, `$has_any_keys`, `$has_all_keys` |
 | JSONPath | `$json_path_exists`, `$json_path_match` |
-| Updates (`update_one`) | `$set`, `$insert`, `$set_lax` |
+| Updates (`update_one`) | implicit keys, `$set`, `$unset`, `$replace_roots` |
 
 ## Related Docs
 
@@ -885,5 +856,5 @@ For the full lifecycle contract, see [`docs/lifecycle.md`](lifecycle.md).
 - [`docs/api/schema.md`](api/schema.md) (schema API and index declaration rules)
 - [`docs/api/query-builder.md`](api/query-builder.md) (query builder chain and filter families)
 - [`docs/lifecycle.md`](lifecycle.md) (document phases, hydration/save flow, dirty tracking, and serialization)
-- [`docs/query-translation.md`](query-translation.md) (PostgreSQL operator/function mapping)
+- [`docs/advanced/query-translation.md`](advanced/query-translation.md) (advanced PostgreSQL reference)
 - [`docs/local-integration-testing.md`](local-integration-testing.md) (local integration test setup)

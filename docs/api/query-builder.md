@@ -47,7 +47,9 @@ Read/query execution:
 - JSONB key existence: `$has_key`, `$has_any_keys`, `$has_all_keys`
 - JSONPath: `$json_path_exists`, `$json_path_match`
 
-See [`../query-translation.md`](../query-translation.md) for PostgreSQL operator/function mapping.
+> **Note:** Use `$json_path_exists` and `$json_path_match` only when your PostgreSQL version supports native JSONPath queries.
+
+See [`../advanced/query-translation.md`](../advanced/query-translation.md) when you want the advanced PostgreSQL reference behind these operators.
 
 ## Base-field Query Rules
 
@@ -67,15 +69,13 @@ Operator matrix:
 
 ## JSON Key Existence
 
-- `$has_key` maps to PostgreSQL `?`
-- `$has_any_keys` maps to PostgreSQL `?|`
-- `$has_all_keys` maps to PostgreSQL `?&`
+- `$has_key` checks whether one key is present
+- `$has_any_keys` checks whether any key from a list is present
+- `$has_all_keys` checks whether all keys from a list are present
 
 When used with a nested field path, JsonBadger extracts that nested JSONB value first, then applies the existence operator to the extracted value.
 
 ## JSONPath
 
-- `$json_path_exists` maps to `@?`
-- `$json_path_match` maps to `@@`
-
-JsonBadger binds the JSONPath string as a `::jsonpath` parameter.
+- `$json_path_exists` checks whether a JSONPath query finds a match
+- `$json_path_match` checks whether a JSONPath predicate matches

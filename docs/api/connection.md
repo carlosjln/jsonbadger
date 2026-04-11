@@ -22,7 +22,6 @@ const connection = await JsonBadger.connect(uri, options);
 
 - `max`: pool size
 - `debug`: logs SQL/debug events when `true`
-- `auto_index`: server-wide default for automatic index creation when `Model.ensure_table()` is called
 - any supported `pg` pool options (`ssl`, `host`, `port`, `user`, `password`, `database`)
 
 ## Connection Lifecycle
@@ -39,7 +38,7 @@ await connection.disconnect();
 - `connect(...)` performs a PostgreSQL capability scan and caches the result
 - later schema-level `uuidv7` selections are checked against the cached capability info during `Model.ensure_table()`
 
-> **Note:** Troubleshooting SQL like `SELECT version();` and `SHOW server_version;` is optional. Runtime checks are machine-readable and internal.
+> **Note:** You do not need to run manual version checks during normal usage. JsonBadger performs the compatibility checks it needs automatically.
 
 ## Connection Reuse Pattern
 
