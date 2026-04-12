@@ -411,14 +411,25 @@ describe('where_compiler behavior', function () {
 
 			expect(function compile_invalid_decimal_id() {
 				where_compiler({id: {$eq: 1.25}});
-			}).toThrow('Invalid id value for bigserial id_strategy');
+			}).toThrow('Invalid id value for bigint identity');
+
+			expect(function() {
+				where_compiler({id: {$eq: Number.MAX_SAFE_INTEGER + 1}});
+			}).toThrow('Invalid id value for bigint identity');
 		});
 
-		test('uses uuid parameter casts for id filters when id_strategy is uuidv7', function () {
+		test('uses uuid parameter casts for id filters when the bound identity is uuidv7', function () {
+			const schema_instance = create_bound_schema({}, {
+				identity: {
+					type: 'uuid',
+					format: 'uuidv7',
+					mode: 'database'
+				}
+			});
 			const base_field_result = where_compiler({
 				id: {$eq: '0194f028-579a-7b5b-8107-b9ad31395f43'}
 			}, {
-				id_strategy: 'uuidv7'
+				schema: schema_instance
 			});
 
 			expect(base_field_result.sql).toContain('"id" = $1::uuid');
@@ -426,13 +437,20 @@ describe('where_compiler behavior', function () {
 		});
 
 		test('compiles uuidv7 id array comparisons for base fields', function () {
+			const schema_instance = create_bound_schema({}, {
+				identity: {
+					type: 'uuid',
+					format: 'uuidv7',
+					mode: 'database'
+				}
+			});
 			const result = where_compiler({
 				id: {
 					$in: ['0194f028-579a-7b5b-8107-b9ad31395f43'],
 					$nin: ['0194f028-579b-7c8c-9108-caeb424a6a54']
 				}
 			}, {
-				id_strategy: 'uuidv7'
+				schema: schema_instance
 			});
 
 			expect(result.sql).toContain('"id" = ANY($1::uuid[])');
@@ -461,14 +479,22 @@ describe('where_compiler behavior', function () {
 			]);
 		});
 
-		test('rejects invalid id values for selected id_strategy', function () {
+		test('rejects invalid id values for the selected identity shape', function () {
+			const schema_instance = create_bound_schema({}, {
+				identity: {
+					type: 'uuid',
+					format: 'uuidv7',
+					mode: 'database'
+				}
+			});
+
 			expect(function compile_invalid_bigserial_id() {
 				where_compiler({id: {$eq: 'abc'}});
-			}).toThrow('Invalid id value for bigserial id_strategy');
+			}).toThrow('Invalid id value for bigint identity');
 
 			expect(function compile_invalid_uuid_id() {
-				where_compiler({id: {$eq: 'abc'}}, {id_strategy: 'uuidv7'});
-			}).toThrow('Invalid id value for uuid id_strategy');
+				where_compiler({id: {$eq: 'abc'}}, {schema: schema_instance});
+			}).toThrow('Invalid id value for uuidv7 identity');
 		});
 	});
 });

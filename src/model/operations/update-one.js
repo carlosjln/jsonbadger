@@ -43,8 +43,7 @@ async function exec_update_one(model, query_filter, update_definition) {
 
 	const where_result = where_compiler(query_filter, {
 		schema: model.schema,
-		data_column,
-		id_strategy: model.schema.id_strategy
+		data_column
 	});
 
 	const parameter_state = create_parameter_state(where_result.next_index);

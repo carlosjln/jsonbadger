@@ -1,4 +1,5 @@
 const uuidv7_pattern = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const integer_string_pattern = /^[0-9]+$/;
 
 function is_object(value) {
 	return typeof value === 'object'
@@ -73,8 +74,20 @@ function is_uuid_v7(value) {
 	return uuidv7_pattern.test(value);
 }
 
+function is_integer_string(value) {
+	if(typeof value !== 'string') {
+		return false;
+	}
+
+	return integer_string_pattern.test(value);
+}
+
 function is_string(value) {
 	return typeof value === 'string';
+}
+
+function is_number(value) {
+	return typeof value === 'number';
 }
 
 function is_function(value) {
@@ -137,6 +150,8 @@ export {
 	is_plain_object,
 	is_not_object,
 	is_nan,
+	is_integer_string,
+	is_number,
 	is_uuid_v7,
 	to_int,
 	to_number,
@@ -155,6 +170,8 @@ export default {
 	is_plain_object,
 	is_not_object,
 	is_nan,
+	is_integer_string,
+	is_number,
 	is_uuid_v7,
 	to_int,
 	to_number,

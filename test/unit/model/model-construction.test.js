@@ -6,7 +6,7 @@ import {
 	create_payload_model
 } from '#test/unit/model/test-helpers.js';
 
-const existing_uuid = '0194f028-579a-7b5b-8107-b9ad31395f43';
+const existing_uuid = '7';
 
 describe('Model construction lifecycle', function () {
 	describe('compiled schema lifecycle', function () {
@@ -32,7 +32,7 @@ describe('Model construction lifecycle', function () {
 				format: null,
 				mode: 'database',
 				id_strategy: 'bigserial',
-				insert_includes_id: false,
+				requires_explicit_id: false,
 				column_sql: 'id BIGSERIAL PRIMARY KEY'
 			});
 			expect(schema_instance.$runtime.identity).toEqual({

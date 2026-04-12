@@ -151,10 +151,30 @@ describe('Schema validation lifecycle', function () {
 		const schema_instance = new Schema({
 			name: String
 		}, {
-			id_strategy: 'uuidv7'
+			identity: {
+				type: 'uuid',
+				format: 'uuidv7',
+				mode: 'database'
+			}
 		});
 		const validation_result = schema_instance.validate_base_fields({
 			id: '019631f7-ef80-7c17-8cf0-a9b241551111',
+			created_at: new Date('2026-03-31T10:00:00.000Z'),
+			updated_at: '2026-03-31T11:00:00.000Z'
+		});
+
+		expect(validation_result).toEqual({
+			valid: true,
+			errors: null
+		});
+	});
+
+	test('validate_base_fields accepts numeric string ids for bigint identity', function () {
+		const schema_instance = new Schema({
+			name: String
+		});
+		const validation_result = schema_instance.validate_base_fields({
+			id: '17',
 			created_at: new Date('2026-03-31T10:00:00.000Z'),
 			updated_at: '2026-03-31T11:00:00.000Z'
 		});

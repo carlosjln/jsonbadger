@@ -46,11 +46,15 @@ QueryBuilder.prototype.skip = function (skip_value) {
 	return this;
 };
 
+/**
+ * Execute the configured read operation and hydrate the returned rows.
+ *
+ * @returns {Promise<*[]|*|number|null>}
+ */
 QueryBuilder.prototype.exec = async function () {
 	// Query execution is the queried/hydrated lifecycle boundary for read methods:
 	// rows become document instances through `model.hydrate(...)`.
 	const schema = this.model.schema;
-	const id_strategy = schema.id_strategy;
 	const model_options = this.model.options;
 
 	const table_name = model_options.table_name;
@@ -61,7 +65,7 @@ QueryBuilder.prototype.exec = async function () {
 	const limit_count = this.operation === 'find_one' ? 1 : this.limit_count;
 
 	const merged_filter = Object.assign({}, this.base_filter, this.where_filter);
-	const where_result = where_compiler(merged_filter, {schema, data_column, id_strategy});
+	const where_result = where_compiler(merged_filter, {schema, data_column});
 	const query_context = {
 		connection: this.connection,
 		table_identifier,

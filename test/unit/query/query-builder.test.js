@@ -172,7 +172,14 @@ describe('QueryBuilder.exec read behavior', function () {
 		const query_builder = new QueryBuilder(create_model_stub({
 			connection: connection,
 			hydrate,
-			schema: {id_strategy: 'uuidv7'}
+			schema: {
+				$runtime: {
+					identity: {
+						type: 'uuid',
+						format: 'uuidv7'
+					}
+				}
+			}
 		}), 'find_one', {id: '0194f028-579a-7b5b-8107-b9ad31395f43'}, null);
 
 		const result = await query_builder.exec();
@@ -271,7 +278,14 @@ describe('QueryBuilder.exec read behavior', function () {
 function create_model_stub(overrides = {}) {
 	return Object.assign({
 		connection: null,
-		schema: {id_strategy: 'bigserial'},
+		schema: {
+			$runtime: {
+				identity: {
+					type: 'bigint',
+					format: null
+				}
+			}
+		},
 		options: {table_name: 'users', data_column: 'data'},
 		hydrate: function (row_value) {
 			return Object.assign({}, row_value.data, {

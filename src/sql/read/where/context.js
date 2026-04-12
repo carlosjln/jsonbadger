@@ -2,7 +2,7 @@
  * MODULE RESPONSIBILITY
  * Create shared compile context helpers for read-query WHERE compilation.
  */
-import ID_STRATEGY from '#src/constants/id-strategy.js';
+import defaults from '#src/constants/defaults.js';
 
 import {quote_identifier} from '#src/utils/assert.js';
 import {is_function, is_object} from '#src/utils/value.js';
@@ -41,17 +41,55 @@ function is_array_root(compile_context, root_path) {
 	return schema_instance.is_array_root(root_path);
 }
 
+/**
+ * Resolve the identity shape that should drive query id casting.
+ *
+ * @param {object|null|undefined} schema_instance
+ * @returns {{type: string, format: string|null}}
+ */
+function resolve_query_identity(schema_instance) {
+	const runtime_identity = schema_instance?.$runtime?.identity;
+
+	if(runtime_identity) {
+		return {
+			type: runtime_identity.type,
+			format: runtime_identity.format
+		};
+	}
+
+	const configured_identity = schema_instance?.options?.identity;
+
+	if(configured_identity) {
+		return {
+			type: configured_identity.type,
+			format: configured_identity.format
+		};
+	}
+
+	return {
+		type: defaults.schema_options.identity.type,
+		format: defaults.schema_options.identity.format
+	};
+}
+
+/**
+ * Create the normalized compile context for one where-compiler execution.
+ *
+ * @param {object|null|undefined} compile_options
+ * @returns {object}
+ */
 function create_compile_context(compile_options) {
 	const options = compile_options ?? {};
 	const data_column_name = options.data_column ?? 'data';
 	const data_column_reference = quote_identifier(data_column_name);
 	const schema_instance = options.schema ?? null;
-	const id_strategy = options.id_strategy === ID_STRATEGY.uuidv7 ? ID_STRATEGY.uuidv7 : ID_STRATEGY.bigserial;
+	const query_identity = resolve_query_identity(schema_instance);
 
 	return {
 		data_column_reference,
 		schema_instance,
-		id_strategy
+		identity_type: query_identity.type,
+		identity_format: query_identity.format
 	};
 }
 

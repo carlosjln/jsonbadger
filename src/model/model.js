@@ -2,7 +2,6 @@
  * MODULE RESPONSIBILITY
  * Own document lifecycle, schema validation, timestamp policy, and persistence delegation.
  */
-import ID_STRATEGY from '#src/constants/id-strategy.js';
 import INTAKE_MODE from '#src/constants/intake-mode.js';
 import QueryError from '#src/errors/query-error.js';
 
@@ -450,7 +449,9 @@ Model.prototype.insert = async function () {
 	const model = this.constructor;
 	const document = this.document;
 	const data_column = model.options.data_column;
+	const identity_runtime = model.schema.$runtime.identity;
 
+	prepare_insert_identity(model.schema, document, identity_runtime);
 	model.schema.validate(document);
 	apply_timestamps(document);
 
@@ -459,13 +460,14 @@ Model.prototype.insert = async function () {
 		updated_at: document.updated_at
 	};
 
-	if(model.schema.id_strategy === ID_STRATEGY.uuidv7) {
+	if(identity_runtime.requires_explicit_id) {
 		base_fields.id = document.id;
 	}
 
 	const data = {
 		payload: document[data_column],
-		base_fields
+		base_fields,
+		identity_runtime
 	};
 	const saved_row = await exec_insert_one(model, data);
 
@@ -863,6 +865,40 @@ function apply_timestamps(document) {
 	}
 
 	document.updated_at = now;
+}
+
+/**
+ * Prepare identity state before the insert validation and SQL lifecycle.
+ *
+ * @param {object} schema_instance
+ * @param {Document} document
+ * @param {object} identity_runtime
+ * @returns {void}
+ * @throws {QueryError}
+ */
+function prepare_insert_identity(schema_instance, document, identity_runtime) {
+	if(identity_runtime.type === 'bigint' && document.id != null) {
+		throw new QueryError('Document id cannot be set for database-generated bigint identity', {
+			operation: 'insert',
+			field: 'id',
+			value: document.id
+		});
+	}
+
+	if(!identity_runtime.requires_explicit_id) {
+		return;
+	}
+
+	if(document.id == null && is_function(schema_instance.options.identity.generator)) {
+		document.id = schema_instance.options.identity.generator();
+	}
+
+	if(document.id == null) {
+		throw new QueryError('Application-generated identity requires document.id or schema.options.identity.generator', {
+			operation: 'insert',
+			field: 'id'
+		});
+	}
 }
 
 export default Model;

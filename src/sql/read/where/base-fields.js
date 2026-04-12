@@ -3,10 +3,11 @@
  * Compile top-level base-field predicates for read queries.
  */
 import QueryError from '#src/errors/query-error.js';
-import ID_STRATEGY from '#src/constants/id-strategy.js';
+import IDENTITY_FORMAT from '#src/constants/identity-format.js';
+import IDENTITY_TYPE from '#src/constants/identity-type.js';
 import {bind_parameter} from '#src/sql/parameter-binder.js';
 import {parse_path} from '#src/sql/jsonb/path-parser.js';
-import {is_plain_object, is_uuid_v7} from '#src/utils/value.js';
+import {is_integer_string, is_number, is_plain_object, is_uuid_v7} from '#src/utils/value.js';
 
 // Base fields are top-level only. Each one owns its SQL expression and allowed operators.
 const base_field_rules = Object.freeze({
@@ -125,7 +126,7 @@ function build_base_field_comparison(field_name, operator_name, normalized_value
 	const field_rule = base_field_rules[field_name];
 	const placeholder = bind_parameter(parameter_state, normalized_value);
 	const field_expression = field_rule.expression;
-	const id_parameter_cast = resolve_id_parameter_cast(compile_context.id_strategy);
+	const id_parameter_cast = resolve_id_parameter_cast(compile_context.identity_type);
 
 	if(operator_name === '$eq') {
 		if(field_rule.value_kind === 'id') {
@@ -204,7 +205,7 @@ function normalize_base_field_scalar(field_name, operator_value, operator_name, 
 	}
 
 	if(field_rule.value_kind === 'id') {
-		return normalize_id_value(operator_value, operator_name, compile_context.id_strategy);
+		return normalize_id_value(operator_value, operator_name, compile_context.identity_type, compile_context.identity_format);
 	}
 
 	return normalize_timestamp_value(field_name, operator_name, operator_value);
@@ -224,12 +225,22 @@ function normalize_timestamp_value(field_name, operator_name, operator_value) {
 	return parsed_timestamp.toISOString();
 }
 
-function normalize_id_value(operator_value, operator_name, id_strategy) {
-	if(id_strategy === ID_STRATEGY.uuidv7) {
+/**
+ * Normalize one id comparison value according to the active identity shape.
+ *
+ * @param {*} operator_value
+ * @param {string} operator_name
+ * @param {string} identity_type
+ * @param {string|null} identity_format
+ * @returns {string}
+ * @throws {QueryError}
+ */
+function normalize_id_value(operator_value, operator_name, identity_type, identity_format) {
+	if(identity_type === IDENTITY_TYPE.uuid && identity_format === IDENTITY_FORMAT.uuidv7) {
 		const uuid_value = String(operator_value);
 
 		if(!is_uuid_v7(uuid_value)) {
-			throw new QueryError('Invalid id value for uuid id_strategy', {
+			throw new QueryError('Invalid id value for uuidv7 identity', {
 				field: 'id',
 				operator: operator_name,
 				value: operator_value
@@ -240,12 +251,12 @@ function normalize_id_value(operator_value, operator_name, id_strategy) {
 	}
 
 	if(typeof operator_value === 'bigint') {
-		return operator_value.toString();
+		return String(operator_value);
 	}
 
-	if(typeof operator_value === 'number') {
-		if(Number.isInteger(operator_value) === false) {
-			throw new QueryError('Invalid id value for bigserial id_strategy', {
+	if(is_number(operator_value)) {
+		if(!Number.isSafeInteger(operator_value)) {
+			throw new QueryError('Invalid id value for bigint identity', {
 				field: 'id',
 				operator: operator_name,
 				value: operator_value
@@ -257,8 +268,8 @@ function normalize_id_value(operator_value, operator_name, id_strategy) {
 
 	const numeric_value = String(operator_value);
 
-	if(/^[0-9]+$/.test(numeric_value) === false) {
-		throw new QueryError('Invalid id value for bigserial id_strategy', {
+	if(!is_integer_string(numeric_value)) {
+		throw new QueryError('Invalid id value for bigint identity', {
 			field: 'id',
 			operator: operator_name,
 			value: operator_value
@@ -268,8 +279,14 @@ function normalize_id_value(operator_value, operator_name, id_strategy) {
 	return numeric_value;
 }
 
-function resolve_id_parameter_cast(id_strategy) {
-	if(id_strategy === ID_STRATEGY.uuidv7) {
+/**
+ * Resolve the SQL cast suffix for id comparison parameters.
+ *
+ * @param {string} identity_type
+ * @returns {string}
+ */
+function resolve_id_parameter_cast(identity_type) {
+	if(identity_type === IDENTITY_TYPE.uuid) {
 		return '::uuid';
 	}
 

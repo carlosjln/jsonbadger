@@ -36,11 +36,11 @@ Purpose: replace `id_strategy` with `identity`, default the library back to nume
 - [x] T11. Emit `UUID PRIMARY KEY DEFAULT uuidv7()` for bound native UUIDv7 database mode.
 - [x] T12. Emit `UUID PRIMARY KEY` for bound application-generated UUIDv7 mode.
 
-- [ ] T13. Update model insert lifecycle so application-generated ids are created before validation when `schema.$runtime.identity.insert_includes_id === true`.
-- [ ] T14. Reject explicit ids for phase-one numeric database mode.
-- [ ] T15. Update insert SQL building so `id` is included only when the bound runtime says it should be included.
-- [ ] T16. Update read/query id normalization and casting based on bound identity type and format.
-- [ ] T17. Keep public `document.id` string-shaped in all supported modes.
+- [x] T13. Update model insert lifecycle so application-generated ids are created before validation when `schema.$runtime.identity.requires_explicit_id === true`.
+- [x] T14. Reject explicit ids for phase-one numeric database mode.
+- [x] T15. Update insert SQL building so `id` is included only when the bound runtime says it should be included.
+- [x] T16. Update read/query id normalization and casting based on bound identity type and format.
+- [x] T17. Keep public `document.id` string-shaped in all supported modes.
 
 - [ ] T18. Update focused unit and integration tests for defaults, schema construction, binding, insert lifecycle, id validation, query casting, and migration DDL.
 - [ ] T19. Update public docs and examples after the implementation is stable.

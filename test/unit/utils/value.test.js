@@ -4,6 +4,8 @@ import {
 	get_if,
 	is_boolean,
 	is_function,
+	is_integer_string,
+	is_number,
 	is_plain_object,
 	is_uuid_v7,
 	to_number
@@ -32,6 +34,22 @@ describe('utils/value', function () {
 		expect(is_uuid_v7(valid_uuid)).toBe(true);
 		expect(is_uuid_v7(invalid_uuid)).toBe(false);
 		expect(is_uuid_v7(123)).toBe(false);
+	});
+
+	test('is_integer_string only accepts digit-only integer strings', function () {
+		expect(is_integer_string('12')).toBe(true);
+		expect(is_integer_string('0')).toBe(true);
+		expect(is_integer_string('12.5')).toBe(false);
+		expect(is_integer_string('-1')).toBe(false);
+		expect(is_integer_string(12)).toBe(false);
+	});
+
+	test('is_number only accepts number primitives', function () {
+		expect(is_number(12)).toBe(true);
+		expect(is_number(12.5)).toBe(true);
+		expect(is_number(NaN)).toBe(true);
+		expect(is_number('12')).toBe(false);
+		expect(is_number(null)).toBe(false);
 	});
 
 	test('to_number coerces numeric values and falls back to zero for invalid input', function () {

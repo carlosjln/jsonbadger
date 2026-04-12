@@ -11,9 +11,9 @@ jest.unstable_mockModule('#src/sql/run.js', function () {
 const {default: Schema} = await import('#src/schema/schema.js');
 const {default: model} = await import('#src/model/factory/index.js');
 
-const first_uuid = '0194f028-579a-7b5b-8107-b9ad31395f43';
-const second_uuid = '0194f028-579a-7b5b-8107-b9ad31395f44';
-const third_uuid = '0194f028-579a-7b5b-8107-b9ad31395f45';
+const first_uuid = '1';
+const second_uuid = '2';
+const third_uuid = '3';
 
 describe('Model persistence operations lifecycle', function () {
 	let connection;
@@ -46,9 +46,10 @@ describe('Model persistence operations lifecycle', function () {
 		expect(sql_runner_mock).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO "users"'), expect.any(Array), connection);
 	});
 
-	test('doc.insert preserves explicit created_at, refreshes updated_at, and includes uuid ids for uuidv7 models', async function () {
+	test('doc.insert generates application ids before validation and includes them in the insert SQL', async function () {
 		const created_at = new Date('2026-03-06T10:00:00.000Z');
 		const updated_at = new Date('2026-03-06T11:00:00.000Z');
+		const id_generator = jest.fn().mockReturnValue('019631f7-ef80-7c17-8cf0-a9b241551111');
 
 		sql_runner_mock.mockResolvedValueOnce({
 			rows: [{
@@ -60,10 +61,14 @@ describe('Model persistence operations lifecycle', function () {
 		});
 
 		const User = create_model(new Schema({name: String}, {
-			id_strategy: 'uuidv7'
+			identity: {
+				type: 'uuid',
+				format: 'uuidv7',
+				mode: 'application',
+				generator: id_generator
+			}
 		}), connection);
 		const user_document = User.from({
-			id: '019631f7-ef80-7c17-8cf0-a9b241551111',
 			name: 'saved',
 			created_at,
 			updated_at
@@ -71,12 +76,24 @@ describe('Model persistence operations lifecycle', function () {
 
 		await user_document.insert();
 
+		expect(id_generator).toHaveBeenCalledTimes(1);
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('INSERT INTO "users" ("data", id, created_at, updated_at)');
 		expect(sql_runner_mock.mock.calls[0][1][0]).toBe('{"name":"saved"}');
 		expect(sql_runner_mock.mock.calls[0][1][1]).toBe('019631f7-ef80-7c17-8cf0-a9b241551111');
 		expect(sql_runner_mock.mock.calls[0][1][2]).toBe(created_at);
 		expect(sql_runner_mock.mock.calls[0][1][3]).toEqual(expect.any(Date));
 		expect(sql_runner_mock.mock.calls[0][1][3]).not.toBe(updated_at);
+	});
+
+	test('doc.insert rejects explicit ids for phase-one bigint database identity', async function () {
+		const User = create_model(new Schema({name: String}), connection);
+		const user_document = User.from({
+			id: '17',
+			name: 'saved'
+		});
+
+		await expect(user_document.insert()).rejects.toThrow('Document id cannot be set for database-generated bigint identity');
+		expect(sql_runner_mock).not.toHaveBeenCalled();
 	});
 
 	test('insert_one rejects existing model instances and requires plain input', async function () {

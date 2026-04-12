@@ -15,7 +15,7 @@ async function scan_server_capabilities(pool_instance) {
 
 	const server_version_num_text = server_version_num_result.rows?.[0]?.server_version_num;
 	const server_version = server_version_result.rows?.[0]?.server_version;
-	const has_uuidv7_function = uuidv7_function_result.rows?.[0]?.has_uuidv7_function === true;
+	const has_uuidv7_function = Boolean(uuidv7_function_result.rows?.[0]?.has_uuidv7_function);
 	const server_version_num = Number.parseInt(String(server_version_num_text), 10);
 
 	assert_condition(Number.isInteger(server_version_num), 'Unable to determine PostgreSQL server_version_num');

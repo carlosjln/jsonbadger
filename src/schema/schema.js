@@ -19,7 +19,7 @@ import {assert_condition, assert_identifier, assert_path} from '#src/utils/asser
 import {is_array, is_not_array} from '#src/utils/array.js';
 import {read_nested_path, write_nested_path} from '#src/utils/object-path.js';
 import {deep_clone, has_own} from '#src/utils/object.js';
-import {is_function, is_object, is_plain_object, is_string, is_uuid_v7, is_valid_timestamp} from '#src/utils/value.js';
+import {is_function, is_integer_string, is_object, is_plain_object, is_string, is_uuid_v7, is_valid_timestamp} from '#src/utils/value.js';
 
 const base_fields = Object.freeze({
 	id: Object.freeze({type: 'Mixed'}),
@@ -73,12 +73,11 @@ function Schema(schema_definition = {}, schema_options = {}) {
 Schema.prototype.configure_validators = function () {
 	const default_slug = this.get_default_slug();
 	const registered_slug_keys = this.get_extra_slugs();
-	const id_strategy = this.id_strategy;
 	const validators = Object.create(null);
 
 	// Root document validator
 	validators.base_fields = (document) => {
-		return validate_base_field_values(document, id_strategy);
+		return validate_base_field_values(document, resolve_base_field_validation_identity(this));
 	};
 
 	// Get all definitions in one pass
@@ -130,7 +129,7 @@ Schema.prototype.validate = function (document) {
 	for(const run_validator of Object.values(this.validators)) {
 		const validation_result = run_validator(document);
 
-		if(validation_result.valid === false && is_array(validation_result.errors)) {
+		if(!validation_result.valid && is_array(validation_result.errors)) {
 			error_details.push(...validation_result.errors);
 		}
 	}
@@ -153,7 +152,7 @@ Schema.prototype.validate = function (document) {
  * @throws {ValidationError}
  */
 Schema.prototype.validate_base_fields = function (document) {
-	const validation_result = validate_base_field_values(document, this.id_strategy);
+	const validation_result = validate_base_field_values(document, resolve_base_field_validation_identity(this));
 
 	if(!validation_result.valid) {
 		throw new ValidationError('Schema validation failed', validation_result.errors);
@@ -268,7 +267,7 @@ Schema.prototype.cast = function (document) {
 Schema.prototype.add_method = function (method_name, method_implementation) {
 	assert_identifier(method_name, 'method_name');
 	assert_condition(is_function(method_implementation), 'method_implementation must be a function');
-	assert_condition(has_own(this.methods, method_name) === false, 'Schema method "' + method_name + '" already exists');
+	assert_condition(!has_own(this.methods, method_name), 'Schema method "' + method_name + '" already exists');
 
 	this.methods[method_name] = method_implementation;
 	return this;
@@ -653,7 +652,7 @@ function resolve_identity_id_strategy(identity_options) {
  * @returns {object}
  */
 function build_read_operators(connection) {
-	const supports_jsonpath = connection?.server_capabilities?.supports_jsonpath === true;
+	const supports_jsonpath = connection?.server_capabilities?.supports_jsonpath;
 
 	return {
 		$json_path_exists: supports_jsonpath ? jsonpath_exists_native_operator : jsonpath_exists_compat_operator,
@@ -670,7 +669,7 @@ function build_read_operators(connection) {
  * @throws {Error}
  */
 function build_identity_runtime(identity_options, connection) {
-	const supports_uuidv7 = connection?.server_capabilities?.supports_uuidv7 === true;
+	const supports_uuidv7 = connection?.server_capabilities?.supports_uuidv7;
 
 	if(identity_options.type === IDENTITY_TYPE.bigint) {
 		return {
@@ -678,7 +677,7 @@ function build_identity_runtime(identity_options, connection) {
 			format: null,
 			mode: IDENTITY_MODE.database,
 			id_strategy: ID_STRATEGY.bigserial,
-			insert_includes_id: false,
+			requires_explicit_id: false,
 			column_sql: 'id BIGSERIAL PRIMARY KEY'
 		};
 	}
@@ -689,7 +688,7 @@ function build_identity_runtime(identity_options, connection) {
 			format: IDENTITY_FORMAT.uuidv7,
 			mode: IDENTITY_MODE.application,
 			id_strategy: ID_STRATEGY.uuidv7,
-			insert_includes_id: true,
+			requires_explicit_id: true,
 			column_sql: 'id UUID PRIMARY KEY'
 		};
 	}
@@ -703,7 +702,7 @@ function build_identity_runtime(identity_options, connection) {
 			format: IDENTITY_FORMAT.uuidv7,
 			mode: IDENTITY_MODE.database,
 			id_strategy: ID_STRATEGY.uuidv7,
-			insert_includes_id: false,
+			requires_explicit_id: false,
 			column_sql: 'id UUID PRIMARY KEY DEFAULT uuidv7()'
 		};
 	}
@@ -716,7 +715,7 @@ function build_identity_runtime(identity_options, connection) {
 			format: IDENTITY_FORMAT.uuidv7,
 			mode: IDENTITY_MODE.database,
 			id_strategy: ID_STRATEGY.uuidv7,
-			insert_includes_id: false,
+			requires_explicit_id: false,
 			column_sql: 'id UUID PRIMARY KEY DEFAULT uuidv7()'
 		};
 	}
@@ -731,7 +730,7 @@ function build_identity_runtime(identity_options, connection) {
 		format: IDENTITY_FORMAT.uuidv7,
 		mode: IDENTITY_MODE.application,
 		id_strategy: ID_STRATEGY.uuidv7,
-		insert_includes_id: true,
+		requires_explicit_id: true,
 		column_sql: 'id UUID PRIMARY KEY'
 	};
 }
@@ -740,20 +739,34 @@ function build_identity_runtime(identity_options, connection) {
  * Validate base-field values and collect deterministic error details.
  *
  * @param {object} document
- * @param {string} id_strategy
+ * @param {object} identity_state
+ * @param {string} identity_state.type
+ * @param {string|null} identity_state.format
  * @returns {{valid: boolean, errors: object[]|null}}
  */
-function validate_base_field_values(document, id_strategy) {
+function validate_base_field_values(document, identity_state) {
 	const error_details = [];
 
-	if(id_strategy === ID_STRATEGY.uuidv7 && document.id != null && !is_uuid_v7(document.id)) {
-		error_details.push({
-			path: 'id',
-			code: 'validator_error',
-			message: 'Path "id" must be a valid UUIDv7',
-			type: 'validator_error',
-			value: document.id
-		});
+	if(document.id != null) {
+		if(identity_state.type === IDENTITY_TYPE.uuid && identity_state.format === IDENTITY_FORMAT.uuidv7 && !is_uuid_v7(document.id)) {
+			error_details.push({
+				path: 'id',
+				code: 'validator_error',
+				message: 'Path "id" must be a valid UUIDv7',
+				type: 'validator_error',
+				value: document.id
+			});
+		}
+
+		if(identity_state.type === IDENTITY_TYPE.bigint && !is_integer_string(document.id)) {
+			error_details.push({
+				path: 'id',
+				code: 'validator_error',
+				message: 'Path "id" must be a numeric string',
+				type: 'validator_error',
+				value: document.id
+			});
+		}
 	}
 
 	for(const key of ['created_at', 'updated_at']) {
@@ -773,6 +786,28 @@ function validate_base_field_values(document, id_strategy) {
 	return {
 		valid: error_details.length === 0,
 		errors: error_details.length > 0 ? error_details : null
+	};
+}
+
+/**
+ * Resolve the identity shape used by schema-level base-field validation.
+ *
+ * @param {Schema} schema_instance
+ * @returns {{type: string, format: string|null}}
+ */
+function resolve_base_field_validation_identity(schema_instance) {
+	const runtime_identity = schema_instance.$runtime.identity;
+
+	if(runtime_identity) {
+		return {
+			type: runtime_identity.type,
+			format: runtime_identity.format
+		};
+	}
+
+	return {
+		type: schema_instance.options.identity.type,
+		format: schema_instance.options.identity.format
 	};
 }
 

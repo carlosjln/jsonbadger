@@ -12,6 +12,7 @@ import {quote_identifier} from '#src/utils/assert.js';
  * @param {object} data Prepared insert state.
  * @param {object} data.payload JSONB payload for the data column.
  * @param {object} data.base_fields Row-level fields to persist outside the data column.
+ * @param {object} data.identity_runtime Bound identity runtime for the compiled schema.
  * @returns {Promise<object|null>}
  */
 async function exec_insert_one(model, data) {
@@ -22,8 +23,9 @@ async function exec_insert_one(model, data) {
 	const data_identifier = quote_identifier(data_column);
 	const payload = data.payload;
 	const base_fields = data.base_fields;
+	const identity_runtime = data.identity_runtime;
 
-	const insert_query = sql.build_insert_query({table_identifier, data_identifier, payload, base_fields});
+	const insert_query = sql.build_insert_query({table_identifier, data_identifier, payload, base_fields, identity_runtime});
 	const query_result = await sql.run(insert_query.sql_text, insert_query.sql_params, model.connection);
 	const saved_row = query_result.rows[0];
 

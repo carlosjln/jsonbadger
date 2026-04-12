@@ -12,17 +12,19 @@ import {jsonb_stringify} from '#src/utils/json.js';
  * @param {string} query_context.data_identifier
  * @param {object} query_context.payload
  * @param {object} query_context.base_fields
+ * @param {object} query_context.identity_runtime
  * @returns {object}
  */
 function build_insert_query(query_context) {
 	const sql_columns = [query_context.data_identifier];
 	const sql_params = [jsonb_stringify(query_context.payload)];
 	const sql_values = ['$1::jsonb'];
+	const identity_runtime = query_context.identity_runtime;
 
-	if(query_context.base_fields.id !== undefined && query_context.base_fields.id !== null) {
+	if(identity_runtime.requires_explicit_id) {
 		sql_columns.push('id');
 		sql_params.push(String(query_context.base_fields.id));
-		sql_values.push('$' + sql_params.length + '::uuid');
+		sql_values.push('$' + sql_params.length + resolve_insert_id_cast(identity_runtime));
 	}
 
 	for(const key of ['created_at', 'updated_at']) {
@@ -37,6 +39,20 @@ function build_insert_query(query_context) {
 			`RETURNING id::text AS id, ${query_context.data_identifier} AS data, created_at AS created_at, updated_at AS updated_at`,
 		sql_params
 	};
+}
+
+/**
+ * Resolve the SQL cast for explicit insert ids.
+ *
+ * @param {object} identity_runtime
+ * @returns {string}
+ */
+function resolve_insert_id_cast(identity_runtime) {
+	if(identity_runtime.type === 'uuid') {
+		return '::uuid';
+	}
+
+	return '::bigint';
 }
 
 export default build_insert_query;

@@ -15,7 +15,6 @@ import {quote_identifier} from '#src/utils/assert.js';
  */
 async function exec_delete_one(model, query_filter) {
 	const schema = model.schema;
-	const id_strategy = schema.id_strategy;
 
 	const model_options = model.options;
 	const data_column = model_options.data_column;
@@ -23,7 +22,7 @@ async function exec_delete_one(model, query_filter) {
 
 	const table_identifier = quote_identifier(table_name);
 	const data_identifier = quote_identifier(data_column);
-	const where_result = where_compiler(query_filter, {schema, data_column, id_strategy});
+	const where_result = where_compiler(query_filter, {schema, data_column});
 	const query_context = {table_identifier, data_identifier, where_result};
 
 	const delete_query = sql.build_delete_query(query_context);

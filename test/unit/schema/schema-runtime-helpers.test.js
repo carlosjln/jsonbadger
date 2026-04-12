@@ -237,7 +237,7 @@ describe('Schema runtime helpers lifecycle', function () {
 			format: null,
 			mode: 'database',
 			id_strategy: 'bigserial',
-			insert_includes_id: false,
+			requires_explicit_id: false,
 			column_sql: 'id BIGSERIAL PRIMARY KEY'
 		});
 	});
@@ -287,7 +287,7 @@ describe('Schema runtime helpers lifecycle', function () {
 			format: 'uuidv7',
 			mode: 'application',
 			id_strategy: 'uuidv7',
-			insert_includes_id: true,
+			requires_explicit_id: true,
 			column_sql: 'id UUID PRIMARY KEY'
 		});
 	});
@@ -314,7 +314,7 @@ describe('Schema runtime helpers lifecycle', function () {
 			format: 'uuidv7',
 			mode: 'database',
 			id_strategy: 'uuidv7',
-			insert_includes_id: false,
+			requires_explicit_id: false,
 			column_sql: 'id UUID PRIMARY KEY DEFAULT uuidv7()'
 		});
 	});
@@ -341,7 +341,7 @@ describe('Schema runtime helpers lifecycle', function () {
 			format: 'uuidv7',
 			mode: 'application',
 			id_strategy: 'uuidv7',
-			insert_includes_id: true,
+			requires_explicit_id: true,
 			column_sql: 'id UUID PRIMARY KEY'
 		});
 	});

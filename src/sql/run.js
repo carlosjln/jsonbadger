@@ -40,7 +40,7 @@ function resolve_pool_instance(connection) {
 }
 
 function resolve_debug_mode(connection) {
-	return connection?.options?.debug === true;
+	return Boolean(connection?.options?.debug);
 }
 
 export default run;

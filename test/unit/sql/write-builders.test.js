@@ -15,6 +15,10 @@ describe('SQL write builder lifecycle', function () {
 			payload: {
 				name: 'alice'
 			},
+			identity_runtime: {
+				type: 'bigint',
+				requires_explicit_id: false
+			},
 			base_fields: {
 				created_at,
 				updated_at
@@ -38,6 +42,10 @@ describe('SQL write builder lifecycle', function () {
 			data_identifier: '"data"',
 			payload: {
 				name: 'alice'
+			},
+			identity_runtime: {
+				type: 'uuid',
+				requires_explicit_id: true
 			},
 			base_fields: {
 				id: '019631f7-ef80-7c17-8cf0-a9b241551111',

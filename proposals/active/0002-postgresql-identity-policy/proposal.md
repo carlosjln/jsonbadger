@@ -322,7 +322,7 @@ id UUID PRIMARY KEY
    C. reject explicit ids for database-generated numeric mode in phase one
 
 7. Update `src/sql/write/build-insert-query.js`.
-   A. include `id` only when `schema.$runtime.identity.insert_includes_id = true`
+   A. include `id` only when `schema.$runtime.identity.requires_explicit_id = true`
    B. choose the SQL cast from the bound schema id type
 
 8. Update `src/sql/read/where/context.js` and `src/sql/read/where/base-fields.js`.
@@ -368,7 +368,7 @@ Schema.prototype.$bind_connection = function (connection) {
 			this.$runtime.identity = {
 				mode: IDENTITY_MODE.database,
 				column_sql: 'id UUID PRIMARY KEY DEFAULT uuidv7()',
-				insert_includes_id: false
+				requires_explicit_id: false
 			};
 			return this;
 		}
@@ -381,7 +381,7 @@ Schema.prototype.$bind_connection = function (connection) {
 			this.$runtime.identity = {
 				mode: IDENTITY_MODE.application,
 				column_sql: 'id UUID PRIMARY KEY',
-				insert_includes_id: true
+				requires_explicit_id: true
 			};
 			return this;
 		}
@@ -391,7 +391,7 @@ Schema.prototype.$bind_connection = function (connection) {
 				this.$runtime.identity = {
 					mode: IDENTITY_MODE.database,
 					column_sql: 'id UUID PRIMARY KEY DEFAULT uuidv7()',
-					insert_includes_id: false
+					requires_explicit_id: false
 				};
 				return this;
 			}
@@ -400,7 +400,7 @@ Schema.prototype.$bind_connection = function (connection) {
 				this.$runtime.identity = {
 					mode: IDENTITY_MODE.application,
 					column_sql: 'id UUID PRIMARY KEY',
-					insert_includes_id: true
+					requires_explicit_id: true
 				};
 				return this;
 			}
@@ -417,7 +417,7 @@ Schema.prototype.$bind_connection = function (connection) {
 
 ```js
 function prepare_insert_id(model, document) {
-	if(model.schema.$runtime.identity.insert_includes_id !== true) {
+	if(model.schema.$runtime.identity.requires_explicit_id !== true) {
 		return;
 	}
 

@@ -58,7 +58,7 @@ describe('Model migration lifecycle', function () {
 				format: null,
 				mode: 'database',
 				id_strategy: 'bigserial',
-				insert_includes_id: false,
+				requires_explicit_id: false,
 				column_sql: 'id BIGSERIAL PRIMARY KEY'
 			},
 			connection
@@ -131,7 +131,7 @@ describe('Model migration lifecycle', function () {
 				format: 'uuidv7',
 				mode: 'database',
 				id_strategy: 'uuidv7',
-				insert_includes_id: false,
+				requires_explicit_id: false,
 				column_sql: 'id UUID PRIMARY KEY DEFAULT uuidv7()'
 			},
 			connection
