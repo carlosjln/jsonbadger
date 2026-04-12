@@ -93,7 +93,6 @@ Schema
           - paths
           - indexes
           - options
-          - id_strategy
           - auto_index
           - methods
           - aliases
@@ -105,7 +104,8 @@ Schema
 Important:
 
 - slug ownership belongs to `Schema`
-- `Schema` owns the final runtime `id_strategy`
+- `Schema` owns declarative identity config in `schema.options.identity`
+- `Schema` owns resolved identity runtime in `schema.$runtime.identity`
 - schema methods are later installed on compiled model constructors
 
 ## 5. Model Registration Flow
@@ -246,7 +246,7 @@ model constructor read methods
    v
 query builder
    |
-   +--> where_compiler(..., {schema, data_column, id_strategy})
+   +--> where_compiler(..., {schema, data_column})
    +--> sort_compiler(...)
    +--> limit_skip_compiler(...)
    +--> sql_runner(sql_text, params, Model.connection)
@@ -322,7 +322,7 @@ User
    |     +--> normalize update gateway
    |     +--> normalize update definition
    |     +--> JsonbOps.from(...)
-   |     +--> where_compiler(..., {schema, data_column, id_strategy})
+   |     +--> where_compiler(..., {schema, data_column})
    |     +--> exec_update_one(...)
    |     +--> sql_runner(..., Model.connection)
    |     +--> raw updated row
@@ -330,7 +330,7 @@ User
    |
    +--> Model.delete_one(...)
           |
-          +--> where_compiler(..., {schema, data_column, id_strategy})
+          +--> where_compiler(..., {schema, data_column})
           +--> sql_runner(..., Model.connection)
           +--> raw deleted row
           +--> Model.hydrate(row)
@@ -344,8 +344,7 @@ App startup / bootstrap
    v
 Model.ensure_table()
    |
-   +--> read model.schema.id_strategy
-   +--> if uuidv7: assert server capability snapshot
+   +--> read model.schema.$runtime.identity
    +--> table migration helper
    +--> execute through explicit Connection
 
@@ -381,14 +380,15 @@ Connection
 Schema
   |
   +--> owns paths, indexes, slug ownership, aliases, and validators
-  +--> owns id_strategy and auto_index
+  +--> owns schema options and auto_index
+  +--> owns capability-bound runtime state in $runtime
   +--> owns the document conform tree
   |
 Model
   |
   +--> is compiled through Connection.model(...)
   +--> owns schema/options/connection bindings
-  +--> reads model.schema.id_strategy as final runtime truth
+  +--> reads model.schema.$runtime as final bound runtime truth
   +--> executes through its owning Connection
   |
 Document instances

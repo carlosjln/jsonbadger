@@ -13,8 +13,10 @@ Use this directory for module-scoped API reference pages.
 Named exports:
 - `connect(uri, options)`
 - `Schema`
-- `ID_STRATEGY`
 - `field_type`
+- `IDENTITY_TYPE`
+- `IDENTITY_FORMAT`
+- `IDENTITY_MODE`
 
 Default export (`JsonBadger`) includes the same plus:
 - `field_type.register(name, type_constructor, aliases?)`

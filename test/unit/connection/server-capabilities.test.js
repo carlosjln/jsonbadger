@@ -1,8 +1,5 @@
 import {describe, expect, jest, test} from '@jest/globals';
-
-const {default: ID_STRATEGY} = await import('#src/constants/id-strategy.js');
 const {scan_server_capabilities} = await import('#src/connection/server-capabilities.js');
-const {assert_id_strategy_capability} = await import('#src/connection/server-capability-assertions.js');
 
 describe('server capability scan', function () {
 	test('scans PostgreSQL version, uuidv7 capability, and jsonpath capability using internal SQL checks', async function () {
@@ -55,23 +52,5 @@ describe('server capability scan', function () {
 		const result = await scan_server_capabilities(pool_instance);
 
 		expect(result.supports_jsonpath).toBe(false);
-	});
-});
-
-describe('id strategy capability assertion', function () {
-	test('does nothing for non-uuidv7 strategies', function () {
-		expect(function assert_bigserial_capability() {
-			assert_id_strategy_capability(ID_STRATEGY.bigserial, null);
-		}).not.toThrow();
-	});
-
-	test('throws a clear error when uuidv7 is unsupported', function () {
-		expect(function assert_unsupported_uuidv7() {
-			assert_id_strategy_capability(ID_STRATEGY.uuidv7, {
-				server_version: '17.4',
-				server_version_num: 170004,
-				supports_uuidv7: false
-			});
-		}).toThrow('id_strategy=uuidv7 requires PostgreSQL native uuidv7() support (PostgreSQL 18+)');
 	});
 });

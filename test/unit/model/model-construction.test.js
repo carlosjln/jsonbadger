@@ -31,7 +31,6 @@ describe('Model construction lifecycle', function () {
 				type: 'bigint',
 				format: null,
 				mode: 'database',
-				id_strategy: 'bigserial',
 				requires_explicit_id: false,
 				column_sql: 'id BIGSERIAL PRIMARY KEY'
 			});

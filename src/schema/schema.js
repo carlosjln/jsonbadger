@@ -2,7 +2,6 @@ import defaults from '#src/constants/defaults.js';
 import IDENTITY_FORMAT from '#src/constants/identity-format.js';
 import IDENTITY_MODE from '#src/constants/identity-mode.js';
 import IDENTITY_TYPE from '#src/constants/identity-type.js';
-import ID_STRATEGY from '#src/constants/id-strategy.js';
 
 import ValidationError from '#src/errors/validation-error.js';
 
@@ -49,7 +48,6 @@ function Schema(schema_definition = {}, schema_options = {}) {
 
 	this.indexes = [];
 	this.options = $options;
-	this.id_strategy = $options.id_strategy;
 	this.auto_index = $options.auto_index;
 	this.methods = Object.create(null);
 	this.validators = Object.create(null);
@@ -300,7 +298,6 @@ Schema.prototype.clone = function () {
 
 	cloned_schema.indexes = this.get_indexes();
 	cloned_schema.options = deep_clone(this.options);
-	cloned_schema.id_strategy = this.id_strategy;
 	cloned_schema.auto_index = this.auto_index;
 	cloned_schema.methods = Object.assign(Object.create(null), this.methods);
 	cloned_schema.validators = Object.create(null);
@@ -498,8 +495,7 @@ function build_slug_field_maps(field_types, default_slug, slug_keys) {
 }
 
 /**
- * Build normalized schema options, including merged identity config and the temporary
- * derived `id_strategy` bridge still used by downstream code.
+ * Build normalized schema options, including merged identity config.
  *
  * @param {object} schema_options
  * @returns {object}
@@ -515,7 +511,6 @@ function build_schema_options(schema_options = {}) {
 	validate_identity_options(identity_options);
 
 	next_options.identity = identity_options;
-	next_options.id_strategy = resolve_identity_id_strategy(identity_options);
 
 	if(!is_array(next_options.slugs)) {
 		next_options.slugs = [];
@@ -536,8 +531,7 @@ function build_schema_options(schema_options = {}) {
 }
 
 /**
- * Merge the public identity namespace and map the temporary legacy `id_strategy` input
- * while the rest of the rollout is still in progress.
+ * Merge the public identity namespace.
  *
  * @param {object} schema_options
  * @returns {object}
@@ -546,29 +540,12 @@ function build_schema_options(schema_options = {}) {
 function build_identity_options(schema_options) {
 	const next_identity = Object.assign({}, defaults.schema_options.identity);
 	const has_identity_options = has_own(schema_options, 'identity');
-	const has_legacy_id_strategy = has_own(schema_options, 'id_strategy');
-	const legacy_id_strategy = schema_options.id_strategy;
-	const valid_legacy_strategy_values = Object.values(ID_STRATEGY);
+
+	assert(has_own(schema_options, 'id_strategy'), 'schema_options.id_strategy has been replaced by schema_options.identity');
 
 	if(has_identity_options) {
 		assert(!is_plain_object(schema_options.identity), 'identity must be a plain object');
 		Object.assign(next_identity, schema_options.identity);
-		return next_identity;
-	}
-
-	if(!has_legacy_id_strategy) {
-		return next_identity;
-	}
-
-	assert(
-		!valid_legacy_strategy_values.includes(legacy_id_strategy),
-		'id_strategy must be one of: ' + valid_legacy_strategy_values.join(', ')
-	);
-
-	if(legacy_id_strategy === ID_STRATEGY.uuidv7) {
-		next_identity.type = IDENTITY_TYPE.uuid;
-		next_identity.format = IDENTITY_FORMAT.uuidv7;
-		next_identity.mode = IDENTITY_MODE.fallback;
 	}
 
 	return next_identity;
@@ -632,20 +609,6 @@ function validate_identity_option_combination(identity_options) {
 }
 
 /**
- * Resolve the temporary schema-level `id_strategy` bridge from the public identity config.
- *
- * @param {object} identity_options
- * @returns {string}
- */
-function resolve_identity_id_strategy(identity_options) {
-	if(identity_options.type === IDENTITY_TYPE.uuid && identity_options.format === IDENTITY_FORMAT.uuidv7) {
-		return ID_STRATEGY.uuidv7;
-	}
-
-	return ID_STRATEGY.bigserial;
-}
-
-/**
  * Resolve the bound read-operator implementations for one connection context.
  *
  * @param {object|null|undefined} connection
@@ -676,7 +639,6 @@ function build_identity_runtime(identity_options, connection) {
 			type: IDENTITY_TYPE.bigint,
 			format: null,
 			mode: IDENTITY_MODE.database,
-			id_strategy: ID_STRATEGY.bigserial,
 			requires_explicit_id: false,
 			column_sql: 'id BIGSERIAL PRIMARY KEY'
 		};
@@ -687,7 +649,6 @@ function build_identity_runtime(identity_options, connection) {
 			type: IDENTITY_TYPE.uuid,
 			format: IDENTITY_FORMAT.uuidv7,
 			mode: IDENTITY_MODE.application,
-			id_strategy: ID_STRATEGY.uuidv7,
 			requires_explicit_id: true,
 			column_sql: 'id UUID PRIMARY KEY'
 		};
@@ -701,7 +662,6 @@ function build_identity_runtime(identity_options, connection) {
 			type: IDENTITY_TYPE.uuid,
 			format: IDENTITY_FORMAT.uuidv7,
 			mode: IDENTITY_MODE.database,
-			id_strategy: ID_STRATEGY.uuidv7,
 			requires_explicit_id: false,
 			column_sql: 'id UUID PRIMARY KEY DEFAULT uuidv7()'
 		};
@@ -714,7 +674,6 @@ function build_identity_runtime(identity_options, connection) {
 			type: IDENTITY_TYPE.uuid,
 			format: IDENTITY_FORMAT.uuidv7,
 			mode: IDENTITY_MODE.database,
-			id_strategy: ID_STRATEGY.uuidv7,
 			requires_explicit_id: false,
 			column_sql: 'id UUID PRIMARY KEY DEFAULT uuidv7()'
 		};
@@ -729,7 +688,6 @@ function build_identity_runtime(identity_options, connection) {
 		type: IDENTITY_TYPE.uuid,
 		format: IDENTITY_FORMAT.uuidv7,
 		mode: IDENTITY_MODE.application,
-		id_strategy: ID_STRATEGY.uuidv7,
 		requires_explicit_id: true,
 		column_sql: 'id UUID PRIMARY KEY'
 	};

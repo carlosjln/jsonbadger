@@ -180,22 +180,16 @@ describe('Schema construction lifecycle', function () {
 			mode: 'fallback',
 			generator
 		});
-		expect(schema_instance.id_strategy).toBe('uuidv7');
 	});
 
-	test('maps the temporary legacy id_strategy input into identity config', function () {
-		const schema_instance = new Schema({
-			name: String
-		}, {
-			id_strategy: 'uuidv7'
-		});
-
-		expect(schema_instance.options.identity).toEqual({
-			type: 'uuid',
-			format: 'uuidv7',
-			mode: 'fallback',
-			generator: null
-		});
+	test('rejects legacy id_strategy input during construction', function () {
+		expect(function build_legacy_id_strategy_schema() {
+			return new Schema({
+				name: String
+			}, {
+				id_strategy: 'uuidv7'
+			});
+		}).toThrow('schema_options.id_strategy has been replaced by schema_options.identity');
 	});
 
 	test('rejects unsupported static identity combinations during construction', function () {

@@ -22,10 +22,7 @@ function create_schema() {
 	return {
 		validate: jest.fn(),
 		configure_validators: jest.fn(),
-		options: {
-			id_strategy: 'bigserial'
-		},
-		id_strategy: 'bigserial'
+		options: {}
 	};
 }
 
