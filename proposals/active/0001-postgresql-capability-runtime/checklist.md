@@ -24,8 +24,8 @@ Purpose: implement one upstream capability-binding seam so downstream SQL code c
 - [x] T9. Update `src/sql/read/where/operators.js` to dispatch by public operator name and call the already-bound implementation from `compile_context.schema_instance.$runtime.read_operators`.
 - [x] T10. Keep `src/sql/read/where/context.js` simple; pass the schema instance through and do not introduce another runtime container.
 
-- [ ] T11. Add or update focused unit tests for capability scanning, `$bind_connection(connection)`, `$bind_connection(null)`, native binding, compat binding, and fail-fast cases.
-- [ ] T12. Update any internal docs that describe the old capability-selection flow after the code is settled.
+- [x] T11. Add or update focused unit tests for capability scanning, `$bind_connection(connection)`, `$bind_connection(null)`, native binding, compat binding, and fail-fast cases.
+- [x] T12. Update any internal docs that describe the old capability-selection flow after the code is settled.
 
 ## Validation
 

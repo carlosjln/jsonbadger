@@ -168,7 +168,7 @@ async function scan_server_capabilities(pool_instance) {
 2. `src/model/factory/index.js`
 
 ```js
-const $schema = schema.clone();
+const $schema = schema.clone().configure_validators();
 $schema.$bind_connection(connection);
 
 model.schema = $schema;
@@ -178,14 +178,8 @@ model.schema = $schema;
 
 ```js
 Schema.prototype.$bind_connection = function (connection) {
-	const capabilities = connection?.server_capabilities ?? null;
-	const supports_jsonpath = capabilities?.supports_jsonpath === true;
-	this.$runtime = this.$runtime ?? {};
-
-	this.$runtime.read_operators = {
-		$json_path_exists: supports_jsonpath ? jsonpath_exists_native : jsonpath_exists_compat,
-		$json_path_match: supports_jsonpath ? jsonpath_match_native : jsonpath_match_compat
-	};
+	this.$runtime = Object.create(null);
+	this.$runtime.read_operators = build_read_operators(connection);
 
 	return this;
 };
@@ -226,11 +220,13 @@ Schema.prototype.$bind_connection = function (connection) {
 
 ```js
 if(name === '$json_path_exists') {
-	return compile_context.schema_instance.$runtime.read_operators.$json_path_exists(json_expression, value, parameter_state);
+	const read_operator = resolve_read_operator(compile_context, name, path_value);
+	return read_operator(json_expression, value, parameter_state);
 }
 
 if(name === '$json_path_match') {
-	return compile_context.schema_instance.$runtime.read_operators.$json_path_match(json_expression, value, parameter_state);
+	const read_operator = resolve_read_operator(compile_context, name, path_value);
+	return read_operator(json_expression, value, parameter_state);
 }
 ```
 
@@ -258,7 +254,3 @@ if(name === '$json_path_match') {
 
 3. Do not expose compatibility translators as a normal public API.
    A. users should still see the clean JsonBadger operator surface first
-
-
-
-

@@ -99,6 +99,7 @@ Schema
           - aliases
           - validators
           - $conform_tree
+          - $runtime
 ```
 
 Important:
@@ -124,6 +125,9 @@ Connection.model(...)
    +--> return existing model when schema/options match
    +--> throw ModelOverwriteError on conflicting redefinition
    +--> require schema instanceof Schema
+   +--> clone schema
+   +--> configure validators on the clone
+   +--> bind connection runtime onto the clone via schema.$bind_connection(connection)
    +--> build compiled model constructor/runtime
 ```
 
@@ -253,6 +257,11 @@ Connection.pool_instance.query(...)
    v
 PostgreSQL
 ```
+
+Important:
+
+- JSONPath operator dispatch reads the already-bound implementation from `model.schema.$runtime.read_operators`
+- read-query compilation does not branch on `connection.server_capabilities` directly
 
 Hydration path for document-returning reads:
 

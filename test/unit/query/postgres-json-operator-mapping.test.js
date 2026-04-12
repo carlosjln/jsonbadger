@@ -84,4 +84,18 @@ describe('PostgreSQL JSON operator mapping', function () {
 			});
 		}).toThrow('Invalid value for $json_path_match operator');
 	});
+
+	test('fails fast when JSONPath dispatch has no bound schema runtime', function () {
+		expect(function compile_unbound_jsonpath_exists() {
+			where_compiler({profile: {$json_path_exists: '$.city ? (@ != null)'}}, {
+				data_column: 'data'
+			});
+		}).toThrow('Read operator requires a bound schema runtime: $json_path_exists');
+
+		expect(function compile_unbound_jsonpath_match() {
+			where_compiler({profile: {$json_path_match: '$.age > 18'}}, {
+				data_column: 'data'
+			});
+		}).toThrow('Read operator requires a bound schema runtime: $json_path_match');
+	});
 });
