@@ -2,11 +2,11 @@ import ensure_index from '#src/migration/ensure-index.js';
 import resolve_schema_indexes from '#src/migration/schema-indexes-resolver.js';
 import ensure_table from '#src/migration/ensure-table.js';
 
-async function ensure_schema(table_name, data_column, collection_schema, id_strategy, connection) {
+async function ensure_schema(table_name, data_column, collection_schema, identity_runtime, connection) {
 	await ensure_table({
 		table_name,
 		data_column,
-		id_strategy,
+		identity_runtime,
 		connection
 	});
 

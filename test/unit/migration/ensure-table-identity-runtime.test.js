@@ -10,17 +10,19 @@ jest.unstable_mockModule('#src/sql/run.js', function build_sql_runner_mock() {
 
 const {default: ensure_table} = await import('#src/migration/ensure-table.js');
 
-describe('ensure_table id strategy', function () {
+describe('ensure_table identity runtime', function () {
 	beforeEach(function reset_test_state() {
 		sql_runner_mock.mockReset();
 		sql_runner_mock.mockResolvedValue({rows: []});
 	});
 
-	test('creates BIGSERIAL primary key for bigserial strategy', async function () {
+	test('creates BIGSERIAL primary key for bigint database runtime', async function () {
 		await ensure_table({
 			table_name: 'users',
 			data_column: 'data',
-			id_strategy: 'bigserial'
+			identity_runtime: {
+				column_sql: 'id BIGSERIAL PRIMARY KEY'
+			}
 		});
 
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
@@ -29,16 +31,32 @@ describe('ensure_table id strategy', function () {
 		expect(sql_runner_mock.mock.calls[0][1]).toEqual([]);
 	});
 
-	test('creates UUID primary key with database uuidv7() default for uuidv7 strategy', async function () {
+	test('creates UUID primary key with native uuidv7() default for database runtime', async function () {
 		await ensure_table({
 			table_name: 'sessions',
 			data_column: 'payload',
-			id_strategy: 'uuidv7'
+			identity_runtime: {
+				column_sql: 'id UUID PRIMARY KEY DEFAULT uuidv7()'
+			}
 		});
 
 		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('id UUID PRIMARY KEY DEFAULT uuidv7()');
 		expect(sql_runner_mock.mock.calls[0][0]).toContain('"payload" JSONB NOT NULL');
+		expect(sql_runner_mock.mock.calls[0][1]).toEqual([]);
+	});
+
+	test('creates UUID primary key without a database default for application runtime', async function () {
+		await ensure_table({
+			table_name: 'sessions',
+			data_column: 'payload',
+			identity_runtime: {
+				column_sql: 'id UUID PRIMARY KEY'
+			}
+		});
+
+		expect(sql_runner_mock).toHaveBeenCalledTimes(1);
+		expect(sql_runner_mock.mock.calls[0][0]).toContain('id UUID PRIMARY KEY, "payload" JSONB NOT NULL');
 		expect(sql_runner_mock.mock.calls[0][1]).toEqual([]);
 	});
 
@@ -48,27 +66,12 @@ describe('ensure_table id strategy', function () {
 		await ensure_table({
 			table_name: 'users',
 			data_column: 'data',
-			id_strategy: 'bigserial',
+			identity_runtime: {
+				column_sql: 'id BIGSERIAL PRIMARY KEY'
+			},
 			connection
 		});
 
 		expect(sql_runner_mock).toHaveBeenCalledWith(expect.any(String), [], connection);
-	});
-
-	test('throws when id_strategy is omitted', async function () {
-		await expect(ensure_table({
-			table_name: 'logs',
-			data_column: 'data'
-		})).rejects.toThrow('id_strategy must be one of: bigserial, uuidv7');
-	});
-
-	test('throws for unsupported id_strategy values', async function () {
-		await expect(ensure_table({
-			table_name: 'audit',
-			data_column: 'data',
-			id_strategy: 'uuid'
-		})).rejects.toThrow(
-			'id_strategy must be one of: bigserial, uuidv7'
-		);
 	});
 });

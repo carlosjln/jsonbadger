@@ -35,15 +35,16 @@ describe('ensure_schema', function () {
 
 	test('ensures table and skips index creation when schema has no declared indexes', async function () {
 		const schema_value = {name: 'schema'};
+		const identity_runtime = {column_sql: 'id UUID PRIMARY KEY DEFAULT uuidv7()'};
 		resolve_schema_indexes_mock.mockReturnValue([]);
 
-		await ensure_schema('users', 'data', schema_value, 'uuidv7');
+		await ensure_schema('users', 'data', schema_value, identity_runtime);
 
 		expect(ensure_table_mock).toHaveBeenCalledTimes(1);
 		expect(ensure_table_mock).toHaveBeenCalledWith({
 			table_name: 'users',
 			data_column: 'data',
-			id_strategy: 'uuidv7',
+			identity_runtime,
 			connection: undefined
 		});
 		expect(resolve_schema_indexes_mock).toHaveBeenCalledTimes(1);
@@ -57,10 +58,11 @@ describe('ensure_schema', function () {
 			{using: 'btree', path: 'email', order: 1, unique: true},
 			{using: 'gin', path: 'profile.city', name: 'idx_users_city_gin'}
 		];
+		const identity_runtime = {column_sql: 'id BIGSERIAL PRIMARY KEY'};
 
 		resolve_schema_indexes_mock.mockReturnValue(schema_indexes);
 
-		await ensure_schema('users', 'data', {schema: true}, 'bigserial');
+		await ensure_schema('users', 'data', {schema: true}, identity_runtime);
 
 		expect(ensure_table_mock).toHaveBeenCalledTimes(1);
 		expect(resolve_schema_indexes_mock).toHaveBeenCalledTimes(1);
@@ -85,17 +87,18 @@ describe('ensure_schema', function () {
 
 	test('forwards explicit connection context to ensure_table and ensure_index', async function () {
 		const connection = {pool_instance: {query: jest.fn()}, options: {debug: false}};
+		const identity_runtime = {column_sql: 'id BIGSERIAL PRIMARY KEY'};
 
 		resolve_schema_indexes_mock.mockReturnValue([
 			{using: 'gin', path: 'profile.city'}
 		]);
 
-		await ensure_schema('users', 'data', {schema: true}, 'bigserial', connection);
+		await ensure_schema('users', 'data', {schema: true}, identity_runtime, connection);
 
 		expect(ensure_table_mock).toHaveBeenCalledWith({
 			table_name: 'users',
 			data_column: 'data',
-			id_strategy: 'bigserial',
+			identity_runtime,
 			connection
 		});
 

@@ -2,7 +2,6 @@ import {beforeEach, describe, expect, jest, test} from '@jest/globals';
 
 const ensure_table_mock = jest.fn();
 const ensure_index_mock = jest.fn();
-const assert_id_strategy_capability_mock = jest.fn();
 
 jest.unstable_mockModule('#src/migration/ensure-table.js', function () {
 	return {
@@ -16,12 +15,6 @@ jest.unstable_mockModule('#src/migration/ensure-index.js', function () {
 	};
 });
 
-jest.unstable_mockModule('#src/connection/server-capability-assertions.js', function () {
-	return {
-		assert_id_strategy_capability: assert_id_strategy_capability_mock
-	};
-});
-
 const {default: Schema} = await import('#src/schema/schema.js');
 const {default: model} = await import('#src/model/factory/index.js');
 
@@ -31,7 +24,6 @@ describe('Model migration lifecycle', function () {
 	beforeEach(function () {
 		ensure_table_mock.mockReset();
 		ensure_index_mock.mockReset();
-		assert_id_strategy_capability_mock.mockReset();
 
 		ensure_table_mock.mockResolvedValue(undefined);
 		ensure_index_mock.mockResolvedValue(undefined);
@@ -61,7 +53,14 @@ describe('Model migration lifecycle', function () {
 		expect(ensure_table_mock).toHaveBeenCalledWith({
 			table_name: 'users',
 			data_column: 'data',
-			id_strategy: 'uuidv7',
+			identity_runtime: {
+				type: 'bigint',
+				format: null,
+				mode: 'database',
+				id_strategy: 'bigserial',
+				insert_includes_id: false,
+				column_sql: 'id BIGSERIAL PRIMARY KEY'
+			},
 			connection
 		});
 		expect(ensure_index_mock).toHaveBeenCalledWith({
@@ -109,22 +108,32 @@ describe('Model migration lifecycle', function () {
 		expect(ensure_index_mock).toHaveBeenCalledTimes(2);
 	});
 
-	test('ensure_table validates uuidv7 capability when the schema selects uuidv7 ids', async function () {
+	test('ensure_table forwards the bound uuid database runtime when the schema selects native uuidv7 ids', async function () {
 		const Event = model('Event', new Schema({
 			name: String
 		}, {
-			id_strategy: 'uuidv7'
+			identity: {
+				type: 'uuid',
+				format: 'uuidv7',
+				mode: 'database'
+			}
 		}), {
 			table_name: 'events'
 		}, connection);
 
 		await Event.ensure_table();
 
-		expect(assert_id_strategy_capability_mock).toHaveBeenCalledWith('uuidv7', connection.server_capabilities);
 		expect(ensure_table_mock).toHaveBeenCalledWith({
 			table_name: 'events',
 			data_column: 'data',
-			id_strategy: 'uuidv7',
+			identity_runtime: {
+				type: 'uuid',
+				format: 'uuidv7',
+				mode: 'database',
+				id_strategy: 'uuidv7',
+				insert_includes_id: false,
+				column_sql: 'id UUID PRIMARY KEY DEFAULT uuidv7()'
+			},
 			connection
 		});
 	});

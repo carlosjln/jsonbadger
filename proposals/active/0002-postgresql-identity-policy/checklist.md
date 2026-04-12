@@ -31,10 +31,10 @@ Purpose: replace `id_strategy` with `identity`, default the library back to nume
   - [x] T8A. allow connection-independent cases
   - [x] T8B. fail clear on capability-dependent cases
 
-- [ ] T9. Update migration / table DDL code to choose the id column definition from `schema.$runtime.identity`.
-- [ ] T10. Keep phase-one numeric database mode on `BIGSERIAL PRIMARY KEY`.
-- [ ] T11. Emit `UUID PRIMARY KEY DEFAULT uuidv7()` for bound native UUIDv7 database mode.
-- [ ] T12. Emit `UUID PRIMARY KEY` for bound application-generated UUIDv7 mode.
+- [x] T9. Update migration / table DDL code to choose the id column definition from `schema.$runtime.identity`.
+- [x] T10. Keep phase-one numeric database mode on `BIGSERIAL PRIMARY KEY`.
+- [x] T11. Emit `UUID PRIMARY KEY DEFAULT uuidv7()` for bound native UUIDv7 database mode.
+- [x] T12. Emit `UUID PRIMARY KEY` for bound application-generated UUIDv7 mode.
 
 - [ ] T13. Update model insert lifecycle so application-generated ids are created before validation when `schema.$runtime.identity.insert_includes_id === true`.
 - [ ] T14. Reject explicit ids for phase-one numeric database mode.

@@ -5,7 +5,6 @@
 import ID_STRATEGY from '#src/constants/id-strategy.js';
 import INTAKE_MODE from '#src/constants/intake-mode.js';
 import QueryError from '#src/errors/query-error.js';
-import {assert_id_strategy_capability} from '#src/connection/server-capability-assertions.js';
 
 import ensure_index_sql from '#src/migration/ensure-index.js';
 import ensure_table_sql from '#src/migration/ensure-table.js';
@@ -670,18 +669,12 @@ Model.ensure_table = async function () {
 	const model_options = model.options;
 	const table_name = model_options.table_name;
 	const data_column = model_options.data_column;
-	const id_strategy = model.schema.id_strategy;
-	const server_capabilities = model.connection?.server_capabilities;
-
-	// Some id strategies depend on server-side support, so verify capability before creating the table.
-	if(id_strategy === ID_STRATEGY.uuidv7 && server_capabilities) {
-		assert_id_strategy_capability(id_strategy, server_capabilities);
-	}
+	const identity_runtime = model.schema.$runtime.identity;
 
 	await ensure_table_sql({
 		table_name,
 		data_column,
-		id_strategy,
+		identity_runtime,
 		connection: model.connection
 	});
 };
