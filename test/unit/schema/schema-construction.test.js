@@ -139,4 +139,23 @@ describe('Schema construction lifecycle', function () {
 		expect(schema_instance.is_array_root('tags.items')).toBe(true);
 		expect(schema_instance.is_array_root('profile.city')).toBe(false);
 	});
+
+	test('stores runtime artifacts under an isolated $runtime container', function () {
+		const schema_instance = new Schema({
+			name: String
+		});
+		const cloned_schema = schema_instance.clone();
+
+		expect(Object.getPrototypeOf(schema_instance.$runtime)).toBeNull();
+		expect(Object.getPrototypeOf(cloned_schema.$runtime)).toBeNull();
+
+		cloned_schema.$runtime.identity = {
+			mode: 'database'
+		};
+
+		expect(schema_instance.$runtime.identity).toBeUndefined();
+		expect(cloned_schema.$runtime.identity).toEqual({
+			mode: 'database'
+		});
+	});
 });

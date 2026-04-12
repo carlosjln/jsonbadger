@@ -12,7 +12,8 @@ const default_connect_options = {
 const server_capabilities = {
 	server_version: '18.1',
 	server_version_num: 180001,
-	supports_uuidv7: true
+	supports_uuidv7: true,
+	supports_jsonpath: true
 };
 
 const pool_instance_state = {
@@ -65,9 +66,16 @@ describe('connect', function () {
 			expect(connection).toBeInstanceOf(Connection);
 			expect(connection.pool_instance).toBe(pool_instance_state);
 			expect(connection.server_capabilities).toEqual(server_capabilities);
+			expect(connection.sql_runtime).toBeUndefined();
 			expect(Pool_mock).toHaveBeenCalledTimes(1);
 			expect(pool_instance_state.query).toHaveBeenCalledWith('SELECT 1');
 			expect(scan_server_capabilities_mock).toHaveBeenCalledWith(pool_instance_state);
+			expect(debug_logger_mock).toHaveBeenCalledWith(false, 'connection_ready', {
+				max: 10,
+				server_version: '18.1',
+				supports_uuidv7: true,
+				supports_jsonpath: true
+			});
 		});
 
 		test('stores normalized default options when connect options are omitted', async function () {

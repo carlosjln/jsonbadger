@@ -22,6 +22,13 @@ const base_fields = Object.freeze({
 
 const base_fields_keys = new Set(Object.keys(base_fields));
 
+/**
+ * Compile one declarative schema instance.
+ *
+ * @param {object} schema_definition
+ * @param {object} schema_options
+ * @returns {void}
+ */
 function Schema(schema_definition = {}, schema_options = {}) {
 	const $schema = apply_base_fields(schema_definition);
 	const $options = build_schema_options(schema_options);
@@ -41,6 +48,7 @@ function Schema(schema_definition = {}, schema_options = {}) {
 	this.validators = Object.create(null);
 	this.aliases = collect_aliases(field_types);
 	this.$conform_tree = build_conform_tree(field_types, default_slug, extra_slug_keys);
+	this.$runtime = Object.create(null);
 
 	assert_condition(typeof this.auto_index === 'boolean', 'auto_index must be a boolean');
 
@@ -259,6 +267,11 @@ Schema.prototype.add_method = function (method_name, method_implementation) {
 	return this;
 };
 
+/**
+ * Clone one compiled schema instance while keeping runtime state isolated.
+ *
+ * @returns {Schema}
+ */
 Schema.prototype.clone = function () {
 	const cloned_schema = Object.create(Schema.prototype);
 
@@ -274,6 +287,7 @@ Schema.prototype.clone = function () {
 	cloned_schema.validators = Object.create(null);
 	cloned_schema.aliases = deep_clone(this.aliases);
 	cloned_schema.$conform_tree = deep_clone(this.$conform_tree);
+	cloned_schema.$runtime = Object.create(null);
 
 	return cloned_schema;
 };

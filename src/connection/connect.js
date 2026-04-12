@@ -30,7 +30,8 @@ async function connect(uri, options) {
 	debug_logger(debug, 'connection_ready', {
 		max: pool_options.max,
 		server_version: server_capabilities.server_version,
-		supports_uuidv7: server_capabilities.supports_uuidv7
+		supports_uuidv7: server_capabilities.supports_uuidv7,
+		supports_jsonpath: server_capabilities.supports_jsonpath
 	});
 
 	return connection_instance;
