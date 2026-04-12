@@ -26,7 +26,7 @@ describe('Model construction lifecycle', function () {
 			expect(User.schema).not.toBe(schema_instance);
 			expect(User.schema.validators.base_fields).toEqual(expect.any(Function));
 			expect(Object.getPrototypeOf(User.schema.$runtime)).toBeNull();
-			expect(Object.keys(User.schema.$runtime)).toEqual([]);
+			expect(Object.keys(User.schema.$runtime)).toEqual(['read_operators']);
 			expect(schema_instance.$runtime.identity).toEqual({
 				mode: 'stale'
 			});

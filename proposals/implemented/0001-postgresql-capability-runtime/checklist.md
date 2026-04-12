@@ -29,11 +29,12 @@ Purpose: implement one upstream capability-binding seam so downstream SQL code c
 
 ## Validation
 
-- [ ] V1. Run `npm run test-unit`.
-- [ ] V2. Run focused unit tests covering server capability detection, schema binding, and read-operator dispatch.
+- [x] V1. Run `npm run test-unit`.
+- [x] V2. Run focused unit tests covering server capability detection, schema binding, and read-operator dispatch.
 
 ## Notes
 
 1. Public query operators stay clean and stable.
 2. JSONPath remains an internal implementation choice, not the normal user-facing API.
+3. `npm run test-unit` currently also runs archived `releases/0.5.0-alpha/test/unit` suites, so that command still fails there outside this proposal's scope.
 
