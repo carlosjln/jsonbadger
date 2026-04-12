@@ -216,4 +216,18 @@ describe('Schema runtime helpers lifecycle', function () {
 
 		expect(schema_instance.get_indexes()).toEqual([]);
 	});
+
+	test('accepts $bind_connection(null) and resets runtime artifacts on the bound schema', function () {
+		const schema_instance = new Schema({
+			name: String
+		});
+
+		schema_instance.$runtime.identity = {
+			mode: 'stale'
+		};
+
+		expect(schema_instance.$bind_connection(null)).toBe(schema_instance);
+		expect(Object.getPrototypeOf(schema_instance.$runtime)).toBeNull();
+		expect(schema_instance.$runtime.identity).toBeUndefined();
+	});
 });

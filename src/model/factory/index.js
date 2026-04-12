@@ -31,7 +31,9 @@ function model(name, schema, options, connection) {
 
 	// Override default model options with instance options
 	const $options = Object.assign({}, defaults.model_options, options);
-	const $schema = schema;
+	const $schema = schema.clone().configure_validators();
+
+	$schema.$bind_connection(connection);
 
 	// Create the concrete Model constructor for this definition.
 	function model(data) {

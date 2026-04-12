@@ -268,6 +268,18 @@ Schema.prototype.add_method = function (method_name, method_implementation) {
 };
 
 /**
+ * Bind one compiled schema instance against one connection context.
+ *
+ * @param {object|null|undefined} connection
+ * @returns {Schema}
+ */
+Schema.prototype.$bind_connection = function (connection) {
+	void connection;
+	this.$runtime = Object.create(null);
+	return this;
+};
+
+/**
  * Clone one compiled schema instance while keeping runtime state isolated.
  *
  * @returns {Schema}

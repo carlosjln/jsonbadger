@@ -1,5 +1,7 @@
 import {describe, expect, test} from '@jest/globals';
 
+import Schema from '#src/schema/schema.js';
+import model from '#src/model/factory/index.js';
 import {
 	create_payload_model
 } from '#test/unit/model/test-helpers.js';
@@ -7,6 +9,30 @@ import {
 const existing_uuid = '0194f028-579a-7b5b-8107-b9ad31395f43';
 
 describe('Model construction lifecycle', function () {
+	describe('compiled schema lifecycle', function () {
+		test('clones and binds the source schema during model compilation', function () {
+			const schema_instance = new Schema({
+				name: String
+			});
+
+			schema_instance.$runtime.identity = {
+				mode: 'stale'
+			};
+
+			const User = model('User', schema_instance, {
+				table_name: 'users'
+			}, null);
+
+			expect(User.schema).not.toBe(schema_instance);
+			expect(User.schema.validators.base_fields).toEqual(expect.any(Function));
+			expect(Object.getPrototypeOf(User.schema.$runtime)).toBeNull();
+			expect(Object.keys(User.schema.$runtime)).toEqual([]);
+			expect(schema_instance.$runtime.identity).toEqual({
+				mode: 'stale'
+			});
+		});
+	});
+
 	describe('from', function () {
 		test('accepts serializable instances, ignores unsafe keys, and keeps extra slug roots out of the default slug', function () {
 			const User = create_payload_model({
