@@ -16,4 +16,16 @@ describe('index exports', function () {
 		expect(index_module.register_field_type).toBeUndefined();
 		expect(index_module.resolve_field_type).toBeUndefined();
 	});
+
+	test('exposes identity constants and removes the old id strategy export', function () {
+		expect(index_module.IDENTITY_TYPE).toBe(jsonbadger.IDENTITY_TYPE);
+		expect(index_module.IDENTITY_FORMAT).toBe(jsonbadger.IDENTITY_FORMAT);
+		expect(index_module.IDENTITY_MODE).toBe(jsonbadger.IDENTITY_MODE);
+		expect(index_module.IDENTITY_TYPE.bigint).toBe('bigint');
+		expect(index_module.IDENTITY_TYPE.uuid).toBe('uuid');
+		expect(index_module.IDENTITY_FORMAT.uuidv7).toBe('uuidv7');
+		expect(index_module.IDENTITY_MODE.fallback).toBe('fallback');
+		expect(index_module.ID_STRATEGY).toBeUndefined();
+		expect(jsonbadger.ID_STRATEGY).toBeUndefined();
+	});
 });

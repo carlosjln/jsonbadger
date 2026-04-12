@@ -1,4 +1,5 @@
-import ID_STRATEGY from '#src/constants/id-strategy.js';
+import IDENTITY_MODE from '#src/constants/identity-mode.js';
+import IDENTITY_TYPE from '#src/constants/identity-type.js';
 
 // TODO: add `model_options.timestamps` as a real config flag and wire its behavior
 // through model lifecycle defaults, docs, and update/insert timestamp handling.
@@ -11,7 +12,16 @@ const defaults = {
 	},
 
 	schema_options: {
-		id_strategy: ID_STRATEGY.uuidv7,
+		identity: {
+			type: IDENTITY_TYPE.bigint,
+			format: null,
+			mode: IDENTITY_MODE.fallback,
+			generator: null
+		},
+
+		// Temporary internal convergence field for current id_strategy consumers.
+		// Remove once T4-T17 finish the identity rollout.
+		id_strategy: 'bigserial',
 		auto_index: true,
 
 		default_slug: DEFAULT_SLUG,
