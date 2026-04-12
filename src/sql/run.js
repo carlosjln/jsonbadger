@@ -4,7 +4,7 @@
  */
 import debug_logger from '#src/debug/debug-logger.js';
 import QueryError from '#src/errors/query-error.js';
-import {assert_condition} from '#src/utils/assert.js';
+import {assert} from '#src/utils/assert.js';
 import {is_function} from '#src/utils/value.js';
 
 async function run(sql_text, sql_params, connection) {
@@ -35,7 +35,7 @@ async function run(sql_text, sql_params, connection) {
 }
 
 function resolve_pool_instance(connection) {
-	assert_condition(connection && is_function(connection.pool_instance?.query), 'run requires connection.pool_instance');
+	assert(!(connection && is_function(connection.pool_instance?.query)), 'run requires connection.pool_instance');
 	return connection.pool_instance;
 }
 

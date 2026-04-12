@@ -15,11 +15,11 @@ import jsonpath_match_native_operator from '#src/sql/jsonb/read/operators/jsonpa
 import {create_path_validator, prepare_schema_state} from '#src/schema/schema-compiler.js';
 import {get_path_type as resolve_path_type, is_array_root as resolve_is_array_root} from '#src/schema/path-introspection.js';
 
-import {assert_condition, assert_identifier, assert_path} from '#src/utils/assert.js';
+import {assert, assert_identifier, assert_path} from '#src/utils/assert.js';
 import {is_array, is_not_array} from '#src/utils/array.js';
 import {read_nested_path, write_nested_path} from '#src/utils/object-path.js';
 import {deep_clone, has_own} from '#src/utils/object.js';
-import {is_function, is_integer_string, is_object, is_plain_object, is_string, is_uuid_v7, is_valid_timestamp} from '#src/utils/value.js';
+import {is_boolean, is_function, is_integer_string, is_object, is_plain_object, is_string, is_uuid_v7, is_valid_timestamp} from '#src/utils/value.js';
 
 const base_fields = Object.freeze({
 	id: Object.freeze({type: 'Mixed'}),
@@ -57,7 +57,7 @@ function Schema(schema_definition = {}, schema_options = {}) {
 	this.$conform_tree = build_conform_tree(field_types, default_slug, extra_slug_keys);
 	this.$runtime = Object.create(null);
 
-	assert_condition(typeof this.auto_index === 'boolean', 'auto_index must be a boolean');
+	assert(!is_boolean(this.auto_index), 'auto_index must be a boolean');
 
 	this.configure_validators();
 	this.register_field_indexes($schema);
@@ -266,8 +266,8 @@ Schema.prototype.cast = function (document) {
 
 Schema.prototype.add_method = function (method_name, method_implementation) {
 	assert_identifier(method_name, 'method_name');
-	assert_condition(is_function(method_implementation), 'method_implementation must be a function');
-	assert_condition(!has_own(this.methods, method_name), 'Schema method "' + method_name + '" already exists');
+	assert(!is_function(method_implementation), 'method_implementation must be a function');
+	assert(has_own(this.methods, method_name), 'Schema method "' + method_name + '" already exists');
 
 	this.methods[method_name] = method_implementation;
 	return this;
@@ -484,7 +484,7 @@ function build_slug_field_maps(field_types, default_slug, slug_keys) {
 		// Explicit secondary slugs (strip the root prefix)
 		if(has_own(definitions, root_key) && root_key !== default_slug) {
 			// Fail fast: Registered slugs must be objects, not flat primitives
-			assert_condition(dot_index > -1, 'Registered slug "' + root_key + '" must be defined as a root object in schema');
+			assert(dot_index === -1, 'Registered slug "' + root_key + '" must be defined as a root object in schema');
 
 			const relative_path = path_name.substring(dot_index + 1);
 			definitions[root_key][relative_path] = field_type;
@@ -551,7 +551,7 @@ function build_identity_options(schema_options) {
 	const valid_legacy_strategy_values = Object.values(ID_STRATEGY);
 
 	if(has_identity_options) {
-		assert_condition(is_plain_object(schema_options.identity), 'identity must be a plain object');
+		assert(!is_plain_object(schema_options.identity), 'identity must be a plain object');
 		Object.assign(next_identity, schema_options.identity);
 		return next_identity;
 	}
@@ -560,8 +560,8 @@ function build_identity_options(schema_options) {
 		return next_identity;
 	}
 
-	assert_condition(
-		valid_legacy_strategy_values.includes(legacy_id_strategy),
+	assert(
+		!valid_legacy_strategy_values.includes(legacy_id_strategy),
 		'id_strategy must be one of: ' + valid_legacy_strategy_values.join(', ')
 	);
 
@@ -598,14 +598,14 @@ function validate_identity_option_shape(identity_options) {
 	const identity_modes = Object.values(IDENTITY_MODE);
 	const identity_formats = Object.values(IDENTITY_FORMAT);
 
-	assert_condition(identity_types.includes(identity_options.type), 'identity.type must be one of: ' + identity_types.join(', '));
-	assert_condition(identity_modes.includes(identity_options.mode), 'identity.mode must be one of: ' + identity_modes.join(', '));
-	assert_condition(
-		identity_options.format == null || identity_formats.includes(identity_options.format),
+	assert(!identity_types.includes(identity_options.type), 'identity.type must be one of: ' + identity_types.join(', '));
+	assert(!identity_modes.includes(identity_options.mode), 'identity.mode must be one of: ' + identity_modes.join(', '));
+	assert(
+		!(identity_options.format == null || identity_formats.includes(identity_options.format)),
 		'identity.format must be null or one of: ' + identity_formats.join(', ')
 	);
-	assert_condition(
-		identity_options.generator == null || is_function(identity_options.generator),
+	assert(
+		!(identity_options.generator == null || is_function(identity_options.generator)),
 		'identity.generator must be a function or null'
 	);
 }
@@ -619,15 +619,15 @@ function validate_identity_option_shape(identity_options) {
  */
 function validate_identity_option_combination(identity_options) {
 	if(identity_options.type === IDENTITY_TYPE.bigint) {
-		assert_condition(identity_options.format == null, 'identity.type=bigint requires identity.format=null');
-		assert_condition(identity_options.mode === IDENTITY_MODE.fallback, 'identity.type=bigint only supports identity.mode=fallback in phase one');
+		assert(identity_options.format != null, 'identity.type=bigint requires identity.format=null');
+		assert(identity_options.mode !== IDENTITY_MODE.fallback, 'identity.type=bigint only supports identity.mode=fallback in phase one');
 		return;
 	}
 
-	assert_condition(identity_options.format === IDENTITY_FORMAT.uuidv7, 'identity.type=uuid requires identity.format=uuidv7 in phase one');
+	assert(identity_options.format !== IDENTITY_FORMAT.uuidv7, 'identity.type=uuid requires identity.format=uuidv7 in phase one');
 
 	if(identity_options.mode === IDENTITY_MODE.application) {
-		assert_condition(is_function(identity_options.generator), 'identity.mode=application requires identity.generator');
+		assert(!is_function(identity_options.generator), 'identity.mode=application requires identity.generator');
 	}
 }
 
@@ -694,8 +694,8 @@ function build_identity_runtime(identity_options, connection) {
 	}
 
 	if(identity_options.mode === IDENTITY_MODE.database) {
-		assert_condition(connection != null, 'identity.mode=database requires a bound connection');
-		assert_condition(supports_uuidv7, 'identity.mode=database requires PostgreSQL uuidv7() support');
+		assert(connection == null, 'identity.mode=database requires a bound connection');
+		assert(!supports_uuidv7, 'identity.mode=database requires PostgreSQL uuidv7() support');
 
 		return {
 			type: IDENTITY_TYPE.uuid,
@@ -707,7 +707,7 @@ function build_identity_runtime(identity_options, connection) {
 		};
 	}
 
-	assert_condition(connection != null, 'identity.mode=fallback requires a bound connection');
+	assert(connection == null, 'identity.mode=fallback requires a bound connection');
 
 	if(supports_uuidv7) {
 		return {
@@ -720,8 +720,8 @@ function build_identity_runtime(identity_options, connection) {
 		};
 	}
 
-	assert_condition(
-		is_function(identity_options.generator),
+	assert(
+		!is_function(identity_options.generator),
 		'identity.mode=fallback requires PostgreSQL uuidv7() support or identity.generator'
 	);
 

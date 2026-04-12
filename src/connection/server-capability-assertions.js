@@ -1,17 +1,17 @@
 import ID_STRATEGY from '#src/constants/id-strategy.js';
-import {assert_condition} from '#src/utils/assert.js';
+import {assert} from '#src/utils/assert.js';
 
 function assert_id_strategy_capability(id_strategy, server_capabilities) {
 	if(id_strategy !== ID_STRATEGY.uuidv7) {
 		return;
 	}
 
-	assert_condition(
-		server_capabilities && typeof server_capabilities === 'object',
+	assert(
+		!(server_capabilities && typeof server_capabilities === 'object'),
 		'PostgreSQL server capabilities are unavailable. Reconnect so jsonbadger can run compatibility checks for id_strategy=uuidv7.'
 	);
 
-	assert_condition(server_capabilities.supports_uuidv7, build_uuidv7_capability_error(server_capabilities));
+	assert(!server_capabilities.supports_uuidv7, build_uuidv7_capability_error(server_capabilities));
 }
 
 function build_uuidv7_capability_error(server_capabilities) {

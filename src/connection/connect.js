@@ -4,12 +4,12 @@ import defaults from '#src/constants/defaults.js';
 import Connection from '#src/connection/connection.js';
 import debug_logger from '#src/debug/debug-logger.js';
 
-import {assert_condition} from '#src/utils/assert.js';
+import {assert} from '#src/utils/assert.js';
 import {scan_server_capabilities} from '#src/connection/server-capabilities.js';
 import {is_function, is_string} from '#src/utils/value.js';
 
 async function connect(uri, options) {
-	assert_condition(is_string(uri) && uri.length > 0, 'connection_uri is required');
+	assert(!(is_string(uri) && uri.length > 0), 'connection_uri is required');
 
 	const final_options = Object.assign({}, defaults.connection_options, options);
 	const {debug, ...pool_options} = final_options;

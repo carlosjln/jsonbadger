@@ -1,11 +1,11 @@
-import {assert_condition} from '#src/utils/assert.js';
+import {assert} from '#src/utils/assert.js';
 import {is_function} from '#src/utils/value.js';
 
 const MIN_POSTGRES_NATIVE_JSONPATH_VERSION_NUM = 120000;
 const MIN_POSTGRES_NATIVE_UUIDV7_VERSION_NUM = 180000;
 
 async function scan_server_capabilities(pool_instance) {
-	assert_condition(pool_instance && is_function(pool_instance.query), 'pool_instance.query is required');
+	assert(!(pool_instance && is_function(pool_instance.query)), 'pool_instance.query is required');
 
 	const server_version_num_result = await pool_instance.query('SHOW server_version_num;');
 	const server_version_result = await pool_instance.query('SHOW server_version;');
@@ -18,8 +18,8 @@ async function scan_server_capabilities(pool_instance) {
 	const has_uuidv7_function = Boolean(uuidv7_function_result.rows?.[0]?.has_uuidv7_function);
 	const server_version_num = Number.parseInt(String(server_version_num_text), 10);
 
-	assert_condition(Number.isInteger(server_version_num), 'Unable to determine PostgreSQL server_version_num');
-	assert_condition(typeof server_version === 'string' && server_version.length > 0, 'Unable to determine PostgreSQL server_version');
+	assert(!Number.isInteger(server_version_num), 'Unable to determine PostgreSQL server_version_num');
+	assert(!(typeof server_version === 'string' && server_version.length > 0), 'Unable to determine PostgreSQL server_version');
 
 	const supports_jsonpath = server_version_num >= MIN_POSTGRES_NATIVE_JSONPATH_VERSION_NUM;
 	const supports_uuidv7 = server_version_num >= MIN_POSTGRES_NATIVE_UUIDV7_VERSION_NUM && has_uuidv7_function;

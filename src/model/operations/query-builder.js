@@ -8,13 +8,13 @@ import where_compiler from '#src/sql/read/where/index.js';
 
 import run from '#src/sql/run.js';
 
-import {assert_condition, quote_identifier} from '#src/utils/assert.js';
+import {assert, quote_identifier} from '#src/utils/assert.js';
 import {is_object, to_iso_timestamp} from '#src/utils/value.js';
 
 function QueryBuilder(model, operation, query_filter) {
-	assert_condition(model, 'QueryBuilder requires model');
-	assert_condition(model.schema, 'QueryBuilder requires model.schema');
-	assert_condition(model.options, 'QueryBuilder requires model.options');
+	assert(!model, 'QueryBuilder requires model');
+	assert(!model.schema, 'QueryBuilder requires model.schema');
+	assert(!model.options, 'QueryBuilder requires model.options');
 
 	this.connection = model.connection || null;
 	this.model = model;

@@ -2,7 +2,7 @@ import debug_logger from '#src/debug/debug-logger.js';
 import defaults from '#src/constants/defaults.js';
 import ModelOverwriteError from '#src/errors/model-overwrite-error.js';
 import model_factory from '#src/model/factory/index.js';
-import {assert_condition, assert_identifier} from '#src/utils/assert.js';
+import {assert, assert_identifier} from '#src/utils/assert.js';
 import {are_equal} from '#src/utils/object.js';
 import {pluralize} from '#src/utils/string.js';
 import {is_function, is_plain_object} from '#src/utils/value.js';
@@ -34,7 +34,7 @@ function Connection(pool_instance, options, server_capabilities) {
  * @throws {ModelOverwriteError} When an existing model is redefined with different schema/options.
  */
 Connection.prototype.model = function (model_definition) {
-	assert_condition(is_plain_object(model_definition), 'model_definition is required');
+	assert(!is_plain_object(model_definition), 'model_definition is required');
 
 	const model_name = model_definition.name;
 	const schema_instance = model_definition.schema;

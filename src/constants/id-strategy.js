@@ -1,4 +1,4 @@
-import {assert_condition} from '#src/utils/assert.js';
+import {assert} from '#src/utils/assert.js';
 import IDENTITY_FORMAT from '#src/constants/identity-format.js';
 
 const ID_STRATEGY = Object.freeze({
@@ -17,7 +17,7 @@ function id_strategy_error() {
 }
 
 function assert_id_strategy(id_strategy) {
-	assert_condition(is_valid(id_strategy), id_strategy_error());
+	assert(!is_valid(id_strategy), id_strategy_error());
 }
 
 export {

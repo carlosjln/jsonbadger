@@ -2,7 +2,7 @@
  * MODULE RESPONSIBILITY
  * Ensure the declared model indexes exist in the backing database.
  */
-import {assert_condition, assert_identifier, assert_path, quote_identifier} from '#src/utils/assert.js';
+import {assert, assert_identifier, assert_path, quote_identifier} from '#src/utils/assert.js';
 import {build_path_literal, split_dot_path} from '#src/utils/object-path.js';
 import {is_object, is_string} from '#src/utils/value.js';
 import run from '#src/sql/run.js';
@@ -59,15 +59,15 @@ async function ensure_index(context) {
 }
 
 function assert_sql_safe_index_definition(index_definition) {
-	assert_condition(is_object(index_definition), 'index_definition must be an object');
-	assert_condition(index_definition.using === 'gin' || index_definition.using === 'btree', 'index_definition.using must be "gin" or "btree"');
+	assert(!is_object(index_definition), 'index_definition must be an object');
+	assert(!(index_definition.using === 'gin' || index_definition.using === 'btree'), 'index_definition.using must be "gin" or "btree"');
 
 	if(index_definition.name !== undefined) {
 		assert_identifier(index_definition.name, 'index_definition.name');
 	}
 
 	if(index_definition.using === 'gin') {
-		assert_condition(is_string(index_definition.path), 'index_definition.path must be a string when using is "gin"');
+		assert(!is_string(index_definition.path), 'index_definition.path must be a string when using is "gin"');
 		assert_path(index_definition.path, 'index path');
 		return;
 	}
@@ -75,7 +75,7 @@ function assert_sql_safe_index_definition(index_definition) {
 	const has_single_path = is_string(index_definition.path);
 	const has_multiple_paths = is_object(index_definition.paths) && Object.keys(index_definition.paths).length > 0;
 
-	assert_condition(has_single_path || has_multiple_paths, 'index_definition.path or index_definition.paths is required when using is "btree"');
+	assert(!(has_single_path || has_multiple_paths), 'index_definition.path or index_definition.paths is required when using is "btree"');
 
 	if(has_single_path) {
 		assert_path(index_definition.path, 'index path');

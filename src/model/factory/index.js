@@ -3,7 +3,7 @@ import defaults from '#src/constants/defaults.js';
 import Model from '#src/model/model.js';
 import Schema from '#src/schema/schema.js';
 
-import {assert_condition, assert_identifier} from '#src/utils/assert.js';
+import {assert, assert_identifier} from '#src/utils/assert.js';
 import {is_not_object} from '#src/utils/value.js';
 
 /**
@@ -25,8 +25,8 @@ import {is_not_object} from '#src/utils/value.js';
  */
 function model(name, schema, options, connection) {
 	// Validate schema/config input.
-	assert_condition(schema instanceof Schema, 'schema must be a Schema instance');
-	assert_condition(!is_not_object(options), 'options are required');
+	assert(!(schema instanceof Schema), 'schema must be a Schema instance');
+	assert(is_not_object(options), 'options are required');
 	assert_identifier(options.table_name, 'table_name');
 
 	// Override default model options with instance options
