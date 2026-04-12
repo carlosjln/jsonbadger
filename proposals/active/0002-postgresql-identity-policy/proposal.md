@@ -296,7 +296,7 @@ id UUID PRIMARY KEY
    E. default `identity.generator = null`
 
 3. Update `src/schema/schema.js`.
-   A. store one `schema.identity` object
+   A. keep declarative identity config under `schema.options.identity`
    B. merge it from `defaults.schema_options.identity` plus user overrides
    C. reserve `schema.$runtime` for runtime-finalized artifacts on the cloned schema
    D. store resolved identity behavior in `schema.$runtime.identity`
@@ -359,8 +359,8 @@ Schema.prototype.$bind_connection = function (connection) {
 	this.$runtime = this.$runtime ?? {};
 	this.$runtime.identity = null;
 
-	if(this.identity.type === IDENTITY_TYPE.uuid && this.identity.format === IDENTITY_FORMAT.uuidv7) {
-		if(this.identity.mode === IDENTITY_MODE.database) {
+	if(this.options.identity.type === IDENTITY_TYPE.uuid && this.options.identity.format === IDENTITY_FORMAT.uuidv7) {
+		if(this.options.identity.mode === IDENTITY_MODE.database) {
 			if(!supports_uuidv7) {
 				throw new Error('identity.mode=database requires PostgreSQL uuidv7() support');
 			}
@@ -373,8 +373,8 @@ Schema.prototype.$bind_connection = function (connection) {
 			return this;
 		}
 
-		if(this.identity.mode === IDENTITY_MODE.application) {
-			if(typeof this.identity.generator !== 'function') {
+		if(this.options.identity.mode === IDENTITY_MODE.application) {
+			if(typeof this.options.identity.generator !== 'function') {
 				throw new Error('identity.mode=application requires schema.options.identity.generator');
 			}
 
@@ -386,7 +386,7 @@ Schema.prototype.$bind_connection = function (connection) {
 			return this;
 		}
 
-		if(this.identity.mode === IDENTITY_MODE.fallback) {
+		if(this.options.identity.mode === IDENTITY_MODE.fallback) {
 			if(supports_uuidv7) {
 				this.$runtime.identity = {
 					mode: IDENTITY_MODE.database,
@@ -396,7 +396,7 @@ Schema.prototype.$bind_connection = function (connection) {
 				return this;
 			}
 
-			if(typeof this.identity.generator === 'function') {
+			if(typeof this.options.identity.generator === 'function') {
 				this.$runtime.identity = {
 					mode: IDENTITY_MODE.application,
 					column_sql: 'id UUID PRIMARY KEY',
@@ -421,8 +421,8 @@ function prepare_insert_id(model, document) {
 		return;
 	}
 
-	if(document.id == null && typeof model.schema.identity.generator === 'function') {
-		document.id = model.schema.identity.generator();
+	if(document.id == null && typeof model.schema.options.identity.generator === 'function') {
+		document.id = model.schema.options.identity.generator();
 	}
 
 	if(document.id == null) {

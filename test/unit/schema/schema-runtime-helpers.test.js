@@ -221,7 +221,7 @@ describe('Schema runtime helpers lifecycle', function () {
 		expect(schema_instance.get_indexes()).toEqual([]);
 	});
 
-	test('accepts $bind_connection(null) and resets runtime artifacts on the bound schema', function () {
+	test('accepts $bind_connection(null) for connection-independent identity cases and resets stale runtime artifacts', function () {
 		const schema_instance = new Schema({
 			name: String
 		});
@@ -232,7 +232,138 @@ describe('Schema runtime helpers lifecycle', function () {
 
 		expect(schema_instance.$bind_connection(null)).toBe(schema_instance);
 		expect(Object.getPrototypeOf(schema_instance.$runtime)).toBeNull();
-		expect(schema_instance.$runtime.identity).toBeUndefined();
+		expect(schema_instance.$runtime.identity).toEqual({
+			type: 'bigint',
+			format: null,
+			mode: 'database',
+			id_strategy: 'bigserial',
+			insert_includes_id: false,
+			column_sql: 'id BIGSERIAL PRIMARY KEY'
+		});
+	});
+
+	test('fails clearly when uuid fallback identity is bound without connection capabilities', function () {
+		const schema_instance = new Schema({
+			name: String
+		}, {
+			identity: {
+				type: 'uuid',
+				format: 'uuidv7',
+				mode: 'fallback',
+				generator: function uuid_generator() {
+					return '019631f7-ef80-7c17-8cf0-a9b241551111';
+				}
+			}
+		});
+
+		expect(function bind_without_connection() {
+			schema_instance.$bind_connection(null);
+		}).toThrow('identity.mode=fallback requires a bound connection');
+	});
+
+	test('binds uuid fallback identity to the application path when server uuidv7 support is unavailable', function () {
+		const generator = function uuid_generator() {
+			return '019631f7-ef80-7c17-8cf0-a9b241551111';
+		};
+		const schema_instance = new Schema({
+			name: String
+		}, {
+			identity: {
+				type: 'uuid',
+				format: 'uuidv7',
+				mode: 'fallback',
+				generator
+			}
+		});
+
+		schema_instance.$bind_connection({
+			server_capabilities: {
+				supports_uuidv7: false
+			}
+		});
+
+		expect(schema_instance.$runtime.identity).toEqual({
+			type: 'uuid',
+			format: 'uuidv7',
+			mode: 'application',
+			id_strategy: 'uuidv7',
+			insert_includes_id: true,
+			column_sql: 'id UUID PRIMARY KEY'
+		});
+	});
+
+	test('binds uuid fallback identity to the database path when server uuidv7 support is available', function () {
+		const schema_instance = new Schema({
+			name: String
+		}, {
+			identity: {
+				type: 'uuid',
+				format: 'uuidv7',
+				mode: 'fallback'
+			}
+		});
+
+		schema_instance.$bind_connection({
+			server_capabilities: {
+				supports_uuidv7: true
+			}
+		});
+
+		expect(schema_instance.$runtime.identity).toEqual({
+			type: 'uuid',
+			format: 'uuidv7',
+			mode: 'database',
+			id_strategy: 'uuidv7',
+			insert_includes_id: false,
+			column_sql: 'id UUID PRIMARY KEY DEFAULT uuidv7()'
+		});
+	});
+
+	test('accepts uuid application identity without a bound connection', function () {
+		const generator = function uuid_generator() {
+			return '019631f7-ef80-7c17-8cf0-a9b241551111';
+		};
+		const schema_instance = new Schema({
+			name: String
+		}, {
+			identity: {
+				type: 'uuid',
+				format: 'uuidv7',
+				mode: 'application',
+				generator
+			}
+		});
+
+		schema_instance.$bind_connection(null);
+
+		expect(schema_instance.$runtime.identity).toEqual({
+			type: 'uuid',
+			format: 'uuidv7',
+			mode: 'application',
+			id_strategy: 'uuidv7',
+			insert_includes_id: true,
+			column_sql: 'id UUID PRIMARY KEY'
+		});
+	});
+
+	test('fails clearly when uuid database identity lacks native server support', function () {
+		const schema_instance = new Schema({
+			name: String
+		}, {
+			identity: {
+				type: 'uuid',
+				format: 'uuidv7',
+				mode: 'database'
+			}
+		});
+
+		expect(function bind_without_native_uuidv7() {
+			schema_instance.$bind_connection({
+				server_capabilities: {
+					supports_uuidv7: false
+				}
+			});
+		}).toThrow('identity.mode=database requires PostgreSQL uuidv7() support');
 	});
 
 	test('binds compatibility read operators when server jsonpath support is unavailable', function () {
@@ -253,7 +384,8 @@ describe('Schema runtime helpers lifecycle', function () {
 
 		schema_instance.$bind_connection({
 			server_capabilities: {
-				supports_jsonpath: true
+				supports_jsonpath: true,
+				supports_uuidv7: true
 			}
 		});
 

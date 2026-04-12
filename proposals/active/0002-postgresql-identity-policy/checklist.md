@@ -19,17 +19,17 @@ Purpose: replace `id_strategy` with `identity`, default the library back to nume
   - [x] T3C. `mode = fallback`
   - [x] T3D. `generator = null`
 
-- [ ] T4. Update `src/schema/schema.js` to merge `defaults.schema_options.identity` with user-provided `schema_options.identity`.
-- [ ] T5. Validate static identity combinations during schema construction.
-- [ ] T6. Implement identity runtime resolution inside `Schema.prototype.$bind_connection(connection)` and store the result in `schema.$runtime.identity`.
-- [ ] T7. Support phase-one combinations only:
-  - [ ] T7A. `bigint + null format`
-  - [ ] T7B. `uuid + uuidv7 + fallback`
-  - [ ] T7C. `uuid + uuidv7 + database`
-  - [ ] T7D. `uuid + uuidv7 + application`
-- [ ] T8. Enforce `schema.$bind_connection(null)` behavior for identity:
-  - [ ] T8A. allow connection-independent cases
-  - [ ] T8B. fail clear on capability-dependent cases
+- [x] T4. Update `src/schema/schema.js` to merge `defaults.schema_options.identity` with user-provided `schema_options.identity`.
+- [x] T5. Validate static identity combinations during schema construction.
+- [x] T6. Implement identity runtime resolution inside `Schema.prototype.$bind_connection(connection)` and store the result in `schema.$runtime.identity`.
+- [x] T7. Support phase-one combinations only:
+  - [x] T7A. `bigint + null format`
+  - [x] T7B. `uuid + uuidv7 + fallback`
+  - [x] T7C. `uuid + uuidv7 + database`
+  - [x] T7D. `uuid + uuidv7 + application`
+- [x] T8. Enforce `schema.$bind_connection(null)` behavior for identity:
+  - [x] T8A. allow connection-independent cases
+  - [x] T8B. fail clear on capability-dependent cases
 
 - [ ] T9. Update migration / table DDL code to choose the id column definition from `schema.$runtime.identity`.
 - [ ] T10. Keep phase-one numeric database mode on `BIGSERIAL PRIMARY KEY`.

@@ -158,4 +158,68 @@ describe('Schema construction lifecycle', function () {
 			mode: 'database'
 		});
 	});
+
+	test('merges identity defaults and schema-level overrides during construction', function () {
+		const generator = function uuid_generator() {
+			return '019631f7-ef80-7c17-8cf0-a9b241551111';
+		};
+		const schema_instance = new Schema({
+			name: String
+		}, {
+			identity: {
+				type: 'uuid',
+				format: 'uuidv7',
+				mode: 'fallback',
+				generator
+			}
+		});
+
+		expect(schema_instance.options.identity).toEqual({
+			type: 'uuid',
+			format: 'uuidv7',
+			mode: 'fallback',
+			generator
+		});
+		expect(schema_instance.id_strategy).toBe('uuidv7');
+	});
+
+	test('maps the temporary legacy id_strategy input into identity config', function () {
+		const schema_instance = new Schema({
+			name: String
+		}, {
+			id_strategy: 'uuidv7'
+		});
+
+		expect(schema_instance.options.identity).toEqual({
+			type: 'uuid',
+			format: 'uuidv7',
+			mode: 'fallback',
+			generator: null
+		});
+	});
+
+	test('rejects unsupported static identity combinations during construction', function () {
+		expect(function build_invalid_bigint_identity_schema() {
+			return new Schema({
+				name: String
+			}, {
+				identity: {
+					type: 'bigint',
+					format: 'uuidv7'
+				}
+			});
+		}).toThrow('identity.type=bigint requires identity.format=null');
+
+		expect(function build_invalid_application_identity_schema() {
+			return new Schema({
+				name: String
+			}, {
+				identity: {
+					type: 'uuid',
+					format: 'uuidv7',
+					mode: 'application'
+				}
+			});
+		}).toThrow('identity.mode=application requires identity.generator');
+	});
 });

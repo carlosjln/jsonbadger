@@ -26,7 +26,15 @@ describe('Model construction lifecycle', function () {
 			expect(User.schema).not.toBe(schema_instance);
 			expect(User.schema.validators.base_fields).toEqual(expect.any(Function));
 			expect(Object.getPrototypeOf(User.schema.$runtime)).toBeNull();
-			expect(Object.keys(User.schema.$runtime)).toEqual(['read_operators']);
+			expect(Object.keys(User.schema.$runtime)).toEqual(['read_operators', 'identity']);
+			expect(User.schema.$runtime.identity).toEqual({
+				type: 'bigint',
+				format: null,
+				mode: 'database',
+				id_strategy: 'bigserial',
+				insert_includes_id: false,
+				column_sql: 'id BIGSERIAL PRIMARY KEY'
+			});
 			expect(schema_instance.$runtime.identity).toEqual({
 				mode: 'stale'
 			});

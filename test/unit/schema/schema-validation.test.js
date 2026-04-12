@@ -169,7 +169,11 @@ describe('Schema validation lifecycle', function () {
 		const schema_instance = new Schema({
 			name: String
 		}, {
-			id_strategy: 'uuidv7'
+			identity: {
+				type: 'uuid',
+				format: 'uuidv7',
+				mode: 'fallback'
+			}
 		});
 
 		expect(function validate_invalid_base_fields() {

@@ -1,4 +1,7 @@
 import defaults from '#src/constants/defaults.js';
+import IDENTITY_FORMAT from '#src/constants/identity-format.js';
+import IDENTITY_MODE from '#src/constants/identity-mode.js';
+import IDENTITY_TYPE from '#src/constants/identity-type.js';
 import ID_STRATEGY from '#src/constants/id-strategy.js';
 
 import ValidationError from '#src/errors/validation-error.js';
@@ -280,6 +283,7 @@ Schema.prototype.add_method = function (method_name, method_implementation) {
 Schema.prototype.$bind_connection = function (connection) {
 	this.$runtime = Object.create(null);
 	this.$runtime.read_operators = build_read_operators(connection);
+	this.$runtime.identity = build_identity_runtime(this.options.identity, connection);
 	return this;
 };
 
@@ -494,11 +498,25 @@ function build_slug_field_maps(field_types, default_slug, slug_keys) {
 	return definitions;
 }
 
+/**
+ * Build normalized schema options, including merged identity config and the temporary
+ * derived `id_strategy` bridge still used by downstream code.
+ *
+ * @param {object} schema_options
+ * @returns {object}
+ * @throws {Error}
+ */
 function build_schema_options(schema_options = {}) {
 	const next_options = Object.assign({}, defaults.schema_options, schema_options);
+	const identity_options = build_identity_options(schema_options);
 	const default_slug = next_options.default_slug;
 	const next_slug_keys = [];
 	const seen_slug_keys = new Set();
+
+	validate_identity_options(identity_options);
+
+	next_options.identity = identity_options;
+	next_options.id_strategy = resolve_identity_id_strategy(identity_options);
 
 	if(!is_array(next_options.slugs)) {
 		next_options.slugs = [];
@@ -519,6 +537,116 @@ function build_schema_options(schema_options = {}) {
 }
 
 /**
+ * Merge the public identity namespace and map the temporary legacy `id_strategy` input
+ * while the rest of the rollout is still in progress.
+ *
+ * @param {object} schema_options
+ * @returns {object}
+ * @throws {Error}
+ */
+function build_identity_options(schema_options) {
+	const next_identity = Object.assign({}, defaults.schema_options.identity);
+	const has_identity_options = has_own(schema_options, 'identity');
+	const has_legacy_id_strategy = has_own(schema_options, 'id_strategy');
+	const legacy_id_strategy = schema_options.id_strategy;
+	const valid_legacy_strategy_values = Object.values(ID_STRATEGY);
+
+	if(has_identity_options) {
+		assert_condition(is_plain_object(schema_options.identity), 'identity must be a plain object');
+		Object.assign(next_identity, schema_options.identity);
+		return next_identity;
+	}
+
+	if(!has_legacy_id_strategy) {
+		return next_identity;
+	}
+
+	assert_condition(
+		valid_legacy_strategy_values.includes(legacy_id_strategy),
+		'id_strategy must be one of: ' + valid_legacy_strategy_values.join(', ')
+	);
+
+	if(legacy_id_strategy === ID_STRATEGY.uuidv7) {
+		next_identity.type = IDENTITY_TYPE.uuid;
+		next_identity.format = IDENTITY_FORMAT.uuidv7;
+		next_identity.mode = IDENTITY_MODE.fallback;
+	}
+
+	return next_identity;
+}
+
+/**
+ * Validate the static identity shape during schema construction.
+ *
+ * @param {object} identity_options
+ * @returns {void}
+ * @throws {Error}
+ */
+function validate_identity_options(identity_options) {
+	validate_identity_option_shape(identity_options);
+	validate_identity_option_combination(identity_options);
+}
+
+/**
+ * Validate the raw identity option shape before checking supported phase-one combinations.
+ *
+ * @param {object} identity_options
+ * @returns {void}
+ * @throws {Error}
+ */
+function validate_identity_option_shape(identity_options) {
+	const identity_types = Object.values(IDENTITY_TYPE);
+	const identity_modes = Object.values(IDENTITY_MODE);
+	const identity_formats = Object.values(IDENTITY_FORMAT);
+
+	assert_condition(identity_types.includes(identity_options.type), 'identity.type must be one of: ' + identity_types.join(', '));
+	assert_condition(identity_modes.includes(identity_options.mode), 'identity.mode must be one of: ' + identity_modes.join(', '));
+	assert_condition(
+		identity_options.format == null || identity_formats.includes(identity_options.format),
+		'identity.format must be null or one of: ' + identity_formats.join(', ')
+	);
+	assert_condition(
+		identity_options.generator == null || is_function(identity_options.generator),
+		'identity.generator must be a function or null'
+	);
+}
+
+/**
+ * Validate the supported phase-one identity combinations.
+ *
+ * @param {object} identity_options
+ * @returns {void}
+ * @throws {Error}
+ */
+function validate_identity_option_combination(identity_options) {
+	if(identity_options.type === IDENTITY_TYPE.bigint) {
+		assert_condition(identity_options.format == null, 'identity.type=bigint requires identity.format=null');
+		assert_condition(identity_options.mode === IDENTITY_MODE.fallback, 'identity.type=bigint only supports identity.mode=fallback in phase one');
+		return;
+	}
+
+	assert_condition(identity_options.format === IDENTITY_FORMAT.uuidv7, 'identity.type=uuid requires identity.format=uuidv7 in phase one');
+
+	if(identity_options.mode === IDENTITY_MODE.application) {
+		assert_condition(is_function(identity_options.generator), 'identity.mode=application requires identity.generator');
+	}
+}
+
+/**
+ * Resolve the temporary schema-level `id_strategy` bridge from the public identity config.
+ *
+ * @param {object} identity_options
+ * @returns {string}
+ */
+function resolve_identity_id_strategy(identity_options) {
+	if(identity_options.type === IDENTITY_TYPE.uuid && identity_options.format === IDENTITY_FORMAT.uuidv7) {
+		return ID_STRATEGY.uuidv7;
+	}
+
+	return ID_STRATEGY.bigserial;
+}
+
+/**
  * Resolve the bound read-operator implementations for one connection context.
  *
  * @param {object|null|undefined} connection
@@ -530,6 +658,81 @@ function build_read_operators(connection) {
 	return {
 		$json_path_exists: supports_jsonpath ? jsonpath_exists_native_operator : jsonpath_exists_compat_operator,
 		$json_path_match: supports_jsonpath ? jsonpath_match_native_operator : jsonpath_match_compat_operator
+	};
+}
+
+/**
+ * Resolve the bound identity runtime for one compiled schema and connection context.
+ *
+ * @param {object} identity_options
+ * @param {object|null|undefined} connection
+ * @returns {object}
+ * @throws {Error}
+ */
+function build_identity_runtime(identity_options, connection) {
+	const supports_uuidv7 = connection?.server_capabilities?.supports_uuidv7 === true;
+
+	if(identity_options.type === IDENTITY_TYPE.bigint) {
+		return {
+			type: IDENTITY_TYPE.bigint,
+			format: null,
+			mode: IDENTITY_MODE.database,
+			id_strategy: ID_STRATEGY.bigserial,
+			insert_includes_id: false,
+			column_sql: 'id BIGSERIAL PRIMARY KEY'
+		};
+	}
+
+	if(identity_options.mode === IDENTITY_MODE.application) {
+		return {
+			type: IDENTITY_TYPE.uuid,
+			format: IDENTITY_FORMAT.uuidv7,
+			mode: IDENTITY_MODE.application,
+			id_strategy: ID_STRATEGY.uuidv7,
+			insert_includes_id: true,
+			column_sql: 'id UUID PRIMARY KEY'
+		};
+	}
+
+	if(identity_options.mode === IDENTITY_MODE.database) {
+		assert_condition(connection != null, 'identity.mode=database requires a bound connection');
+		assert_condition(supports_uuidv7, 'identity.mode=database requires PostgreSQL uuidv7() support');
+
+		return {
+			type: IDENTITY_TYPE.uuid,
+			format: IDENTITY_FORMAT.uuidv7,
+			mode: IDENTITY_MODE.database,
+			id_strategy: ID_STRATEGY.uuidv7,
+			insert_includes_id: false,
+			column_sql: 'id UUID PRIMARY KEY DEFAULT uuidv7()'
+		};
+	}
+
+	assert_condition(connection != null, 'identity.mode=fallback requires a bound connection');
+
+	if(supports_uuidv7) {
+		return {
+			type: IDENTITY_TYPE.uuid,
+			format: IDENTITY_FORMAT.uuidv7,
+			mode: IDENTITY_MODE.database,
+			id_strategy: ID_STRATEGY.uuidv7,
+			insert_includes_id: false,
+			column_sql: 'id UUID PRIMARY KEY DEFAULT uuidv7()'
+		};
+	}
+
+	assert_condition(
+		is_function(identity_options.generator),
+		'identity.mode=fallback requires PostgreSQL uuidv7() support or identity.generator'
+	);
+
+	return {
+		type: IDENTITY_TYPE.uuid,
+		format: IDENTITY_FORMAT.uuidv7,
+		mode: IDENTITY_MODE.application,
+		id_strategy: ID_STRATEGY.uuidv7,
+		insert_includes_id: true,
+		column_sql: 'id UUID PRIMARY KEY'
 	};
 }
 
