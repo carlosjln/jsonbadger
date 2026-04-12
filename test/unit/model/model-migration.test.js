@@ -16,7 +16,7 @@ jest.unstable_mockModule('#src/migration/ensure-index.js', function () {
 	};
 });
 
-jest.unstable_mockModule('#src/connection/server-capabilities.js', function () {
+jest.unstable_mockModule('#src/connection/server-capability-assertions.js', function () {
 	return {
 		assert_id_strategy_capability: assert_id_strategy_capability_mock
 	};

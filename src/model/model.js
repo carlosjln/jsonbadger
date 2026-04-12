@@ -5,7 +5,7 @@
 import ID_STRATEGY from '#src/constants/id-strategy.js';
 import INTAKE_MODE from '#src/constants/intake-mode.js';
 import QueryError from '#src/errors/query-error.js';
-import {assert_id_strategy_capability} from '#src/connection/server-capabilities.js';
+import {assert_id_strategy_capability} from '#src/connection/server-capability-assertions.js';
 
 import ensure_index_sql from '#src/migration/ensure-index.js';
 import ensure_table_sql from '#src/migration/ensure-table.js';
@@ -873,3 +873,4 @@ function apply_timestamps(document) {
 }
 
 export default Model;
+

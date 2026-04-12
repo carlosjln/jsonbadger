@@ -1,7 +1,7 @@
-import ID_STRATEGY from '#src/constants/id-strategy.js';
 import {assert_condition} from '#src/utils/assert.js';
 import {is_function} from '#src/utils/value.js';
 
+const MIN_POSTGRES_NATIVE_JSONPATH_VERSION_NUM = 120000;
 const MIN_POSTGRES_NATIVE_UUIDV7_VERSION_NUM = 180000;
 
 async function scan_server_capabilities(pool_instance) {
@@ -21,40 +21,19 @@ async function scan_server_capabilities(pool_instance) {
 	assert_condition(Number.isInteger(server_version_num), 'Unable to determine PostgreSQL server_version_num');
 	assert_condition(typeof server_version === 'string' && server_version.length > 0, 'Unable to determine PostgreSQL server_version');
 
+	const supports_jsonpath = server_version_num >= MIN_POSTGRES_NATIVE_JSONPATH_VERSION_NUM;
 	const supports_uuidv7 = server_version_num >= MIN_POSTGRES_NATIVE_UUIDV7_VERSION_NUM && has_uuidv7_function;
 
 	return {
 		server_version: server_version,
 		server_version_num: server_version_num,
-		supports_uuidv7: supports_uuidv7
+		supports_uuidv7: supports_uuidv7,
+		supports_jsonpath: supports_jsonpath
 	};
 }
 
-function assert_id_strategy_capability(id_strategy, server_capabilities) {
-	if(id_strategy !== ID_STRATEGY.uuidv7) {
-		return;
-	}
-
-	assert_condition(
-		server_capabilities && typeof server_capabilities === 'object',
-		'PostgreSQL server capabilities are unavailable. Reconnect so jsonbadger can run compatibility checks for id_strategy=uuidv7.'
-	);
-
-	assert_condition(server_capabilities.supports_uuidv7 === true, build_uuidv7_capability_error(server_capabilities));
-}
-
-function build_uuidv7_capability_error(server_capabilities) {
-	const server_version = server_capabilities.server_version ?? 'unknown';
-	const server_version_num = server_capabilities.server_version_num ?? 'unknown';
-	const supports_uuidv7 = server_capabilities.supports_uuidv7 === true ? 'true' : 'false';
-
-	return 'id_strategy=uuidv7 requires PostgreSQL native uuidv7() support (PostgreSQL 18+). ' +
-		'Detected server_version=' + server_version + ', server_version_num=' + server_version_num +
-		', supports_uuidv7=' + supports_uuidv7 + '.';
-}
-
 export {
+	MIN_POSTGRES_NATIVE_JSONPATH_VERSION_NUM,
 	MIN_POSTGRES_NATIVE_UUIDV7_VERSION_NUM,
-	scan_server_capabilities,
-	assert_id_strategy_capability
+	scan_server_capabilities
 };

@@ -1,10 +1,11 @@
 import {describe, expect, jest, test} from '@jest/globals';
 
 const {default: ID_STRATEGY} = await import('#src/constants/id-strategy.js');
-const {scan_server_capabilities, assert_id_strategy_capability} = await import('#src/connection/server-capabilities.js');
+const {scan_server_capabilities} = await import('#src/connection/server-capabilities.js');
+const {assert_id_strategy_capability} = await import('#src/connection/server-capability-assertions.js');
 
 describe('server capability scan', function () {
-	test('scans PostgreSQL version and uuidv7 capability using internal SQL checks', async function () {
+	test('scans PostgreSQL version, uuidv7 capability, and jsonpath capability using internal SQL checks', async function () {
 		const pool_instance = {
 			query: jest.fn()
 				.mockResolvedValueOnce({rows: [{server_version_num: '180001'}]})
@@ -24,7 +25,8 @@ describe('server capability scan', function () {
 		expect(result).toEqual({
 			server_version: '18.1',
 			server_version_num: 180001,
-			supports_uuidv7: true
+			supports_uuidv7: true,
+			supports_jsonpath: true
 		});
 	});
 
@@ -39,6 +41,20 @@ describe('server capability scan', function () {
 		const result = await scan_server_capabilities(pool_instance);
 
 		expect(result.supports_uuidv7).toBe(false);
+		expect(result.supports_jsonpath).toBe(true);
+	});
+
+	test('reports jsonpath as unsupported below PostgreSQL 12', async function () {
+		const pool_instance = {
+			query: jest.fn()
+				.mockResolvedValueOnce({rows: [{server_version_num: '110012'}]})
+				.mockResolvedValueOnce({rows: [{server_version: '11.12'}]})
+				.mockResolvedValueOnce({rows: [{has_uuidv7_function: false}]})
+		};
+
+		const result = await scan_server_capabilities(pool_instance);
+
+		expect(result.supports_jsonpath).toBe(false);
 	});
 });
 

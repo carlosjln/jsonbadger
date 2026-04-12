@@ -11,7 +11,7 @@ Purpose: implement one upstream capability-binding seam so downstream SQL code c
 
 ## Checklist
 
-- [ ] T1. Update `src/connection/server-capabilities.js` to expose only factual capability data such as `server_version`, `server_version_num`, `supports_uuidv7`, and `supports_jsonpath`.
+- [x] T1. Update `src/connection/server-capabilities.js` to expose only factual capability data such as `server_version`, `server_version_num`, `supports_uuidv7`, and `supports_jsonpath`.
 - [ ] T2. Keep capability detection in `src/connection/connect.js`; create `Connection` with `server_capabilities` and do not add any extra runtime-selection object there.
 - [ ] T3. Update `src/schema/schema.js` so `schema.identity` remains declarative and runtime artifacts live under `schema.$runtime`.
 - [ ] T4. Add `Schema.prototype.$bind_connection(connection)` in `src/schema/schema.js`.
@@ -33,3 +33,4 @@ Purpose: implement one upstream capability-binding seam so downstream SQL code c
 
 1. Public query operators stay clean and stable.
 2. JSONPath remains an internal implementation choice, not the normal user-facing API.
+
