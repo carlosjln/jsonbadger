@@ -2,6 +2,9 @@ import {describe, expect, test} from '@jest/globals';
 
 import where_compiler from '#src/sql/read/where/index.js';
 import Schema from '#src/schema/schema.js';
+import {
+	create_bound_schema
+} from '#test/unit/query/test-helpers.js';
 
 describe('where_compiler field type casting', function () {
 	test('casts scalar and operator values using schema field types', function () {
@@ -29,6 +32,7 @@ describe('where_compiler field type casting', function () {
 	});
 
 	test('maps key existence and JSONPath operators to PostgreSQL-native SQL', function () {
+		const schema_instance = create_bound_schema();
 		const has_key_result = where_compiler({profile: {$has_key: 'city'}}, {
 			data_column: 'data'
 		});
@@ -39,9 +43,11 @@ describe('where_compiler field type casting', function () {
 			data_column: 'data'
 		});
 		const jsonpath_exists_result = where_compiler({profile: {$json_path_exists: '$.city ? (@ != null)'}}, {
+			schema: schema_instance,
 			data_column: 'data'
 		});
 		const jsonpath_match_result = where_compiler({profile: {$json_path_match: '$.age > 18'}}, {
+			schema: schema_instance,
 			data_column: 'data'
 		});
 

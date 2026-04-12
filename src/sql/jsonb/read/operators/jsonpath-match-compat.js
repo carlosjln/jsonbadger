@@ -1,12 +1,12 @@
 /*
  * MODULE RESPONSIBILITY
- * Compile the SQL fragment for the $jsonpath-match read-query operator.
+ * Compile the SQL fragment for the compatibility $json_path_match read-query operator.
  */
 import QueryError from '#src/errors/query-error.js';
 import {bind_parameter} from '#src/sql/parameter-binder.js';
 import {is_string} from '#src/utils/value.js';
 
-function jsonpath_match_operator(jsonb_expression, comparison_value, parameter_state) {
+function jsonpath_match_compat_operator(jsonb_expression, comparison_value, parameter_state) {
 	if(!is_string(comparison_value) || comparison_value.trim() === '') {
 		throw new QueryError('Invalid value for $json_path_match operator', {
 			operator: '$json_path_match',
@@ -19,4 +19,4 @@ function jsonpath_match_operator(jsonb_expression, comparison_value, parameter_s
 	return jsonb_expression + ' @@ ' + placeholder + '::jsonpath';
 }
 
-export default jsonpath_match_operator;
+export default jsonpath_match_compat_operator;

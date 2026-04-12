@@ -1,6 +1,9 @@
 import {describe, expect, test} from '@jest/globals';
 
 import where_compiler from '#src/sql/read/where/index.js';
+import {
+	create_bound_schema
+} from '#test/unit/query/test-helpers.js';
 
 describe('where_compiler behavior', function () {
 	describe('core query flow', function () {
@@ -194,6 +197,7 @@ describe('where_compiler behavior', function () {
 		});
 
 		test('compiles JSON containment, existence, and jsonpath operators', function () {
+			const schema_instance = create_bound_schema();
 			const result = where_compiler({
 				payload: {
 					$contains: {nested: true},
@@ -204,6 +208,8 @@ describe('where_compiler behavior', function () {
 					$has_any_keys: ['nested', 'count'],
 					$has_all_keys: ['nested', 'count']
 				}
+			}, {
+				schema: schema_instance
 			});
 
 			expect(result.sql).toContain('@>');

@@ -1,6 +1,9 @@
 import {describe, expect, test} from '@jest/globals';
 
 import where_compiler from '#src/sql/read/where/index.js';
+import {
+	create_bound_schema
+} from '#test/unit/query/test-helpers.js';
 
 describe('PostgreSQL JSON operator mapping', function () {
 	test('maps containment and existence operators to native JSONB operators', function () {
@@ -47,10 +50,13 @@ describe('PostgreSQL JSON operator mapping', function () {
 	});
 
 	test('maps JSONPath operators to native PostgreSQL jsonpath operators', function () {
+		const schema_instance = create_bound_schema();
 		const exists_result = where_compiler({profile: {$json_path_exists: '$.city ? (@ != null)'}}, {
+			schema: schema_instance,
 			data_column: 'data'
 		});
 		const match_result = where_compiler({profile: {$json_path_match: '$.age > 18'}}, {
+			schema: schema_instance,
 			data_column: 'data'
 		});
 
@@ -62,12 +68,20 @@ describe('PostgreSQL JSON operator mapping', function () {
 	});
 
 	test('rejects invalid JSONPath operator values before SQL execution', function () {
+		const schema_instance = create_bound_schema();
+
 		expect(function compile_invalid_jsonpath_exists() {
-			where_compiler({profile: {$json_path_exists: ''}}, {data_column: 'data'});
+			where_compiler({profile: {$json_path_exists: ''}}, {
+				schema: schema_instance,
+				data_column: 'data'
+			});
 		}).toThrow('Invalid value for $json_path_exists operator');
 
 		expect(function compile_invalid_jsonpath_match() {
-			where_compiler({profile: {$json_path_match: null}}, {data_column: 'data'});
+			where_compiler({profile: {$json_path_match: null}}, {
+				schema: schema_instance,
+				data_column: 'data'
+			});
 		}).toThrow('Invalid value for $json_path_match operator');
 	});
 });

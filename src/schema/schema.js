@@ -4,6 +4,10 @@ import ID_STRATEGY from '#src/constants/id-strategy.js';
 import ValidationError from '#src/errors/validation-error.js';
 
 import {default_field_type_registry} from '#src/field-types/registry.js';
+import jsonpath_exists_compat_operator from '#src/sql/jsonb/read/operators/jsonpath-exists-compat.js';
+import jsonpath_exists_native_operator from '#src/sql/jsonb/read/operators/jsonpath-exists-native.js';
+import jsonpath_match_compat_operator from '#src/sql/jsonb/read/operators/jsonpath-match-compat.js';
+import jsonpath_match_native_operator from '#src/sql/jsonb/read/operators/jsonpath-match-native.js';
 
 import {create_path_validator, prepare_schema_state} from '#src/schema/schema-compiler.js';
 import {get_path_type as resolve_path_type, is_array_root as resolve_is_array_root} from '#src/schema/path-introspection.js';
@@ -274,8 +278,8 @@ Schema.prototype.add_method = function (method_name, method_implementation) {
  * @returns {Schema}
  */
 Schema.prototype.$bind_connection = function (connection) {
-	void connection;
 	this.$runtime = Object.create(null);
+	this.$runtime.read_operators = build_read_operators(connection);
 	return this;
 };
 
@@ -512,6 +516,21 @@ function build_schema_options(schema_options = {}) {
 
 	next_options.slugs = next_slug_keys;
 	return next_options;
+}
+
+/**
+ * Resolve the bound read-operator implementations for one connection context.
+ *
+ * @param {object|null|undefined} connection
+ * @returns {object}
+ */
+function build_read_operators(connection) {
+	const supports_jsonpath = connection?.server_capabilities?.supports_jsonpath === true;
+
+	return {
+		$json_path_exists: supports_jsonpath ? jsonpath_exists_native_operator : jsonpath_exists_compat_operator,
+		$json_path_match: supports_jsonpath ? jsonpath_match_native_operator : jsonpath_match_compat_operator
+	};
 }
 
 /**

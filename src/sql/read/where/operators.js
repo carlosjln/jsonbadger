@@ -9,8 +9,6 @@ import contains_operator from '#src/sql/jsonb/read/operators/contains.js';
 import has_all_keys_operator from '#src/sql/jsonb/read/operators/has-all-keys.js';
 import has_any_keys_operator from '#src/sql/jsonb/read/operators/has-any-keys.js';
 import has_key_operator from '#src/sql/jsonb/read/operators/has-key.js';
-import jsonpath_exists_operator from '#src/sql/jsonb/read/operators/jsonpath-exists.js';
-import jsonpath_match_operator from '#src/sql/jsonb/read/operators/jsonpath-match.js';
 import size_operator from '#src/sql/jsonb/read/operators/size.js';
 import {build_json_expression, build_text_expression, parse_path} from '#src/sql/jsonb/path-parser.js';
 
@@ -100,11 +98,13 @@ function compile_standard_operator(context) {
 	}
 
 	if(name === '$json_path_exists') {
-		return jsonpath_exists_operator(json_expression, value, parameter_state);
+		const bound_read_operator = resolve_read_operator(compile_context, name, path_value);
+		return bound_read_operator(json_expression, value, parameter_state);
 	}
 
 	if(name === '$json_path_match') {
-		return jsonpath_match_operator(json_expression, value, parameter_state);
+		const bound_read_operator = resolve_read_operator(compile_context, name, path_value);
+		return bound_read_operator(json_expression, value, parameter_state);
 	}
 
 	if(name === '$all') {
@@ -117,6 +117,29 @@ function compile_standard_operator(context) {
 
 	throw new QueryError('Unsupported operator: ' + name, {
 		operator: name,
+		path: path_value
+	});
+}
+
+/**
+ * Resolve one already-bound read operator from the schema runtime.
+ *
+ * @param {object} compile_context
+ * @param {string} operator_name
+ * @param {string} path_value
+ * @returns {Function}
+ * @throws {QueryError}
+ */
+function resolve_read_operator(compile_context, operator_name, path_value) {
+	const schema_instance = compile_context.schema_instance;
+	const bound_read_operator = schema_instance?.$runtime?.read_operators?.[operator_name];
+
+	if(bound_read_operator) {
+		return bound_read_operator;
+	}
+
+	throw new QueryError('Read operator requires a bound schema runtime: ' + operator_name, {
+		operator: operator_name,
 		path: path_value
 	});
 }

@@ -10,8 +10,10 @@ import has_all_keys_operator from '#src/sql/jsonb/read/operators/has-all-keys.js
 import has_any_keys_operator from '#src/sql/jsonb/read/operators/has-any-keys.js';
 import has_key_operator from '#src/sql/jsonb/read/operators/has-key.js';
 import in_operator from '#src/sql/read/where/operators/in.js';
-import jsonpath_exists_operator from '#src/sql/jsonb/read/operators/jsonpath-exists.js';
-import jsonpath_match_operator from '#src/sql/jsonb/read/operators/jsonpath-match.js';
+import jsonpath_exists_compat_operator from '#src/sql/jsonb/read/operators/jsonpath-exists-compat.js';
+import jsonpath_exists_native_operator from '#src/sql/jsonb/read/operators/jsonpath-exists-native.js';
+import jsonpath_match_compat_operator from '#src/sql/jsonb/read/operators/jsonpath-match-compat.js';
+import jsonpath_match_native_operator from '#src/sql/jsonb/read/operators/jsonpath-match-native.js';
 import nin_operator from '#src/sql/read/where/operators/nin.js';
 import size_operator from '#src/sql/jsonb/read/operators/size.js';
 import {create_parameter_state} from '#src/sql/parameter-binder.js';
@@ -67,15 +69,23 @@ describe('Query operators', function () {
 		expect(all_parameter_state.params).toEqual([['name', 'email']]);
 	});
 
-	test('maps JSONPath operators to PostgreSQL jsonpath operators', function () {
-		const exists_parameter_state = create_parameter_state();
-		const match_parameter_state = create_parameter_state();
+	test('maps native and compat JSONPath operators to SQL fragments', function () {
+		const native_exists_parameter_state = create_parameter_state();
+		const native_match_parameter_state = create_parameter_state();
+		const compat_exists_parameter_state = create_parameter_state();
+		const compat_match_parameter_state = create_parameter_state();
 
-		expect(jsonpath_exists_operator('data', '$.a ? (@ > 1)', exists_parameter_state)).toBe('data @? $1::jsonpath');
-		expect(exists_parameter_state.params).toEqual(['$.a ? (@ > 1)']);
+		expect(jsonpath_exists_native_operator('data', '$.a ? (@ > 1)', native_exists_parameter_state)).toBe('data @? $1::jsonpath');
+		expect(native_exists_parameter_state.params).toEqual(['$.a ? (@ > 1)']);
 
-		expect(jsonpath_match_operator('data', '$.a > 1', match_parameter_state)).toBe('data @@ $1::jsonpath');
-		expect(match_parameter_state.params).toEqual(['$.a > 1']);
+		expect(jsonpath_match_native_operator('data', '$.a > 1', native_match_parameter_state)).toBe('data @@ $1::jsonpath');
+		expect(native_match_parameter_state.params).toEqual(['$.a > 1']);
+
+		expect(jsonpath_exists_compat_operator('data', '$.a ? (@ > 1)', compat_exists_parameter_state)).toBe('data @? $1::jsonpath');
+		expect(compat_exists_parameter_state.params).toEqual(['$.a ? (@ > 1)']);
+
+		expect(jsonpath_match_compat_operator('data', '$.a > 1', compat_match_parameter_state)).toBe('data @@ $1::jsonpath');
+		expect(compat_match_parameter_state.params).toEqual(['$.a > 1']);
 	});
 
 	test('throws a query error for invalid numeric input in $gt', function () {

@@ -1,6 +1,10 @@
 import {describe, expect, test} from '@jest/globals';
 
 import Schema from '#src/schema/schema.js';
+import jsonpath_exists_compat_operator from '#src/sql/jsonb/read/operators/jsonpath-exists-compat.js';
+import jsonpath_exists_native_operator from '#src/sql/jsonb/read/operators/jsonpath-exists-native.js';
+import jsonpath_match_compat_operator from '#src/sql/jsonb/read/operators/jsonpath-match-compat.js';
+import jsonpath_match_native_operator from '#src/sql/jsonb/read/operators/jsonpath-match-native.js';
 
 describe('Schema runtime helpers lifecycle', function () {
 	test('registers methods and rejects invalid or duplicate method definitions', function () {
@@ -229,5 +233,31 @@ describe('Schema runtime helpers lifecycle', function () {
 		expect(schema_instance.$bind_connection(null)).toBe(schema_instance);
 		expect(Object.getPrototypeOf(schema_instance.$runtime)).toBeNull();
 		expect(schema_instance.$runtime.identity).toBeUndefined();
+	});
+
+	test('binds compatibility read operators when server jsonpath support is unavailable', function () {
+		const schema_instance = new Schema({
+			name: String
+		});
+
+		schema_instance.$bind_connection(null);
+
+		expect(schema_instance.$runtime.read_operators.$json_path_exists).toBe(jsonpath_exists_compat_operator);
+		expect(schema_instance.$runtime.read_operators.$json_path_match).toBe(jsonpath_match_compat_operator);
+	});
+
+	test('binds native read operators when server jsonpath support is available', function () {
+		const schema_instance = new Schema({
+			name: String
+		});
+
+		schema_instance.$bind_connection({
+			server_capabilities: {
+				supports_jsonpath: true
+			}
+		});
+
+		expect(schema_instance.$runtime.read_operators.$json_path_exists).toBe(jsonpath_exists_native_operator);
+		expect(schema_instance.$runtime.read_operators.$json_path_match).toBe(jsonpath_match_native_operator);
 	});
 });
