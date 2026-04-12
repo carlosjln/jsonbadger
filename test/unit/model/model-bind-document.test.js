@@ -1,11 +1,16 @@
 import {describe, expect, test} from '@jest/globals';
 
-import {create_payload_model} from '#test/unit/model/test-helpers.js';
+import {create_model} from '#test/unit/model/test-helpers.js';
 
-const existing_uuid = '0194f028-579a-7b5b-8107-b9ad31395f43';
+const existing_bigint_id = '7';
+const existing_uuid_v7_id = '0194f028-579a-7b5b-8107-b9ad31395f43';
+const next_uuid_v7_id = '0194f028-579a-7b5b-8107-b9ad31395f44';
 
-function create_hydrated_document(schema_definition, document_data, slugs = []) {
-	const User = create_payload_model(schema_definition, slugs);
+function create_hydrated_document(schema_definition, document_data, slugs = [], schema_options = {}) {
+	const User = create_model(schema_definition, Object.assign({
+		default_slug: 'payload',
+		slugs
+	}, schema_options));
 	return User.hydrate(document_data);
 }
 
@@ -32,7 +37,7 @@ describe('Model document binding lifecycle', function () {
 				theme: String
 			}
 		}, {
-			id: existing_uuid,
+			id: existing_bigint_id,
 			payload: {
 				email: 'alice@example.com',
 				profile: {
@@ -50,12 +55,39 @@ describe('Model document binding lifecycle', function () {
 		const result = user_document.bind_document(entity);
 
 		expect(result).toBe(entity);
-		expect(entity.id).toBe(existing_uuid);
+		expect(entity.id).toBe(existing_bigint_id);
 		expect(entity.created_at).toEqual(new Date('2026-04-05T08:00:00.000Z'));
 		expect(entity.updated_at).toEqual(new Date('2026-04-05T09:00:00.000Z'));
 		expect(entity.email).toBe('alice@example.com');
 		expect(entity.profile).toBe(user_document.document.payload.profile);
 		expect(entity.settings).toBe(user_document.document.settings);
+	});
+
+	test('bind_document exposes explicit uuid identities unchanged', function () {
+		const user_document = create_hydrated_document({
+			email: String
+		}, {
+			id: existing_uuid_v7_id,
+			payload: {
+				email: 'alice@example.com'
+			}
+		}, [], {
+			identity: {
+				type: 'uuid',
+				format: 'uuidv7',
+				mode: 'application',
+				generator: function uuid_generator() {
+					return existing_uuid_v7_id;
+				}
+			}
+		});
+		const entity = bind_entity(user_document);
+
+		expect(entity.id).toBe(existing_uuid_v7_id);
+
+		entity.id = next_uuid_v7_id;
+
+		expect(user_document.document.id).toBe(next_uuid_v7_id);
 	});
 
 	test('bind_document routes default-slug writes through model set so field casts still apply', function () {

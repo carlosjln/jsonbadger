@@ -24,7 +24,7 @@ Setup
 - [Shared Fixture and Assumptions](#shared-fixture-and-assumptions)
 - [Reserved Base Fields](#reserved-base-fields)
 - [Setup and Connect](#setup-and-connect)
-- [ID Strategy Examples](#id-strategy-examples)
+- [Identity Examples](#identity-examples)
 - [Schema and Model Definition](#schema-and-model-definition)
 - [Built-in FieldType Examples](#built-in-fieldtype-examples)
 - [Create and Save Documents](#create-and-save-documents)
@@ -69,12 +69,12 @@ When a snippet uses a different value (for example `name: 'jane'`), either seed 
 - Query/sort support for base fields is top-level only (no dotted base-field paths like `created_at.value`).
 
 `id` behavior:
-- Create with `ID_STRATEGY.uuidv7`:
-  - caller-provided `id` is used.
-  - if `id` is omitted, PostgreSQL default `uuidv7()` generates it.
-- Create with `ID_STRATEGY.bigserial`:
-  - caller-provided `id` is ignored silently.
-  - PostgreSQL sequence generates it.
+- Default schema identity uses database-generated bigint ids.
+  - caller-provided `id` is rejected on create in phase one.
+  - PostgreSQL generates the value.
+- UUIDv7 schemas use the bound runtime path.
+  - database path: PostgreSQL generates the id with `uuidv7()`.
+  - application path: JsonBadger uses `identity.generator` before validation and includes the id in the insert.
 - Update paths cannot mutate `id`.
 
 Timestamp helper behavior:
@@ -87,8 +87,6 @@ Timestamp helper behavior:
   - `created_at` is not auto-updated.
 
 ## Setup and Connect
-
-> Important: `ID_STRATEGY.uuidv7` requires native PostgreSQL `uuidv7()` support (PostgreSQL 18+).
 
 ```js
 import JsonBadger from 'jsonbadger';
@@ -103,21 +101,30 @@ const options = {
 const connection = await JsonBadger.connect(db_uri, options);
 ```
 
-Schema-level UUIDv7 selection (PostgreSQL 18+ native `uuidv7()` required):
+Schema-level UUIDv7 selection:
 
 ```js
+import {v7 as uuidv7} from 'uuid';
+
 const db_uri = 'postgresql://user:pass@localhost:5432/dbname';
 const connection = await JsonBadger.connect(db_uri);
 
 const event_schema = new JsonBadger.Schema({
 	name: String
 }, {
-	id_strategy: JsonBadger.ID_STRATEGY.uuidv7
+	identity: {
+		type: JsonBadger.IDENTITY_TYPE.uuid,
+		format: JsonBadger.IDENTITY_FORMAT.uuidv7,
+		mode: JsonBadger.IDENTITY_MODE.fallback,
+		generator: uuidv7
+	}
 });
 ```
 
 Notes:
-- JsonBadger checks native `uuidv7()` support automatically during `Model.ensure_table()` using the capability snapshot captured at `connect(...)`.
+- JsonBadger scans server capabilities during `connect(...)`.
+- `IDENTITY_MODE.fallback` binds the database path when native `uuidv7()` is available.
+- If the server does not support native `uuidv7()`, JsonBadger uses `identity.generator`.
 - Run `ensure_table()` / `ensure_indexes()` during startup/bootstrap before normal runtime operations, or use `ensure_model()` when you want the combined path.
 
 Teardown example:
@@ -137,11 +144,13 @@ try {
 }
 ```
 
-## ID Strategy Examples
+## Identity Examples
 
-Schema-level `id_strategy` selection:
+Schema-level `identity` selection:
 
 ```js
+import {v7 as uuidv7} from 'uuid';
+
 const db_uri = 'postgresql://user:pass@localhost:5432/dbname';
 const connection = await JsonBadger.connect(db_uri);
 
@@ -150,7 +159,12 @@ const AuditLog = connection.model({
 	schema: new JsonBadger.Schema({
 		event_name: String
 	}, {
-		id_strategy: JsonBadger.ID_STRATEGY.uuidv7 // PostgreSQL 18+ native uuidv7() required
+		identity: {
+			type: JsonBadger.IDENTITY_TYPE.uuid,
+			format: JsonBadger.IDENTITY_FORMAT.uuidv7,
+			mode: JsonBadger.IDENTITY_MODE.fallback,
+			generator: uuidv7
+		}
 	}),
 	table_name: 'audit_logs'
 });
@@ -159,36 +173,26 @@ const Counter = connection.model({
 	name: 'Counter',
 	schema: new JsonBadger.Schema({
 		label: String
-	}, {
-		id_strategy: JsonBadger.ID_STRATEGY.bigserial // schema override
 	}),
 	table_name: 'counters'
 });
 ```
 
 Notes:
-- `id_strategy` lives on the schema. If omitted, the library default is `uuidv7`.
-- `ID_STRATEGY.uuidv7` uses database-generated IDs and JsonBadger validates support automatically.
+- `identity` lives on the schema.
+- If omitted, the library default is bigint + database-generated ids.
+- `IDENTITY_MODE.fallback` uses the database path when available and the application path otherwise.
 
 Create-time `id` behavior example:
 
 ```js
-// uuidv7 model: pass-through when provided
-const uuid_user = await AuditLog.create({
-	id: '0194f028-579a-7b5b-8107-b9ad31395f43',
-	event_name: 'login'
-});
-
-// uuidv7 model: DB generates when omitted
+// uuidv7 fallback model: database or application path is chosen during schema binding
 const generated_uuid_user = await AuditLog.create({
 	event_name: 'logout'
 });
 
-// bigserial model: caller id is ignored, DB generates numeric id
-const serial_counter = await Counter.create({
-	id: 999,
-	label: 'requests'
-});
+// bigint default model: caller id is rejected, DB generates numeric id
+await Counter.create({label: 'requests'});
 ```
 
 ## Schema and Model Definition
@@ -206,7 +210,12 @@ const user_schema = new JsonBadger.Schema({
 	orders: [{sku: String, qty: Number, price: Number}],
 	payload: {}
 }, {
-	id_strategy: JsonBadger.ID_STRATEGY.bigserial
+	identity: {
+		type: JsonBadger.IDENTITY_TYPE.bigint,
+		format: null,
+		mode: JsonBadger.IDENTITY_MODE.fallback,
+		generator: null
+	}
 });
 
 // Schema-level indexes (single path and compound)

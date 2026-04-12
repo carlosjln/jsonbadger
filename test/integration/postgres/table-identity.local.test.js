@@ -9,7 +9,7 @@ import {
 	drop_table_if_exists
 } from '#test/integration/postgres/helpers.js';
 
-describe('Table ID strategy integration (local PostgreSQL)', function () {
+describe('Table identity integration (local PostgreSQL)', function () {
 	let connection;
 
 	beforeAll(async function setup_database() {
@@ -20,19 +20,25 @@ describe('Table ID strategy integration (local PostgreSQL)', function () {
 		await disconnect_connection(connection);
 	});
 
-	test('uses schema-selected uuidv7 and schema-selected bigserial', async function () {
-		const uuid_table_name = build_test_table_name('jsonbadger_id_strategy_test', 'uuid');
-		const bigserial_table_name = build_test_table_name('jsonbadger_id_strategy_test', 'bigserial');
+	test('uses identity-selected uuidv7 and default bigint identities', async function () {
+		const uuid_table_name = build_test_table_name('jsonbadger_identity_test', 'uuid');
+		const bigserial_table_name = build_test_table_name('jsonbadger_identity_test', 'bigint');
+		const uuid_generator = function uuid_generator() {
+			return '019631f7-ef80-7c17-8cf0-a9b241551111';
+		};
 
 		const uuid_schema = new jsonbadger.Schema({
 			name: {type: String, required: true}
 		}, {
-			id_strategy: jsonbadger.ID_STRATEGY.uuidv7
+			identity: {
+				type: jsonbadger.IDENTITY_TYPE.uuid,
+				format: jsonbadger.IDENTITY_FORMAT.uuidv7,
+				mode: jsonbadger.IDENTITY_MODE.fallback,
+				generator: uuid_generator
+			}
 		});
 		const bigserial_schema = new jsonbadger.Schema({
 			name: {type: String, required: true}
-		}, {
-			id_strategy: jsonbadger.ID_STRATEGY.bigserial
 		});
 
 		const uuid_model = connection.model({
@@ -51,10 +57,20 @@ describe('Table ID strategy integration (local PostgreSQL)', function () {
 			await drop_table_if_exists(connection, uuid_table_name);
 			await drop_table_if_exists(connection, bigserial_table_name);
 
-			expect(uuid_model.schema.id_strategy).toBe(jsonbadger.ID_STRATEGY.uuidv7);
-			expect(bigserial_model.schema.id_strategy).toBe(jsonbadger.ID_STRATEGY.bigserial);
-			expect(uuid_schema.id_strategy).toBe(jsonbadger.ID_STRATEGY.uuidv7);
-			expect(bigserial_schema.id_strategy).toBe(jsonbadger.ID_STRATEGY.bigserial);
+			expect(uuid_model.schema.options.identity).toEqual({
+				type: jsonbadger.IDENTITY_TYPE.uuid,
+				format: jsonbadger.IDENTITY_FORMAT.uuidv7,
+				mode: jsonbadger.IDENTITY_MODE.fallback,
+				generator: uuid_generator
+			});
+			expect(bigserial_model.schema.options.identity).toEqual({
+				type: jsonbadger.IDENTITY_TYPE.bigint,
+				format: null,
+				mode: jsonbadger.IDENTITY_MODE.fallback,
+				generator: null
+			});
+			expect(uuid_model.schema.$runtime.identity.type).toBe(jsonbadger.IDENTITY_TYPE.uuid);
+			expect(bigserial_model.schema.$runtime.identity.type).toBe(jsonbadger.IDENTITY_TYPE.bigint);
 
 			await uuid_model.ensure_table();
 			await bigserial_model.ensure_table();

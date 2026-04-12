@@ -6,7 +6,7 @@
 - [connect](#connect)
 - [Connection Options](#connection-options)
 - [Connection Lifecycle](#connection-lifecycle)
-- [UUIDv7 Compatibility](#uuidv7-compatibility)
+- [Identity Capability Binding](#identity-capability-binding)
 - [Connection Reuse Pattern](#connection-reuse-pattern)
 - [Cross-File Example](#cross-file-example)
 
@@ -33,12 +33,12 @@ const connection = await JsonBadger.connect(uri, options);
 await connection.disconnect();
 ```
 
-## UUIDv7 Compatibility
+## Identity Capability Binding
 
 - `connect(...)` performs a PostgreSQL capability scan and caches the result
-- later schema-level `uuidv7` selections are checked against the cached capability info during `Model.ensure_table()`
+- later schema identity binding reads that cached capability info during model compilation
 
-> **Note:** You do not need to run manual version checks during normal usage. JsonBadger performs the compatibility checks it needs automatically.
+> **Note:** You do not need to run manual version checks during normal usage. JsonBadger binds the runtime identity path it needs automatically.
 
 ## Connection Reuse Pattern
 

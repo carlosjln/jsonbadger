@@ -11,8 +11,10 @@ jest.unstable_mockModule('#src/sql/run.js', function () {
 const {default: Schema} = await import('#src/schema/schema.js');
 const {default: model} = await import('#src/model/factory/index.js');
 
-const existing_uuid = '0194f028-579a-7b5b-8107-b9ad31395f43';
-const next_uuid = '0194f028-579a-7b5b-8107-b9ad31395f44';
+const existing_bigint_id = '7';
+const next_bigint_id = '8';
+const existing_uuid_v7_id = '0194f028-579a-7b5b-8107-b9ad31395f43';
+const next_uuid_v7_id = '0194f028-579a-7b5b-8107-b9ad31395f44';
 
 describe('Model.update_one gateway normalization', function () {
 	let connection;
@@ -258,7 +260,7 @@ describe('Model.update_one gateway normalization', function () {
 		const User = create_model(new Schema({name: String}), connection);
 		const next_updated_at = '2026-03-31T12:00:00.000Z';
 
-		await User.update_one({id: existing_uuid}, {
+		await User.update_one({id: existing_bigint_id}, {
 			set: {
 				'data.name': 'alice',
 				updated_at: next_updated_at
@@ -270,7 +272,36 @@ describe('Model.update_one gateway normalization', function () {
 
 		expect(sql_text).toContain('updated_at =');
 		expect(sql_params).toEqual([
-			existing_uuid,
+			existing_bigint_id,
+			'"alice"',
+			next_updated_at
+		]);
+	});
+
+	test('accepts explicit uuid identity filters when the schema opts into uuid', async function () {
+		const User = create_model(new Schema({
+			name: String
+		}, {
+			identity: {
+				type: 'uuid',
+				format: 'uuidv7',
+				mode: 'application',
+				generator: function uuid_generator() {
+					return existing_uuid_v7_id;
+				}
+			}
+		}), connection);
+		const next_updated_at = '2026-03-31T12:00:00.000Z';
+
+		await User.update_one({id: existing_uuid_v7_id}, {
+			set: {
+				'data.name': 'alice',
+				updated_at: next_updated_at
+			}
+		});
+
+		expect(sql_runner_mock.mock.calls[0][1]).toEqual([
+			existing_uuid_v7_id,
 			'"alice"',
 			next_updated_at
 		]);
@@ -303,7 +334,7 @@ describe('Model.update_one gateway normalization', function () {
 	test('returns a hydrated document when update_one receives a row', async function () {
 		sql_runner_mock.mockResolvedValueOnce({
 			rows: [{
-				id: next_uuid,
+				id: next_bigint_id,
 				data: {
 					name: 'alice'
 				},
@@ -320,6 +351,43 @@ describe('Model.update_one gateway normalization', function () {
 		});
 
 		expect(updated_document).toBeInstanceOf(User);
+		expect(updated_document.document.data).toEqual({
+			name: 'alice'
+		});
+	});
+
+	test('returns a hydrated document for explicit uuid identity rows', async function () {
+		sql_runner_mock.mockResolvedValueOnce({
+			rows: [{
+				id: next_uuid_v7_id,
+				data: {
+					name: 'alice'
+				},
+				created_at: new Date('2026-04-01T10:00:00.000Z'),
+				updated_at: new Date('2026-04-01T11:00:00.000Z')
+			}]
+		});
+
+		const User = create_model(new Schema({
+			name: String
+		}, {
+			identity: {
+				type: 'uuid',
+				format: 'uuidv7',
+				mode: 'application',
+				generator: function uuid_generator() {
+					return existing_uuid_v7_id;
+				}
+			}
+		}), connection);
+		const updated_document = await User.update_one({id: existing_uuid_v7_id}, {
+			$set: {
+				name: 'alice'
+			}
+		});
+
+		expect(updated_document).toBeInstanceOf(User);
+		expect(updated_document.id).toBe(next_uuid_v7_id);
 		expect(updated_document.document.data).toEqual({
 			name: 'alice'
 		});

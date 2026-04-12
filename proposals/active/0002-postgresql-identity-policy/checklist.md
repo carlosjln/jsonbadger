@@ -42,14 +42,14 @@ Purpose: replace `id_strategy` with `identity`, default the library back to nume
 - [x] T16. Update read/query id normalization and casting based on bound identity type and format.
 - [x] T17. Keep public `document.id` string-shaped in all supported modes.
 
-- [ ] T18. Update focused unit and integration tests for defaults, schema construction, binding, insert lifecycle, id validation, query casting, and migration DDL.
-- [ ] T19. Update public docs and examples after the implementation is stable.
+- [x] T18. Update focused unit and integration tests for defaults, schema construction, binding, insert lifecycle, id validation, query casting, and migration DDL.
+- [x] T19. Update public docs and examples after the implementation is stable.
 
 ## Validation
 
-- [ ] V1. Run `npm run test-unit`.
-- [ ] V2. Run focused unit tests for schema defaults, schema binding, model inserts, and id validation.
-- [ ] V3. Run `npm run test-integration` for PostgreSQL migration and persistence coverage once unit tests pass.
+- [x] V1. Run `npm run test-unit`.
+- [x] V2. Run focused unit tests for schema defaults, schema binding, model inserts, and id validation.
+- [x] V3. Run `npm run test-integration` for PostgreSQL migration and persistence coverage once unit tests pass.
 
 ## Notes
 
