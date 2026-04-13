@@ -4,6 +4,7 @@ jspm_packages/
 dist
 dist-ssr
 coverage
+proposals
 
 releases
 data

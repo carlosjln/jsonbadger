@@ -21,6 +21,13 @@ describe('index exports', function () {
 		expect(index_module.IDENTITY_TYPE).toBe(jsonbadger.IDENTITY_TYPE);
 		expect(index_module.IDENTITY_FORMAT).toBe(jsonbadger.IDENTITY_FORMAT);
 		expect(index_module.IDENTITY_MODE).toBe(jsonbadger.IDENTITY_MODE);
+		expect(index_module.defaults).toBe(jsonbadger.defaults);
+		expect(index_module.defaults.schema_options.identity).toEqual({
+			type: 'bigint',
+			format: null,
+			mode: 'fallback',
+			generator: null
+		});
 		expect(index_module.IDENTITY_TYPE.bigint).toBe('bigint');
 		expect(index_module.IDENTITY_TYPE.uuid).toBe('uuid');
 		expect(index_module.IDENTITY_FORMAT.uuidv7).toBe('uuidv7');

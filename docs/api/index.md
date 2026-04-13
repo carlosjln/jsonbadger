@@ -14,11 +14,13 @@ Named exports:
 - `connect(uri, options)`
 - `Schema`
 - `field_type`
+- `defaults`
 - `IDENTITY_TYPE`
 - `IDENTITY_FORMAT`
 - `IDENTITY_MODE`
 
 Default export (`JsonBadger`) includes the same plus:
+- `defaults.schema_options.identity`
 - `field_type.register(name, type_constructor, aliases?)`
 - `field_type.resolve(type)`
 - `field_types.UUIDv7`

@@ -4,6 +4,7 @@
 
 - [Schema API](#schema-api)
 - [Constructor](#constructor)
+- [Identity Options](#identity-options)
 - [Ownership Boundary](#ownership-boundary)
 - [Core Methods](#core-methods)
 - [Slug Access](#slug-access)
@@ -17,6 +18,75 @@
 ```js
 const user_schema = new JsonBadger.Schema(definition, options);
 ```
+
+## Identity Options
+
+Set repo-wide identity defaults before you construct schemas:
+
+```js
+import JsonBadger from 'jsonbadger';
+import {v7 as uuidv7} from 'uuid';
+
+JsonBadger.defaults.schema_options.identity = {
+	type: JsonBadger.IDENTITY_TYPE.uuid,
+	format: JsonBadger.IDENTITY_FORMAT.uuidv7,
+	mode: JsonBadger.IDENTITY_MODE.fallback,
+	generator: uuidv7
+};
+
+const user_schema = new JsonBadger.Schema({
+	name: String
+});
+```
+
+Override identity per schema in the second `Schema` argument:
+
+```js
+import JsonBadger from 'jsonbadger';
+import {v7 as uuidv7} from 'uuid';
+
+const user_schema = new JsonBadger.Schema({
+	name: String
+}, {
+	identity: {
+		type: JsonBadger.IDENTITY_TYPE.uuid,
+		format: JsonBadger.IDENTITY_FORMAT.uuidv7,
+		mode: JsonBadger.IDENTITY_MODE.fallback,
+		generator: uuidv7
+	}
+});
+```
+
+Default identity when `identity` is omitted:
+
+```js
+{
+	identity: {
+		type: JsonBadger.IDENTITY_TYPE.bigint,
+		format: null,
+		mode: JsonBadger.IDENTITY_MODE.fallback,
+		generator: null
+	}
+}
+```
+
+Supported combinations:
+- `bigint + null + fallback`
+- `uuid + uuidv7 + fallback`
+- `uuid + uuidv7 + database`
+- `uuid + uuidv7 + application`
+
+Mode behavior:
+- `fallback`: use database `uuidv7()` when the bound connection supports it, otherwise use `identity.generator`
+- `database`: require a bound connection with native `uuidv7()` support
+- `application`: require `identity.generator` and include the generated id in the insert
+
+Base-field behavior:
+- bigint identity keeps public `document.id` string-shaped
+- uuid identity validates `document.id` as UUIDv7
+- default bigint schemas reject caller-provided ids on create in phase one
+
+> **Note:** `JsonBadger.defaults` is read when `new JsonBadger.Schema(...)` runs. Set repo-wide defaults before constructing schemas. Per-schema `identity` still overrides the repo-wide default.
 
 ## Ownership Boundary
 
