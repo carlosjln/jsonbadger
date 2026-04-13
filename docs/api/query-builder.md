@@ -8,7 +8,7 @@
 - [Supported Filter Families](#supported-filter-families)
 - [Base-field Query Rules](#base-field-query-rules)
 - [JSON Key Existence](#json-key-existence)
-- [JSONPath](#jsonpath)
+- [Path Existence](#path-existence)
 
 ## Builder Chain
 
@@ -44,10 +44,8 @@ Read/query execution:
 - scalar comparisons: direct equality, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`
 - sets/arrays: `$in`, `$nin`, `$all`, `$size`, `$contains`, `$elem_match`
 - regex: `$regex` and `$options`
+- path existence: `$exists`
 - JSONB key existence: `$has_key`, `$has_any_keys`, `$has_all_keys`
-- JSONPath: `$json_path_exists`, `$json_path_match`
-
-> **Note:** Use `$json_path_exists` and `$json_path_match` only when your PostgreSQL version supports native JSONPath queries.
 
 See [`../advanced/query-translation.md`](../advanced/query-translation.md) when you want the advanced PostgreSQL reference behind these operators.
 
@@ -65,7 +63,7 @@ Rules:
 Operator matrix:
 - `id`: direct equality, `$eq`, `$ne`, `$in`, `$nin`
 - `created_at` / `updated_at`: direct equality, `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`
-- unsupported on base fields: `$regex`, `$contains`, `$all`, `$size`, `$has_key`, `$has_any_keys`, `$has_all_keys`, `$json_path_exists`, `$json_path_match`, `$elem_match`
+- unsupported on base fields: `$regex`, `$contains`, `$all`, `$size`, `$has_key`, `$has_any_keys`, `$has_all_keys`, `$exists`, `$elem_match`
 
 ## JSON Key Existence
 
@@ -75,7 +73,7 @@ Operator matrix:
 
 When used with a nested field path, JsonBadger extracts that nested JSONB value first, then applies the existence operator to the extracted value.
 
-## JSONPath
+## Path Existence
 
-- `$json_path_exists` checks whether a JSONPath query finds a match
-- `$json_path_match` checks whether a JSONPath predicate matches
+- `$exists: true` checks whether the selected dotted path is present
+- `$exists: false` checks whether the selected dotted path is absent

@@ -49,53 +49,60 @@ describe('PostgreSQL JSON operator mapping', function () {
 		expect(literal_key_result.params).toEqual(['address.zip']);
 	});
 
-	test('maps JSONPath operators to native PostgreSQL jsonpath operators', function () {
-		const schema_instance = create_bound_schema();
-		const exists_result = where_compiler({profile: {$json_path_exists: '$.city ? (@ != null)'}}, {
-			schema: schema_instance,
+	test('maps path existence to native JSONPath when server support is available', function () {
+		const native_schema_instance = create_bound_schema();
+		const exists_result = where_compiler({profile: {$exists: true}}, {
+			schema: native_schema_instance,
 			data_column: 'data'
 		});
-		const match_result = where_compiler({profile: {$json_path_match: '$.age > 18'}}, {
-			schema: schema_instance,
+		const missing_result = where_compiler({profile: {$exists: false}}, {
+			schema: native_schema_instance,
 			data_column: 'data'
 		});
 
 		expect(exists_result.sql).toContain(' @? $1::jsonpath');
-		expect(exists_result.params).toEqual(['$.city ? (@ != null)']);
+		expect(exists_result.params).toEqual(['$.profile']);
 
-		expect(match_result.sql).toContain(' @@ $1::jsonpath');
-		expect(match_result.params).toEqual(['$.age > 18']);
+		expect(missing_result.sql).toContain('NOT ("data" @? $1::jsonpath)');
+		expect(missing_result.params).toEqual(['$.profile']);
 	});
 
-	test('rejects invalid JSONPath operator values before SQL execution', function () {
+	test('maps path existence to extracted-value SQL checks when server jsonpath support is unavailable', function () {
+		const compat_schema_instance = create_bound_schema({}, {}, {
+			supports_jsonpath: false
+		});
+		const exists_result = where_compiler({profile: {$exists: true}}, {
+			schema: compat_schema_instance,
+			data_column: 'data'
+		});
+		const missing_result = where_compiler({profile: {$exists: false}}, {
+			schema: compat_schema_instance,
+			data_column: 'data'
+		});
+
+		expect(exists_result.sql).toContain(' IS NOT NULL');
+		expect(exists_result.params).toEqual([]);
+
+		expect(missing_result.sql).toContain(' IS NULL');
+		expect(missing_result.params).toEqual([]);
+	});
+
+	test('rejects invalid $exists operator values before SQL execution', function () {
 		const schema_instance = create_bound_schema();
 
-		expect(function compile_invalid_jsonpath_exists() {
-			where_compiler({profile: {$json_path_exists: ''}}, {
+		expect(function compile_invalid_exists() {
+			where_compiler({profile: {$exists: 'yes'}}, {
 				schema: schema_instance,
 				data_column: 'data'
 			});
-		}).toThrow('Invalid value for $json_path_exists operator');
-
-		expect(function compile_invalid_jsonpath_match() {
-			where_compiler({profile: {$json_path_match: null}}, {
-				schema: schema_instance,
-				data_column: 'data'
-			});
-		}).toThrow('Invalid value for $json_path_match operator');
+		}).toThrow('Invalid value for $exists operator');
 	});
 
-	test('fails fast when JSONPath dispatch has no bound schema runtime', function () {
-		expect(function compile_unbound_jsonpath_exists() {
-			where_compiler({profile: {$json_path_exists: '$.city ? (@ != null)'}}, {
+	test('fails fast when path-existence dispatch has no bound schema runtime', function () {
+		expect(function compile_unbound_exists() {
+			where_compiler({profile: {$exists: true}}, {
 				data_column: 'data'
 			});
-		}).toThrow('Read operator requires a bound schema runtime: $json_path_exists');
-
-		expect(function compile_unbound_jsonpath_match() {
-			where_compiler({profile: {$json_path_match: '$.age > 18'}}, {
-				data_column: 'data'
-			});
-		}).toThrow('Read operator requires a bound schema runtime: $json_path_match');
+		}).toThrow('Read operator requires a bound schema runtime: $exists');
 	});
 });

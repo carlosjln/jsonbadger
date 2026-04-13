@@ -53,7 +53,7 @@ describe('PostgreSQL JSON capability alignment', function () {
 		}
 	});
 
-	test('matches PostgreSQL JSONPath semantics including suppressed mismatch cases', async function () {
+	test('matches the clean public JSON query surface for existence and comparisons', async function () {
 		const test_table_name = build_test_table_name('jsonbadger_pg_caps_test');
 		const capability_model = create_capability_model(connection, test_table_name);
 
@@ -62,23 +62,27 @@ describe('PostgreSQL JSON capability alignment', function () {
 			await capability_model.ensure_table();
 			await seed_capability_documents(capability_model);
 
-			const jsonpath_exists_match = await capability_model.find({
-				payload: {$json_path_exists: '$.items[*] ? (@.qty > 1)'}
+			const existing_nested_path = await capability_model.find({
+				'payload.profile.city': {$exists: true}
 			}).exec();
-			const jsonpath_predicate_match = await capability_model.find({
-				payload: {$json_path_match: '$.score > 10'}
+			const array_item_match = await capability_model.find({
+				'payload.items': {
+					$elem_match: {
+						qty: {$gt: 1}
+					}
+				}
 			}).exec();
-			const jsonpath_type_mismatch = await capability_model.find({
-				payload: {$json_path_match: '$.text_value > 1'}
+			const scalar_comparison_match = await capability_model.find({
+				'payload.score': {$gt: 10}
 			}).exec();
-			const jsonpath_missing_field = await capability_model.find({
-				payload: {$json_path_exists: '$.missing.deep ? (@ > 0)'}
+			const missing_nested_path = await capability_model.find({
+				'payload.missing.deep': {$exists: true}
 			}).exec();
 
-			expect(jsonpath_exists_match.map(function pick_user(row) {return read_model_data(row).user_name;})).toEqual(['alpha']);
-			expect(jsonpath_predicate_match.map(function pick_user(row) {return read_model_data(row).user_name;})).toEqual(['alpha']);
-			expect(jsonpath_type_mismatch).toEqual([]);
-			expect(jsonpath_missing_field).toEqual([]);
+			expect(existing_nested_path.map(function pick_user(row) {return read_model_data(row).user_name;})).toEqual(['alpha']);
+			expect(array_item_match.map(function pick_user(row) {return read_model_data(row).user_name;})).toEqual(['alpha']);
+			expect(scalar_comparison_match.map(function pick_user(row) {return read_model_data(row).user_name;})).toEqual(['alpha']);
+			expect(missing_nested_path).toEqual([]);
 		} finally {
 			await drop_table_if_exists(connection, test_table_name);
 		}

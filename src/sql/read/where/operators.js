@@ -64,7 +64,7 @@ function compile_standard_operator(context) {
 
 	const data_column_reference = compile_context.data_column_reference;
 	const text_expression = build_text_expression(data_column_reference, path_value);
-	const json_expression = build_json_expression(data_column_reference, path_value);
+	const jsonb_expression = build_json_expression(data_column_reference, path_value);
 	const casted_value = cast_operator_value(path_value, name, value, compile_context);
 	const text_operator_clause = compile_text_operator({
 		name,
@@ -86,33 +86,31 @@ function compile_standard_operator(context) {
 	}
 
 	if(name === '$has_key') {
-		return has_key_operator(json_expression, value, parameter_state);
+		return has_key_operator(jsonb_expression, value, parameter_state);
 	}
 
 	if(name === '$has_any_keys') {
-		return has_any_keys_operator(json_expression, value, parameter_state);
+		return has_any_keys_operator(jsonb_expression, value, parameter_state);
 	}
 
 	if(name === '$has_all_keys') {
-		return has_all_keys_operator(json_expression, value, parameter_state);
+		return has_all_keys_operator(jsonb_expression, value, parameter_state);
 	}
 
-	if(name === '$json_path_exists') {
+	if(name === '$exists') {
 		const bound_read_operator = resolve_read_operator(compile_context, name, path_value);
-		return bound_read_operator(json_expression, value, parameter_state);
-	}
-
-	if(name === '$json_path_match') {
-		const bound_read_operator = resolve_read_operator(compile_context, name, path_value);
-		return bound_read_operator(json_expression, value, parameter_state);
+		return bound_read_operator(jsonb_expression, value, parameter_state, {
+			data_column_reference,
+			path_value
+		});
 	}
 
 	if(name === '$all') {
-		return all_operator(json_expression, casted_value, parameter_state);
+		return all_operator(jsonb_expression, casted_value, parameter_state);
 	}
 
 	if(name === '$size') {
-		return size_operator(json_expression, value, parameter_state);
+		return size_operator(jsonb_expression, value, parameter_state);
 	}
 
 	throw new QueryError('Unsupported operator: ' + name, {

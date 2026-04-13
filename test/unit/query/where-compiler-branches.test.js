@@ -196,14 +196,15 @@ describe('where_compiler behavior', function () {
 			expect(result.params).toContainEqual(['true']);
 		});
 
-		test('compiles JSON containment, existence, and jsonpath operators', function () {
-			const schema_instance = create_bound_schema();
+		test('compiles JSON containment, existence, and path-existence operators', function () {
+			const schema_instance = create_bound_schema({}, {}, {
+				supports_jsonpath: false
+			});
 			const result = where_compiler({
 				payload: {
 					$contains: {nested: true},
 					$size: 2,
-					$json_path_exists: '$.nested ? (@ == true)',
-					$json_path_match: '$.count > 1',
+					$exists: true,
 					$has_key: 'nested',
 					$has_any_keys: ['nested', 'count'],
 					$has_all_keys: ['nested', 'count']
@@ -214,8 +215,7 @@ describe('where_compiler behavior', function () {
 
 			expect(result.sql).toContain('@>');
 			expect(result.sql).toContain('jsonb_array_length(');
-			expect(result.sql).toContain(' @? ');
-			expect(result.sql).toContain(' @@ ');
+			expect(result.sql).toContain(' IS NOT NULL');
 			expect(result.sql).toContain(' ? ');
 			expect(result.sql).toContain(' ?| ');
 			expect(result.sql).toContain(' ?& ');
@@ -315,7 +315,7 @@ describe('where_compiler behavior', function () {
 			}).toThrow('Operator is not supported for base field');
 
 			expect(function compile_base_field_json_operator() {
-				where_compiler({created_at: {$json_path_exists: '$.x'}});
+				where_compiler({created_at: {$exists: true}});
 			}).toThrow('Operator is not supported for base field');
 		});
 

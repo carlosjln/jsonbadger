@@ -6,10 +6,8 @@ import IDENTITY_TYPE from '#src/constants/identity-type.js';
 import ValidationError from '#src/errors/validation-error.js';
 
 import {default_field_type_registry} from '#src/field-types/registry.js';
-import jsonpath_exists_compat_operator from '#src/sql/jsonb/read/operators/jsonpath-exists-compat.js';
-import jsonpath_exists_native_operator from '#src/sql/jsonb/read/operators/jsonpath-exists-native.js';
-import jsonpath_match_compat_operator from '#src/sql/jsonb/read/operators/jsonpath-match-compat.js';
-import jsonpath_match_native_operator from '#src/sql/jsonb/read/operators/jsonpath-match-native.js';
+import exists_compat_operator from '#src/sql/jsonb/read/operators/exists-compat.js';
+import exists_native_operator from '#src/sql/jsonb/read/operators/exists-native.js';
 
 import {create_path_validator, prepare_schema_state} from '#src/schema/schema-compiler.js';
 import {get_path_type as resolve_path_type, is_array_root as resolve_is_array_root} from '#src/schema/path-introspection.js';
@@ -618,8 +616,7 @@ function build_read_operators(connection) {
 	const supports_jsonpath = connection?.server_capabilities?.supports_jsonpath;
 
 	return {
-		$json_path_exists: supports_jsonpath ? jsonpath_exists_native_operator : jsonpath_exists_compat_operator,
-		$json_path_match: supports_jsonpath ? jsonpath_match_native_operator : jsonpath_match_compat_operator
+		$exists: supports_jsonpath ? exists_native_operator : exists_compat_operator
 	};
 }
 

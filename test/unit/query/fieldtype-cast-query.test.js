@@ -31,8 +31,10 @@ describe('where_compiler field type casting', function () {
 		expect(all_result.params).toEqual(['[1,2]']);
 	});
 
-	test('maps key existence and JSONPath operators to PostgreSQL-native SQL', function () {
-		const schema_instance = create_bound_schema();
+	test('maps key and path existence operators to PostgreSQL SQL', function () {
+		const schema_instance = create_bound_schema({}, {}, {
+			supports_jsonpath: false
+		});
 		const has_key_result = where_compiler({profile: {$has_key: 'city'}}, {
 			data_column: 'data'
 		});
@@ -42,11 +44,11 @@ describe('where_compiler field type casting', function () {
 		const has_all_result = where_compiler({profile: {$has_all_keys: ['city', 'country']}}, {
 			data_column: 'data'
 		});
-		const jsonpath_exists_result = where_compiler({profile: {$json_path_exists: '$.city ? (@ != null)'}}, {
+		const exists_result = where_compiler({profile: {$exists: true}}, {
 			schema: schema_instance,
 			data_column: 'data'
 		});
-		const jsonpath_match_result = where_compiler({profile: {$json_path_match: '$.age > 18'}}, {
+		const missing_result = where_compiler({profile: {$exists: false}}, {
 			schema: schema_instance,
 			data_column: 'data'
 		});
@@ -60,10 +62,10 @@ describe('where_compiler field type casting', function () {
 		expect(has_all_result.sql).toContain(' ?& $1::text[]');
 		expect(has_all_result.params).toEqual([['city', 'country']]);
 
-		expect(jsonpath_exists_result.sql).toContain(' @? $1::jsonpath');
-		expect(jsonpath_exists_result.params).toEqual(['$.city ? (@ != null)']);
+		expect(exists_result.sql).toContain(' IS NOT NULL');
+		expect(exists_result.params).toEqual([]);
 
-		expect(jsonpath_match_result.sql).toContain(' @@ $1::jsonpath');
-		expect(jsonpath_match_result.params).toEqual(['$.age > 18']);
+		expect(missing_result.sql).toContain(' IS NULL');
+		expect(missing_result.params).toEqual([]);
 	});
 });

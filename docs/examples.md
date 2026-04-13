@@ -11,7 +11,7 @@ Use [`docs/lifecycle.md`](lifecycle.md) when you need the document phase map ins
 
 - Examples are ordered from setup -> model usage -> queries -> updates -> runtime behavior.
 - Snippets reuse a `User` model shape where possible.
-- Query operators use the current `$` + `snake_case` naming (for example `$elem_match`, `$has_key`, `$json_path_exists`).
+- Query operators use the current `$` + `snake_case` naming (for example `$elem_match`, `$has_key`, `$exists`).
 - This page only includes currently implemented behavior.
 - `Assumes:` notes tell you what earlier setup/data a snippet depends on.
 - Important mechanics: queries run when you call `.exec()` (for example `await User.find({}).exec()`), and direct in-place mutations on `doc.document[...]` bypass `doc.set(...)` and assignment-time casting.
@@ -601,31 +601,30 @@ await User.find({'payload.profile': {$has_key: 'city'}}).exec();
 await User.find({payload: {$has_key: 'profile.city'}}).exec();
 ```
 
-## JSONPath Operators
+## Path Existence
 
-`$json_path_exists` (`@?`) and `$json_path_match` (`@@`):
-
-> **Note:** Use these operators only when your PostgreSQL version supports native JSONPath queries.
+`$exists` checks whether the selected dotted path is present.
 
 Assumes:
-- Your seeded `payload` includes shapes like `items[*].qty` and `score` (as shown in `## Create and Save Documents`).
+- Your seeded `payload` includes nested shapes like `profile.city`.
 
 Target shape reminder:
-- `payload` is a JSON object with keys like `score` and `items`, where `items` is an array of objects (for example `{qty: 2}`).
+- `payload` is a JSON object with keys like `profile`, where `profile.city` may or may not be present.
 
 ```js
 await User.find({
-	payload: {$json_path_exists: '$.items[*] ? (@.qty > 1)'}
+	'payload.profile.city': {$exists: true}
 }).exec();
 
 await User.find({
-	payload: {$json_path_match: '$.score > 10'}
+	'payload.missing.deep': {$exists: true}
 }).exec();
 ```
 
 
 Expected behavior:
-- If your seeded payload does not include those paths/types, these examples return `[]` instead of failing.
+- Existing paths match when `$exists: true`.
+- Missing paths return `[]` when `$exists: true`.
 
 ## Update Operators (`update_one`)
 
@@ -854,7 +853,7 @@ For the full lifecycle contract, see [`docs/lifecycle.md`](lifecycle.md).
 | Array operators | `$all`, `$size`, `$elem_match` |
 | JSON containment | `$contains` |
 | JSONB key existence | `$has_key`, `$has_any_keys`, `$has_all_keys` |
-| JSONPath | `$json_path_exists`, `$json_path_match` |
+| Path existence | `$exists` |
 | Updates (`update_one`) | implicit keys, `$set`, `$unset`, `$replace_roots` |
 
 ## Related Docs

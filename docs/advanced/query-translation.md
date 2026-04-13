@@ -41,12 +41,13 @@ Top-level semantics note:
 - If the filter path is nested (for example `profile.city`), JsonBadger first extracts that nested JSONB value (`#>`), then applies the existence operator to the extracted value's top level.
 - JsonBadger does not emulate recursive/deep key search for these operators.
 
-## JSONPath operators
+## Path existence
 
-- `$json_path_exists` -> `@?` with a `::jsonpath` parameter
-- `$json_path_match` -> `@@` with a `::jsonpath` parameter
-- invalid/empty JSONPath values fail before SQL execution
-- these operators require native PostgreSQL JSONPath support
+- `$exists: true` -> bound path-existence implementation
+- `$exists: false` -> bound path-absence implementation
+- PostgreSQL `12+` may compile `$exists` through native JSONPath `@?`
+- PostgreSQL `9.6` compatibility uses extracted JSONB value `IS [NOT] NULL`
+- invalid non-boolean `$exists` values fail before SQL execution
 
 ## JSON update operators
 
@@ -88,8 +89,7 @@ This table is an advanced PostgreSQL reference for the currently supported query
 | `$has_key` | `?` | Top-level key existence on the left JSONB value | GIN on JSONB value is the expected index family |
 | `$has_any_keys` | `?|` | Any-key existence | GIN on JSONB value is the expected index family |
 | `$has_all_keys` | `?&` | All-keys existence | GIN on JSONB value is the expected index family |
-| `$json_path_exists` | `@?` | JSONPath existence predicate; requires native PostgreSQL JSONPath support | Can benefit from JSONB GIN indexing depending on operator class/query shape |
-| `$json_path_match` | `@@` | JSONPath predicate match; requires native PostgreSQL JSONPath support | Can benefit from JSONB GIN indexing depending on operator class/query shape |
+| `$exists` | bound path-existence implementation (`@?` on native JSONPath servers, extracted JSONB value + `IS [NOT] NULL` on compatibility servers) | Path presence / absence on the selected JSON value | Expression extraction or native JSONPath depending on bound runtime; this is not the same index path as key-existence operators |
 | `update_one.$set` | `jsonb_set(...)` | Creates missing path segments when configured (`true`) | N/A (write-path function) |
 | `update_one.$unset` | `#-` | Removes one JSON path from the target | N/A (write-path function) |
 | `update_one.$replace_roots` | direct JSONB replacement | Replaces the full JSONB root before later operations | N/A (write-path function) |
