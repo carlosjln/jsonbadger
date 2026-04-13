@@ -418,6 +418,19 @@ describe('where_compiler behavior', function () {
 			}).toThrow('Invalid id value for bigint identity');
 		});
 
+		test('accepts native bigint input for bigint-backed id filters', function () {
+			const result = where_compiler({
+				id: {
+					$eq: 7n,
+					$in: [8n, 9n]
+				}
+			});
+
+			expect(result.sql).toContain('"id" = $1::bigint');
+			expect(result.sql).toContain('"id" = ANY($2::bigint[])');
+			expect(result.params).toEqual(['7', ['8', '9']]);
+		});
+
 		test('uses uuid parameter casts for id filters when the bound identity is uuidv7', function () {
 			const schema_instance = create_bound_schema({}, {
 				identity: {
