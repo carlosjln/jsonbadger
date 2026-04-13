@@ -1,4 +1,5 @@
 import connect from '#src/connection/connect.js';
+import defaults from '#src/constants/defaults.js';
 import IDENTITY_FORMAT from '#src/constants/identity-format.js';
 import IDENTITY_MODE from '#src/constants/identity-mode.js';
 import IDENTITY_TYPE from '#src/constants/identity-type.js';
@@ -10,6 +11,7 @@ const jsonbadger = {
 	IDENTITY_TYPE,
 	IDENTITY_FORMAT,
 	IDENTITY_MODE,
+	defaults,
 	connect,
 	field_type,
 	Schema,
@@ -24,6 +26,7 @@ export {
 	IDENTITY_TYPE,
 	IDENTITY_FORMAT,
 	IDENTITY_MODE,
+	defaults,
 	connect,
 	field_type,
 	Schema
