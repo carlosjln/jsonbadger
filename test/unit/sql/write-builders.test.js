@@ -34,6 +34,53 @@ describe('SQL write builder lifecycle', function () {
 		]);
 	});
 
+	test('build_insert_query omits timestamp columns when base fields do not include them', function () {
+		const insert_query = build_insert_query({
+			table_identifier: '"users"',
+			data_identifier: '"data"',
+			payload: {
+				name: 'alice'
+			},
+			identity_runtime: {
+				type: 'bigint',
+				requires_explicit_id: false
+			},
+			base_fields: {}
+		});
+
+		expect(insert_query.sql_text).toContain('INSERT INTO "users" ("data") VALUES ($1::jsonb)');
+		expect(insert_query.sql_text).not.toContain('("data", created_at');
+		expect(insert_query.sql_text).not.toContain('("data", updated_at');
+		expect(insert_query.sql_params).toEqual([
+			'{"name":"alice"}'
+		]);
+	});
+
+	test('build_insert_query includes explicit timestamp columns independently', function () {
+		const updated_at = new Date('2026-03-31T11:00:00.000Z');
+		const insert_query = build_insert_query({
+			table_identifier: '"users"',
+			data_identifier: '"data"',
+			payload: {
+				name: 'alice'
+			},
+			identity_runtime: {
+				type: 'bigint',
+				requires_explicit_id: false
+			},
+			base_fields: {
+				updated_at
+			}
+		});
+
+		expect(insert_query.sql_text).toContain('INSERT INTO "users" ("data", updated_at)');
+		expect(insert_query.sql_text).not.toContain('("data", created_at');
+		expect(insert_query.sql_params).toEqual([
+			'{"name":"alice"}',
+			updated_at
+		]);
+	});
+
 	test('build_insert_query includes the uuid id column when one is present', function () {
 		const created_at = new Date('2026-03-31T10:00:00.000Z');
 		const updated_at = new Date('2026-03-31T11:00:00.000Z');

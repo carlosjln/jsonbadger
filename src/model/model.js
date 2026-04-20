@@ -455,18 +455,9 @@ Model.prototype.insert = async function () {
 	model.schema.validate(document);
 	apply_timestamps(document);
 
-	const base_fields = {
-		created_at: document.created_at,
-		updated_at: document.updated_at
-	};
-
-	if(identity_runtime.requires_explicit_id) {
-		base_fields.id = document.id;
-	}
-
 	const data = {
 		payload: document[data_column],
-		base_fields,
+		base_fields: build_insert_base_fields(document, identity_runtime),
 		identity_runtime
 	};
 	const saved_row = await exec_insert_one(model, data);
@@ -596,13 +587,12 @@ Model.create = async function (documents) {
 	const model = this;
 
 	if(is_array(documents)) {
-		// Replace this fan-out with insert_many once a bulk insert path exists.
 		return await Promise.all(documents.map((document) => {
-			return model.insert_one(document);
+			return execute_insert_write(model, document, {apply_lifecycle_timestamps: true});
 		}));
 	}
 
-	return model.insert_one(documents);
+	return execute_insert_write(model, documents, {apply_lifecycle_timestamps: true});
 };
 
 /**
@@ -618,8 +608,7 @@ Model.insert_one = async function (record) {
 		throw new Error('Model.insert_one accepts only plain object; use doc.insert() or doc.save() for existing documents');
 	}
 
-	const instance = model.from(record);
-	return instance.insert();
+	return execute_insert_write(model, record, {apply_lifecycle_timestamps: false});
 };
 
 /**
@@ -867,6 +856,49 @@ function apply_timestamps(document) {
 	document.updated_at = now;
 }
 
+async function execute_insert_write(model, record, options) {
+	const instance = model.from(record);
+	const document = instance.document;
+	const data_column = model.options.data_column;
+	const identity_runtime = model.schema.$runtime.identity;
+
+	prepare_insert_identity(model.schema, document, identity_runtime);
+	model.schema.validate(document);
+
+	if(options.apply_lifecycle_timestamps) {
+		apply_timestamps(document);
+	}
+
+	const data = {
+		payload: document[data_column],
+		base_fields: build_insert_base_fields(document, identity_runtime),
+		identity_runtime
+	};
+	const saved_row = await exec_insert_one(model, data);
+
+	if(saved_row) {
+		return model.hydrate(saved_row);
+	}
+
+	return null;
+}
+
+function build_insert_base_fields(document, identity_runtime) {
+	const base_fields = {};
+
+	if(identity_runtime.requires_explicit_id) {
+		base_fields.id = document.id;
+	}
+
+	for(const key of timestamp_fields) {
+		if(has_own(document, key)) {
+			base_fields[key] = document[key];
+		}
+	}
+
+	return base_fields;
+}
+
 /**
  * Prepare identity state before the insert validation and SQL lifecycle.
  *
@@ -902,4 +934,3 @@ function prepare_insert_identity(schema_instance, document, identity_runtime) {
 }
 
 export default Model;
-

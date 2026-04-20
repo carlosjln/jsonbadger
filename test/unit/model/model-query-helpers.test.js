@@ -7,7 +7,7 @@ describe('Model query helper lifecycle', function () {
 	test('read helpers create query builders with the expected operation and base filter', function () {
 		const User = create_model({name: String});
 		const find_query = User.find({active: true});
-		const find_one_query = User.find_one({name: 'alice'});
+		const find_one_query = User.find_one({name: 'Nell'});
 		const find_by_id_query = User.find_by_id('17');
 		const count_query = User.count_documents({active: true});
 
@@ -17,7 +17,7 @@ describe('Model query helper lifecycle', function () {
 		expect(find_query.base_filter).toEqual({active: true});
 
 		expect(find_one_query.operation).toBe('find_one');
-		expect(find_one_query.base_filter).toEqual({name: 'alice'});
+		expect(find_one_query.base_filter).toEqual({name: 'Nell'});
 
 		expect(find_by_id_query.operation).toBe('find_one');
 		expect(find_by_id_query.base_filter).toEqual({id: '17'});
@@ -26,21 +26,31 @@ describe('Model query helper lifecycle', function () {
 		expect(count_query.base_filter).toEqual({active: true});
 	});
 
-	test('create delegates single and array inputs through insert_one', async function () {
-		const User = create_model({name: String});
-		const insert_one_spy = jest.spyOn(User, 'insert_one')
-			.mockResolvedValueOnce({id: '1'})
-			.mockResolvedValueOnce({id: '2'})
-			.mockResolvedValueOnce({id: '3'});
+	test('create inserts single and array inputs through direct write path', async function () {
+		const connection = {
+			pool_instance: {
+				query: jest.fn()
+					.mockResolvedValueOnce({rows: [{id: '1', data: {name: 'Nell'}, created_at: new Date(), updated_at: new Date()}]})
+					.mockResolvedValueOnce({rows: [{id: '2', data: {name: 'Draco'}, created_at: new Date(), updated_at: new Date()}]})
+					.mockResolvedValueOnce({rows: [{id: '3', data: {name: 'Nell'}, created_at: new Date(), updated_at: new Date()}]})
+			},
+			options: {debug: false}
+		};
+		const User = create_model({name: String}, {}, {}, connection);
+		const insert_spy = jest.spyOn(User.prototype, 'insert');
 
-		const single_result = await User.create({name: 'alice'});
-		const list_result = await User.create([{name: 'bob'}, {name: 'carol'}]);
+		const single_result = await User.create({name: 'Nell'});
+		const list_result = await User.create([{name: 'Draco'}, {name: 'Nell'}]);
 
-		expect(single_result).toEqual({id: '1'});
-		expect(list_result).toEqual([{id: '2'}, {id: '3'}]);
-		expect(insert_one_spy).toHaveBeenNthCalledWith(1, {name: 'alice'});
-		expect(insert_one_spy).toHaveBeenNthCalledWith(2, {name: 'bob'});
-		expect(insert_one_spy).toHaveBeenNthCalledWith(3, {name: 'carol'});
+		expect(single_result).toBeInstanceOf(User);
+		expect(single_result.document.data).toEqual({name: 'Nell'});
+		expect(list_result).toHaveLength(2);
+		expect(list_result[0].document.data).toEqual({name: 'Draco'});
+		expect(list_result[1].document.data).toEqual({name: 'Nell'});
+		expect(insert_spy).not.toHaveBeenCalled();
+		expect(connection.pool_instance.query).toHaveBeenCalledTimes(3);
+
+		insert_spy.mockRestore();
 	});
 
 	test('query-builder chain helpers merge and overwrite state as expected', function () {

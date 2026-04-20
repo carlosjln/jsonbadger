@@ -91,7 +91,8 @@ Update path:
 const found = await User.find_one({name: 'john'}).exec();
 
 if(found) {
-	found.set('data.profile.city', 'Orlando');
+	const default_slug = User.schema.get_default_slug();
+	found.set(default_slug + '.profile.city', 'Orlando');
 	await found.save();
 }
 ```
@@ -102,9 +103,12 @@ After a successful save:
 - tracked changes are rebased
 
 Timestamp behavior:
-- inserts keep caller-provided `created_at`, otherwise fill it
-- inserts always refresh `updated_at`
-- updates keep caller-provided `updated_at`, otherwise refresh it
+- `Model.create(...)` and `doc.save()` on new documents apply the insert timestamp lifecycle
+- lifecycle inserts keep caller-provided `created_at`; missing `created_at` is filled
+- lifecycle inserts always refresh `updated_at`
+- static `Model.insert_one(...)` writes `created_at` / `updated_at` only when the input includes them
+- `doc.save()` updates always refresh `updated_at`
+- static `Model.update_one(...)` writes `updated_at` only when the update payload includes it
 - updates do not auto-change `created_at`
 
 ## Mutated
@@ -114,8 +118,10 @@ const doc = User.from({
 	name: 'john'
 });
 
-doc.set('data.profile.city', 'Miami');
-doc.document.data.profile.city = 'Orlando';
+const default_slug = User.schema.get_default_slug();
+
+doc.set(default_slug + '.profile.city', 'Miami');
+doc.document[default_slug].profile.city = 'Orlando';
 
 const pending_delta = doc.document.$get_delta();
 ```

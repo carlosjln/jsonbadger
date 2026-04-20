@@ -78,12 +78,17 @@ When a snippet uses a different value (for example `name: 'jane'`), either seed 
 - Update paths cannot mutate `id`.
 
 Timestamp helper behavior:
-- Create:
-  - provided `created_at` / `updated_at` values are kept.
-  - omitted values are auto-filled.
-- Update:
-  - provided `updated_at` is kept.
-  - omitted `updated_at` is auto-set.
+- Lifecycle create:
+  - `User.create(...)` and `doc.save()` on a new document apply the insert timestamp lifecycle.
+  - provided `created_at` is kept.
+  - omitted `created_at` is auto-filled.
+  - `updated_at` is always refreshed.
+- Static insert gateway:
+  - `User.insert_one(...)` writes `created_at` / `updated_at` only when included.
+- Lifecycle update:
+  - `doc.save()` refreshes `updated_at` on existing documents.
+- Static update gateway:
+  - `User.update_one(...)` keeps caller-provided `updated_at` when included in the update payload.
   - `created_at` is not auto-updated.
 
 ## Setup and Connect
@@ -316,13 +321,18 @@ const saved_user = await user_doc.save();
 
 Returns: `saved_user` is a `User` document instance.  
 Raw document shape: `saved_user.document` -> `{ id, data, created_at, updated_at }` when the default slug is still `data`.  
-Runtime note: read the default slug through `saved_user.document[User.schema.get_default_slug()]`.
+Runtime note:
+
+```js
+const default_slug = User.schema.get_default_slug();
+const saved_payload = saved_user.document[default_slug];
+```
 
 Static create and id lookup:
 
 ```js
 const created_user = await User.create({
-	name: 'maria',
+	name: 'Nell',
 	age: 29
 });
 
@@ -333,7 +343,7 @@ Build a new document from external input without marking it persisted:
 
 ```js
 const imported_user = User.from({
-	name: '  maria  ',
+	name: 'Nell',
 	age: '29',
 	created_at: '2026-03-03T08:00:00.000Z'
 });
@@ -345,7 +355,7 @@ Set base fields after construction when needed:
 
 ```js
 const imported_user = User.from({
-	name: 'maria'
+	name: 'Nell'
 });
 
 imported_user.id = '7';
@@ -359,7 +369,7 @@ Hydrate a persisted document from raw row-like data:
 const hydrated_user = User.hydrate({
 	id: '7',
 	data: {
-		name: 'maria',
+		name: 'Nell',
 		age: '29'
 	},
 	created_at: '2026-03-03T08:00:00.000Z',
@@ -372,16 +382,22 @@ const hydrated_user = User.hydrate({
 Timestamp helper examples on create:
 
 ```js
-// Caller-provided timestamp values are kept
+// Lifecycle create: created_at is kept, updated_at is refreshed
 const user_with_timestamps = await User.create({
 	name: 'timed-user',
-	created_at: '2026-03-03T08:00:00.000Z',
-	updated_at: '2026-03-03T09:00:00.000Z'
+	created_at: '2026-03-03T08:00:00.000Z'
 });
 
-// Omitted timestamps are auto-filled
+// Lifecycle create: omitted created_at is filled, updated_at is refreshed
 const user_with_auto_timestamps = await User.create({
 	name: 'auto-timestamp-user'
+});
+
+// Static insert gateway: timestamp fields are used only when provided
+const inserted_user = await User.insert_one({
+	name: 'manual-timestamp-user',
+	created_at: '2026-03-03T08:00:00.000Z',
+	updated_at: '2026-03-03T09:00:00.000Z'
 });
 ```
 
@@ -463,7 +479,7 @@ Returns:
 - `found_user`: `User | null`
 - `by_id_user`: `User | null`
 - `adult_count`: `number`
-- Snapshot example: `all_users[0]?.document` -> `{ id, data, created_at, updated_at }` when the default slug is still `data`
+- Snapshot example: use `all_users[0]?.document[User.schema.get_default_slug()]` for the payload. The full envelope is `{id, data, created_at, updated_at}` only when the default slug is still `data`.
 
 Query builder chaining:
 
@@ -653,7 +669,7 @@ const updated_user = await User.update_one(
 ```
 
 Returns: `updated_user` is `User | null`.  
-Snapshot shape: `updated_user?.document` -> `{ id, data, created_at, updated_at }` when the default slug is still `data`.
+Snapshot payload: `updated_user?.document[User.schema.get_default_slug()]`. The full envelope is `{id, data, created_at, updated_at}` only when the default slug is still `data`.
 
 Use `$unset` to remove one or more JSON paths:
 
@@ -709,7 +725,7 @@ await User.update_one({name: 'john'}, {
 Timestamp helper examples on update:
 
 ```js
-// Caller-provided updated_at is kept
+// Static update gateway: caller-provided updated_at is kept
 await User.update_one({name: 'john'}, {
 	$set: {
 		age: 32,
@@ -717,7 +733,7 @@ await User.update_one({name: 'john'}, {
 	}
 });
 
-// Omitted updated_at is auto-refreshed
+// Static update gateway: omitted updated_at is not changed automatically
 await User.update_one({name: 'john'}, {
 	$set: {
 		age: 33
@@ -734,7 +750,7 @@ const deleted_user = await User.delete_one({name: 'john'});
 ```
 
 Returns: `deleted_user` is `User | null`.  
-Snapshot shape: `deleted_user?.document` -> `{ id, data, created_at, updated_at }` when the default slug is still `data`.
+Snapshot payload: `deleted_user?.document[User.schema.get_default_slug()]`. The full envelope is `{id, data, created_at, updated_at}` only when the default slug is still `data`.
 
 No match (or missing table) returns `null`:
 

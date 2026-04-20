@@ -36,7 +36,7 @@ Hydrate persisted row-like data with `Model.hydrate(...)`:
 const hydrated_user = user_model.hydrate({
 	id: '7',
 	data: {
-		name: 'maria'
+		name: 'Nell'
 	},
 	created_at: '2026-03-03T08:00:00.000Z',
 	updated_at: '2026-03-03T09:00:00.000Z'
@@ -95,14 +95,16 @@ Example:
 
 ```js
 const saved_user = await user_model.create({
-	name: 'maria',
+	name: 'Nell',
 	age: 29
 });
 
-const found_user = await user_model.find_one({name: 'maria'}).exec();
+const found_user = await user_model.find_one({name: 'Nell'}).exec();
 ```
 
-> **Note:** `Model.insert_one(...)` accepts plain input only. If you already have a document instance, use `doc.insert()` or `doc.save()`.
+> **Note:** `Model.insert_one(...)` accepts plain input only. It is an explicit static insert gateway, so pass `created_at` / `updated_at` when you want to control those row fields. If you want timestamp lifecycle management, use `Model.create(...)`, `doc.insert()`, or `doc.save()`.
+
+> **Note:** Instance methods (`doc.insert()`, `doc.update()`, and `doc.save()`) manage timestamp lifecycle automatically. Static write gateways such as `Model.insert_one(...)` and `Model.update_one(...)` are explicit: pass timestamp fields when you want to control them.
 
 ## Model.from
 
@@ -110,7 +112,7 @@ Use `Model.from(...)` when the source is external payload input and you want a n
 
 ```js
 const imported_user = user_model.from({
-	name: '  maria  ',
+	name: 'Nell',
 	age: '29',
 	created_at: '2026-03-03T08:00:00.000Z'
 });
@@ -158,7 +160,7 @@ const user_model = connection.model({
 const imported_user = user_model.from({
 	id: '7',
 	created_at: '2026-03-03T08:00:00.000Z',
-	name: 'maria',
+	name: 'Nell',
 	settings: {
 		theme: 'dark'
 	}
@@ -168,8 +170,10 @@ const imported_user = user_model.from({
 Result:
 - `imported_user.document.id === '7'`
 - `imported_user.document.created_at instanceof Date`
-- `imported_user.document.payload.name === 'maria'`
+- `imported_user.document.payload.name === 'Nell'`
 - `imported_user.document.settings.theme === 'dark'`
+
+> **Note:** `payload` is used here because this schema sets `default_slug: 'payload'`. In reusable code, read the default slug from `user_model.schema.get_default_slug()` before accessing `document[default_slug]`.
 
 ## Model.hydrate
 
@@ -179,7 +183,7 @@ Use `Model.hydrate(...)` when the source already represents a persisted row:
 const hydrated_user = user_model.hydrate({
 	id: '7',
 	payload: {
-		name: 'maria',
+		name: 'Nell',
 		age: '29'
 	},
 	settings: {
@@ -305,7 +309,7 @@ Behavior:
 const doc = user_model.hydrate({
 	id: '7',
 	payload: {
-		name: 'maria',
+		name: 'Nell',
 		profile: {city: 'Miami'}
 	},
 	settings: {
@@ -316,7 +320,7 @@ const doc = user_model.hydrate({
 const entity = {};
 doc.bind_document(entity);
 
-entity.name; // 'maria'
+entity.name; // 'Nell'
 entity.profile.city = 'Orlando';
 entity.settings.theme = 'light';
 ```
@@ -336,7 +340,7 @@ Scenario A: keep a bound entity wrapper and adopt the saved state.
 
 ```js
 const doc = user_model.from({
-	name: 'maria',
+	name: 'Nell',
 	profile: {city: 'Miami'}
 });
 
@@ -379,6 +383,11 @@ Direct document access:
 const default_slug = user_model.schema.get_default_slug();
 const payload = doc.document[default_slug];
 ```
+
+Rules:
+- use `doc.document[default_slug]` instead of hard-coding the default slug name
+- `id`, `created_at`, and `updated_at` stay at the document root
+- registered extra slugs stay at their own root keys
 
 > **Note:** Direct `doc.document[...]` mutation is still allowed, but it bypasses `doc.set(...)` and assignment-time casting.
 

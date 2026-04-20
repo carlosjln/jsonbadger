@@ -1,6 +1,6 @@
 {
 	"name": "jsonbadger",
-	"version": "0.7.0",
+	"version": "0.7.1",
 	"description": "JSONB query/model library for PostgreSQL",
 	"main": "index.js",
 	"type": "module",

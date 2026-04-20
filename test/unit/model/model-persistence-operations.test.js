@@ -44,6 +44,59 @@ describe('Model persistence operations lifecycle', function () {
 		expect(saved_document.document.data).toEqual({name: 'saved'});
 		expect(saved_document.document.$has_changes()).toBe(false);
 		expect(sql_runner_mock).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO "users"'), expect.any(Array), connection);
+		expect(sql_runner_mock.mock.calls[0][0]).toContain('INSERT INTO "users" ("data") VALUES ($1::jsonb)');
+		expect(sql_runner_mock.mock.calls[0][1]).toEqual([
+			'{"name":"saved"}'
+		]);
+	});
+
+	test('create applies lifecycle timestamps through the direct write path', async function () {
+		sql_runner_mock.mockResolvedValueOnce({
+			rows: [{
+				id: first_uuid,
+				data: {name: 'saved'},
+				created_at: new Date('2026-03-06T10:00:00.000Z'),
+				updated_at: new Date('2026-03-06T11:00:00.000Z')
+			}]
+		});
+
+		const User = create_model(new Schema({name: String}), connection);
+		const saved_document = await User.create({name: 'saved'});
+
+		expect(saved_document).toBeInstanceOf(User);
+		expect(sql_runner_mock.mock.calls[0][0]).toContain('INSERT INTO "users" ("data", created_at, updated_at)');
+		expect(sql_runner_mock.mock.calls[0][1][0]).toBe('{"name":"saved"}');
+		expect(sql_runner_mock.mock.calls[0][1][1]).toEqual(expect.any(Date));
+		expect(sql_runner_mock.mock.calls[0][1][2]).toEqual(expect.any(Date));
+	});
+
+	test('insert_one includes timestamp fields only when callers provide them', async function () {
+		const created_at = new Date('2026-03-06T10:00:00.000Z');
+		const updated_at = new Date('2026-03-06T11:00:00.000Z');
+
+		sql_runner_mock.mockResolvedValueOnce({
+			rows: [{
+				id: first_uuid,
+				data: {name: 'saved'},
+				created_at,
+				updated_at
+			}]
+		});
+
+		const User = create_model(new Schema({name: String}), connection);
+		const saved_document = await User.insert_one({
+			name: 'saved',
+			created_at,
+			updated_at
+		});
+
+		expect(saved_document).toBeInstanceOf(User);
+		expect(sql_runner_mock.mock.calls[0][0]).toContain('INSERT INTO "users" ("data", created_at, updated_at)');
+		expect(sql_runner_mock.mock.calls[0][1]).toEqual([
+			'{"name":"saved"}',
+			created_at,
+			updated_at
+		]);
 	});
 
 	test('doc.insert generates application ids before validation and includes them in the insert SQL', async function () {

@@ -278,6 +278,25 @@ describe('Model.update_one gateway normalization', function () {
 		]);
 	});
 
+	test('does not auto-set updated_at when the static update gateway omits it', async function () {
+		const User = create_model(new Schema({name: String}), connection);
+
+		await User.update_one({id: existing_bigint_id}, {
+			$set: {
+				name: 'alice'
+			}
+		});
+
+		const sql_text = sql_runner_mock.mock.calls[0][0];
+		const sql_params = sql_runner_mock.mock.calls[0][1];
+
+		expect(sql_text).not.toContain('updated_at =');
+		expect(sql_params).toEqual([
+			existing_bigint_id,
+			'"alice"'
+		]);
+	});
+
 	test('accepts explicit uuid identity filters when the schema opts into uuid', async function () {
 		const User = create_model(new Schema({
 			name: String

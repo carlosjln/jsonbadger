@@ -152,7 +152,7 @@ Validate a full document envelope:
 schema.validate({
 	id: '0194f028-579a-7b5b-8107-b9ad31395f43',
 	payload: {
-		name: 'maria'
+		name: 'Nell'
 	},
 	settings: {
 		theme: 'dark'

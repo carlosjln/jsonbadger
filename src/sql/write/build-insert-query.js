@@ -3,6 +3,7 @@
  * Build SQL text and parameters for insert writes.
  */
 import {jsonb_stringify} from '#src/utils/json.js';
+import {has_own} from '#src/utils/object.js';
 
 /**
  * Build one insert query payload for a model row insert.
@@ -28,6 +29,11 @@ function build_insert_query(query_context) {
 	}
 
 	for(const key of ['created_at', 'updated_at']) {
+		// Only persist timestamps when lifecycle code or the caller provided them.
+		if(!has_own(query_context.base_fields, key)) {
+			continue;
+		}
+
 		sql_columns.push(key);
 		sql_params.push(query_context.base_fields[key]);
 		sql_values.push('$' + sql_params.length + '::timestamptz');
